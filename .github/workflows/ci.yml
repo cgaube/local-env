@@ -1,5 +1,6 @@
 # Typecheck, lint, format, test and build every pull request: the checks of
-# `bun run check` (the pre-push hook), then the tests and the build
+# `bun run check` (the pre-push hook), then the changeset, the tests and the
+# build
 name: CI
 
 on:
@@ -13,6 +14,9 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The changeset check compares the branch with main
+          fetch-depth: 0
 
       # Bun and Node, as pinned in mise.toml
       - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
@@ -32,6 +36,12 @@ jobs:
       - name: Format
         if: ${{ !cancelled() }}
         run: bun run fmt:check
+
+      # A change to the files in changedFilePatterns (.changeset/config.json)
+      # needs a changeset
+      - name: Changeset
+        if: ${{ !cancelled() }}
+        run: bun run changeset status --since=origin/main
 
       - name: Test
         if: ${{ !cancelled() }}

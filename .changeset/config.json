@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "baseBranch": "main",
+  "changedFilePatterns": ["src/**", "services/**", "compose.yaml"],
   "access": "restricted",
   "ignore": [],
   "fixed": [],
@@ -9,5 +10,8 @@
   "updateInternalDependencies": "patch",
   "commit": false,
   "changelog": "@changesets/cli/changelog",
-  "privatePackages": { "version": true, "tag": true }
+  "privatePackages": {
+    "version": true,
+    "tag": true
+  }
 }
