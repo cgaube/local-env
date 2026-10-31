@@ -1,0 +1,7 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env proxy routes lists the routes of the running containers 1`] = `
+"│  HOST                                                 CONTAINER    PORT  URL
+│  mail.local-env-e2e.test                              mail-mail-1  8025  https://mail.local-env-e2e.test
+│  shop.local-env-e2e.test,www.shop.local-env-e2e.test  shop-shop-1  80    https://shop.local-env-e2e.test"
+`;

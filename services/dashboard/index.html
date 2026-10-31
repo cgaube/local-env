@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>local-env</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='cube' x1='6' y1='4' x2='42' y2='44' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23bd93f9' /%3E%3Cstop offset='1' stop-color='%23ff79c6' /%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M24 4 42 14 24 24 6 14Z' fill='url(%23cube)' /%3E%3Cpath d='M24 4 42 14 24 24 6 14Z' fill='%23fff' opacity='.35' /%3E%3Cpath d='M6 14 24 24V44L6 34Z' fill='url(%23cube)' /%3E%3Cpath d='M42 14 24 24V44L42 34Z' fill='url(%23cube)' /%3E%3Cpath d='M42 14 24 24V44L42 34Z' fill='%23000' opacity='.25' /%3E%3Cpath d='m10.5 22.5 7 5.5-7 2' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' /%3E%3Ccircle cx='40' cy='8' r='5' fill='%2316a34a' /%3E%3C/svg%3E"
+    />
+    <script>
+      // Before the page paints, so a picked theme doesn't flash
+      try {
+        const theme = localStorage.getItem('theme')
+        if (theme) document.documentElement.dataset.theme = theme
+      } catch {}
+    </script>
+    <style>
+      /* light-dark() picks a value from color-scheme: the system's, or the
+         theme picked with the switch (data-theme) */
+      :root {
+        color-scheme: light dark;
+        /* Dark: Dracula (draculatheme.com). Light: the same purple and pink,
+           deeper, so they read on white */
+        --bg: light-dark(#f8f7fb, #282a36);
+        --surface: light-dark(#ffffff, #343746);
+        --border: light-dark(#e7e4ef, #44475a);
+        --text: light-dark(#1c1a24, #f8f8f2);
+        --muted: light-dark(#6e6a7c, #a9abc2);
+        --accent: light-dark(#7c3aed, #bd93f9);
+        --accent-hover: light-dark(#db2777, #ff79c6);
+        --row-hover: light-dark(#f5f3fa, #3c3f51);
+        --ok: #16a34a;
+        --warn: #d97706;
+        --bad: #dc2626;
+      }
+      :root[data-theme='light'] {
+        color-scheme: light;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 48px 16px;
+      }
+      .logo {
+        width: 36px;
+        height: 36px;
+        flex: none;
+      }
+      .logo-dot {
+        fill: var(--ok);
+        stroke: var(--bg);
+        stroke-width: 2.5;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+      .tools {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        max-width: 100%;
+      }
+      .theme {
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      h1 {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .subtitle {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      input[type='search'] {
+        width: 260px;
+        max-width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+      }
+      input[type='search']:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      .card {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px 16px;
+        text-align: left;
+        white-space: nowrap;
+      }
+      th {
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      tbody tr + tr td {
+        border-top: 1px solid var(--border);
+      }
+      tbody tr:hover {
+        background: var(--row-hover);
+      }
+      a {
+        color: var(--accent);
+        font-weight: 500;
+        text-decoration: none;
+      }
+      a:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+      }
+      .extra {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .mono {
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 13px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .bad-text {
+        color: var(--bad);
+      }
+      .status {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        text-transform: capitalize;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .dot.ok {
+        background: var(--ok);
+      }
+      .dot.warn {
+        background: var(--warn);
+      }
+      .dot.bad {
+        background: var(--bad);
+      }
+      button {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button:hover {
+        color: var(--text);
+      }
+      .empty {
+        padding: 48px 16px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .help {
+        margin-bottom: 8px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      .help summary {
+        padding: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .help summary > span {
+        margin-left: 8px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .help-body {
+        padding: 0 16px 16px;
+      }
+      .help h2 {
+        margin: 20px 0 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .help p,
+      .help ul {
+        margin: 8px 0;
+      }
+      .help ul {
+        padding-left: 20px;
+        color: var(--muted);
+      }
+      .help code {
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 13px;
+      }
+      .snippet {
+        position: relative;
+      }
+      .section {
+        margin: 32px 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .apps {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .app {
+        display: block;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 400;
+      }
+      a.app:hover {
+        border-color: var(--accent);
+        text-decoration: none;
+      }
+      .app-head {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .app-head .status {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+      }
+      .app p {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      .app-link {
+        display: block;
+        margin-top: 12px;
+        color: var(--accent);
+        font-weight: 500;
+      }
+      .core > summary {
+        cursor: pointer;
+      }
+      .core > summary span {
+        margin-left: 8px;
+        font-size: 14px;
+        font-weight: 400;
+      }
+
+      .wrap {
+        white-space: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>
+            <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+              <defs>
+                <!-- Dracula purple to pink, like .github/logo.svg -->
+                <linearGradient
+                  id="cube"
+                  x1="6"
+                  y1="4"
+                  x2="42"
+                  y2="44"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0" stop-color="#bd93f9" />
+                  <stop offset="1" stop-color="#ff79c6" />
+                </linearGradient>
+              </defs>
+              <path d="M24 4 42 14 24 24 6 14Z" fill="url(#cube)" />
+              <path d="M24 4 42 14 24 24 6 14Z" fill="#fff" opacity=".35" />
+              <path d="M6 14 24 24V44L6 34Z" fill="url(#cube)" />
+              <path d="M42 14 24 24V44L42 34Z" fill="url(#cube)" />
+              <path d="M42 14 24 24V44L42 34Z" fill="#000" opacity=".25" />
+              <path
+                d="m10.5 22.5 7 5.5-7 2"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle class="logo-dot" cx="40" cy="8" r="5" />
+            </svg>
+            local-env
+          </h1>
+          <p class="subtitle" id="summary">Loading…</p>
+        </div>
+        <div class="tools">
+          <input
+            type="search"
+            id="filter"
+            placeholder="Filter by host, container, stack…"
+            aria-label="Filter routes"
+          />
+          <button type="button" class="theme" id="theme"></button>
+        </div>
+      </header>
+      <nav class="apps" id="apps" aria-label="Apps" hidden></nav>
+      <h2 class="section">Routes</h2>
+      <details class="help" id="help">
+        <summary>
+          Add a route<span
+            >Serve any container at https://&lt;name&gt;.<span
+              class="domain"
+            ></span
+          ></span>
+        </summary>
+        <div class="help-body">
+          <p>
+            Set <code>VIRTUAL_HOST</code> on the container, and
+            <code>VIRTUAL_PORT</code> if the app doesn't listen on port 80 and
+            its image exposes more than one port. The route shows up here a
+            second after the container starts.
+          </p>
+
+          <h2>Docker Compose</h2>
+          <div class="snippet">
+            <pre><code>services:
+  app:
+    image: my-app
+    environment:
+      VIRTUAL_HOST: myapp   # https://myapp.<span class="domain"></span>
+      VIRTUAL_PORT: 3000    # the port the app listens on</code></pre>
+            <button type="button" class="copy-snippet">Copy</button>
+          </div>
+
+          <h2>docker run</h2>
+          <div class="snippet">
+            <pre><code>docker run -d --name myapp -e VIRTUAL_HOST=myapp -e VIRTUAL_PORT=3000 my-app</code></pre>
+            <button type="button" class="copy-snippet">Copy</button>
+          </div>
+
+          <h2>Dockhand</h2>
+          <p>
+            Open the stack in <a href="http://localhost:3000">Dockhand</a>, add
+            <code>VIRTUAL_HOST</code> (and <code>VIRTUAL_PORT</code>) to the
+            service's environment, then redeploy.
+          </p>
+
+          <h2>Good to know</h2>
+          <ul>
+            <li>
+              No <code>ports</code> or <code>networks</code> needed: local-env
+              connects the container to the proxy for you.
+            </li>
+            <li>
+              A short name gets the domain: <code>myapp</code> becomes
+              <code>myapp.<span class="domain"></span></code>. A full hostname
+              is used as is.
+            </li>
+            <li>
+              Several hosts: separate them with commas, as in
+              <code>VIRTUAL_HOST: myapp,api</code>.
+            </li>
+            <li>
+              The app must listen on <code>0.0.0.0</code>, not
+              <code>localhost</code>, so the proxy can reach it.
+            </li>
+            <li>
+              Containers with a route can call each other's URLs, such as
+              <code>https://api.<span class="domain"></span></code>. To trust
+              the certificate, mount the local CA and point
+              <code>SSL_CERT_FILE</code> (or <code>NODE_EXTRA_CA_CERTS</code>)
+              at it:
+              <code
+                >"${HOST_HOME}/Library/Application
+                Support/mkcert/rootCA.pem:/etc/local-env/ca.pem:ro"</code
+              >.
+            </li>
+          </ul>
+        </div>
+      </details>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>Container</th>
+              <th>Stack</th>
+              <th>Port</th>
+              <th>Status</th>
+              <th><span hidden>Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden></div>
+      </div>
+
+      <h2 class="section">Sources</h2>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Docker templates</th>
+              <th>Ansible roles</th>
+            </tr>
+          </thead>
+          <tbody id="sources"></tbody>
+        </table>
+        <div class="empty" id="sources-empty" hidden>
+          No sources. Add one with
+          <code class="mono">local-env sources add &lt;repo&gt;</code>
+        </div>
+      </div>
+
+      <details class="core" id="core">
+        <summary class="section">
+          Core services<span class="muted" id="core-summary"></span>
+        </summary>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Container</th>
+                <th>URL</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="services"></tbody>
+          </table>
+          <div class="empty" id="services-empty" hidden>
+            No services found. Run <code class="mono">local-env start</code>
+          </div>
+        </div>
+      </details>
+    </main>
+    <script>
+      const help = document.getElementById('help')
+      let helpOpened = false
+      const rows = document.getElementById('rows')
+      const empty = document.getElementById('empty')
+      const summary = document.getElementById('summary')
+      const filter = document.getElementById('filter')
+      let routes = []
+      const CORE_STACK = 'local-env'
+
+      const tone = (status) => {
+        if (status === 'running' || status === 'healthy') return 'ok'
+        if (status === 'starting' || status === 'restarting') return 'warn'
+        return 'bad'
+      }
+
+      const statusBadge = (state) => {
+        const status = document.createElement('span')
+        status.className = 'status'
+        const dot = document.createElement('span')
+        dot.className = `dot ${tone(state)}`
+        status.append(dot, state)
+        return status
+      }
+
+      const cell = (content, className) => {
+        const td = document.createElement('td')
+        if (className) td.className = className
+        if (content instanceof Node) td.append(content)
+        else td.textContent = content
+        return td
+      }
+
+      const renderRow = (route) => {
+        const tr = document.createElement('tr')
+
+        const link = document.createElement('a')
+        link.href = route.url
+        link.target = '_blank'
+        link.rel = 'noopener'
+        link.textContent = route.url
+        const url = document.createElement('div')
+        url.append(link)
+        for (const host of route.hosts.slice(1)) {
+          const alias = document.createElement('span')
+          alias.className = 'extra'
+          alias.textContent = host
+          url.append(alias)
+        }
+
+        const copy = document.createElement('button')
+        copy.type = 'button'
+        copy.textContent = 'Copy'
+        copy.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(route.url)
+          copy.textContent = 'Copied'
+          setTimeout(() => (copy.textContent = 'Copy'), 1200)
+        })
+
+        tr.append(
+          cell(url),
+          cell(route.container, 'mono'),
+          cell(route.stack ?? '—', route.stack ? '' : 'muted'),
+          cell(route.port, 'mono'),
+          cell(statusBadge(route.status)),
+          cell(copy),
+        )
+        return tr
+      }
+
+      const render = () => {
+        const query = filter.value.trim().toLowerCase()
+        const visible = routes.filter((route) =>
+          [...route.hosts, route.container, route.stack ?? '']
+            .join(' ')
+            .toLowerCase()
+            .includes(query),
+        )
+        rows.replaceChildren(...visible.map(renderRow))
+
+        empty.hidden = visible.length > 0
+        empty.textContent = routes.length
+          ? 'No routes match the filter.'
+          : 'No active routes. Start a container with VIRTUAL_HOST to expose it.'
+
+        // Shows the help once when there is nothing to list yet
+        if (!routes.length && !helpOpened) {
+          help.open = true
+          helpOpened = true
+        }
+      }
+
+      const showRoutes = (all) => {
+        // local-env's own services have their own section
+        routes = all.filter((route) => route.stack !== CORE_STACK)
+        summary.textContent = `${routes.length} route${routes.length === 1 ? '' : 's'} · updated ${new Date().toLocaleTimeString()}`
+        render()
+      }
+
+      const sourcesBody = document.getElementById('sources')
+      const sourcesEmpty = document.getElementById('sources-empty')
+
+      const plural = (count, word) =>
+        `${count} ${word}${count === 1 ? '' : 's'}`
+
+      const renderSource = (source) => {
+        const tr = document.createElement('tr')
+        const name = document.createElement('div')
+        name.textContent = source.name
+        if (source.origin) {
+          const origin = document.createElement('span')
+          origin.className = 'extra'
+          origin.textContent = source.origin
+          name.append(origin)
+        }
+        const count = (total, word) =>
+          cell(total ? plural(total, word) : '—', total ? '' : 'muted')
+        tr.append(
+          cell(name),
+          count(source.docker, 'template'),
+          count(source.ansible, 'role'),
+        )
+        return tr
+      }
+
+      const showSources = (all) => {
+        sources = all
+        renderApps()
+        sourcesBody.replaceChildren(...sources.map(renderSource))
+        sourcesEmpty.hidden = sources.length > 0
+      }
+
+      const servicesBody = document.getElementById('services')
+      const servicesEmpty = document.getElementById('services-empty')
+
+      const renderService = (service) => {
+        const tr = document.createElement('tr')
+        let target
+        if (service.url) {
+          target = document.createElement('a')
+          target.href = service.url
+          target.target = '_blank'
+          target.rel = 'noopener'
+          target.textContent = service.url
+        }
+        const name = document.createElement('div')
+        name.textContent = service.service
+        if (service.description) {
+          const description = document.createElement('span')
+          description.className = 'extra'
+          description.textContent = service.description
+          name.append(description)
+        }
+        tr.append(
+          cell(name),
+          cell(service.container, 'mono'),
+          target
+            ? cell(target)
+            : cell(
+                service.ports.length
+                  ? `ports ${service.ports.join(', ')}`
+                  : '—',
+                'muted',
+              ),
+          cell(statusBadge(service.state)),
+        )
+        return tr
+      }
+
+      const apps = document.getElementById('apps')
+      let services = []
+      let sources = []
+      // What each app installs, by source folder
+      const CONTENT_WORDS = { docker: 'template', ansible: 'role' }
+
+      // What the app can install from the sources: "3 templates from 1 source"
+      const appContent = (content) => {
+        const word = CONTENT_WORDS[content]
+        if (!word) return null
+        const using = sources.filter((source) => source[content] > 0)
+        const total = using.reduce((sum, source) => sum + source[content], 0)
+        return total
+          ? `${plural(total, word)} from ${plural(using.length, 'source')}`
+          : `No ${word}s in the sources yet`
+      }
+
+      const renderApp = (service) => {
+        const card = document.createElement(service.url ? 'a' : 'div')
+        card.className = 'app'
+        if (service.url) {
+          card.href = service.url
+          card.target = '_blank'
+          card.rel = 'noopener'
+        }
+        const head = document.createElement('div')
+        head.className = 'app-head'
+        const title = document.createElement('span')
+        title.textContent = service.app.name
+        head.append(title, statusBadge(service.state))
+        card.append(head)
+
+        for (const text of [
+          service.description,
+          appContent(service.app.content),
+        ]) {
+          if (!text) continue
+          const line = document.createElement('p')
+          line.textContent = text
+          card.append(line)
+        }
+        if (service.url) {
+          const link = document.createElement('span')
+          link.className = 'app-link'
+          link.textContent = `${service.url.replace(/^https?:\/\//, '')} →`
+          card.append(link)
+        }
+        return card
+      }
+
+      // One card per core service with a local-env.app label
+      const renderApps = () => {
+        const list = services.filter((service) => service.app)
+        apps.replaceChildren(...list.map(renderApp))
+        apps.hidden = !list.length
+      }
+
+      const coreSummary = document.getElementById('core-summary')
+
+      const showServices = (all) => {
+        services = all
+        renderApps()
+        servicesBody.replaceChildren(...services.map(renderService))
+        servicesEmpty.hidden = services.length > 0
+        // Visible while the section is closed
+        const down = services.filter((service) => tone(service.state) !== 'ok')
+        coreSummary.textContent = `· ${
+          !services.length
+            ? 'not running'
+            : down.length
+              ? `${down.length} of ${services.length} not running: ${down.map((service) => service.service).join(', ')}`
+              : `${services.length} running`
+        }`
+        coreSummary.className = down.length ? 'bad-text' : 'muted'
+      }
+
+      // Remembers whether the section is open, in this browser only
+      const core = document.getElementById('core')
+      try {
+        core.open = localStorage.getItem('core-open') === 'true'
+      } catch {}
+      core.addEventListener('toggle', () => {
+        try {
+          localStorage.setItem('core-open', String(core.open))
+        } catch {}
+      })
+
+      // The server sends each list on connect and again when it changes. The
+      // browser reconnects by itself after a drop.
+      const listen = () => {
+        const events = new EventSource('/api/events')
+        const on = (topic, show) =>
+          events.addEventListener(topic, (event) =>
+            show(JSON.parse(event.data)),
+          )
+        on('routes', showRoutes)
+        on('services', showServices)
+        on('sources', showSources)
+        events.addEventListener('error', () => {
+          summary.textContent = 'Reconnecting…'
+        })
+      }
+
+      const loadDomain = async () => {
+        try {
+          const { domain } = await (await fetch('/api/config')).json()
+          for (const element of document.querySelectorAll('.domain')) {
+            element.textContent = domain
+          }
+        } catch {
+          // The examples still read fine without the domain
+        }
+      }
+
+      for (const button of document.querySelectorAll('.copy-snippet')) {
+        button.addEventListener('click', async () => {
+          const code = button.parentElement.querySelector('code').textContent
+          // Copies the snippet without its explanatory comments
+          await navigator.clipboard.writeText(
+            code.replace(/ +#.*$/gm, '').trimEnd(),
+          )
+          button.textContent = 'Copied'
+          setTimeout(() => (button.textContent = 'Copy'), 1200)
+        })
+      }
+
+      // Auto (the system's theme) until the first click, which switches to the
+      // other theme; then each click toggles light and dark. The choice is
+      // kept in this browser only.
+      const LABELS = { light: '☀ Light', dark: '☾ Dark' }
+      const themeButton = document.getElementById('theme')
+      const systemTheme = () =>
+        matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      const showTheme = () => {
+        const picked = document.documentElement.dataset.theme
+        themeButton.textContent = picked ? LABELS[picked] : '◐ Auto'
+        themeButton.setAttribute('aria-label', `Theme: ${picked ?? 'auto'}`)
+      }
+      themeButton.addEventListener('click', () => {
+        const current = document.documentElement.dataset.theme ?? systemTheme()
+        const next = current === 'dark' ? 'light' : 'dark'
+        try {
+          localStorage.setItem('theme', next)
+        } catch {}
+        document.documentElement.dataset.theme = next
+        showTheme()
+      })
+      showTheme()
+
+      filter.addEventListener('input', render)
+      loadDomain()
+      listen()
+    </script>
+  </body>
+</html>

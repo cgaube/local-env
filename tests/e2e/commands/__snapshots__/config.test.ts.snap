@@ -1,0 +1,13 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env config get lists the defaults before setup 1`] = `
+"│  Domain      dev.test (default)
+│  Build port  17080 (default)
+│
+│  Not set up yet: run \`local-env setup\`"
+`;
+
+exports[`local-env config get marks only the stored settings as set 1`] = `
+"│  Domain      acme.test
+│  Build port  17080 (default)"
+`;

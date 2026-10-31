@@ -1,0 +1,8 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env sources links lists the linked stacks and their status 1`] = `
+"│  STACK    TEMPLATE   HOW         STATUS
+│  mail     acme/mail  name:       template changed
+│  mailpit  —          not linked  uses the image of acme/mail
+│  Run \`local-env sources sync\` to link the stacks not linked"
+`;

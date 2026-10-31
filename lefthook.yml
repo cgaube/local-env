@@ -1,0 +1,31 @@
+# Git hooks, installed by `mise install` (mise.toml)
+# https://lefthook.dev
+
+# A short summary; a failing job still prints its errors
+output:
+  - summary
+  - success
+  - failure
+
+# Fixes the staged files and adds the fixes to the commit: oxlint first, then
+# oxfmt formats the result. Unfixable lint errors stop the commit. Tools run
+# through mise, so the hooks also work from apps that don't load your shell
+# (editors, git GUIs).
+pre-commit:
+  piped: true
+  jobs:
+    - name: lint
+      glob: '*.{ts,js,mjs}'
+      run:
+        mise exec -- bunx oxlint --fix --no-error-on-unmatched-pattern
+        {staged_files}
+      stage_fixed: true
+    - name: format
+      run:
+        mise exec -- bunx oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+pre-push:
+  jobs:
+    - name: check
+      run: mise exec -- bun run check

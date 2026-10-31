@@ -1,0 +1,548 @@
+import { execa } from 'execa'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { homedir } from 'os'
+import { prepareTemplateCompose } from '../../../services/catalog-server/template-compose.js'
+import { readConfig } from '../../core/config.js'
+import { COMPOSE_FILES, SOURCES_DIR } from '../../sources/sources.js'
+import {
+  listContainerTemplates,
+  listSources,
+  readSourceContent,
+  type ContainerTemplate,
+} from '../../sources/sources.js'
+import { dockhandApi, dockhandPost, dockhandPut } from './api.js'
+import {
+  composeName,
+  hashTemplate,
+  isLinked,
+  listSnapshots,
+  pruneSnapshots,
+  readLinks,
+  readSnapshot,
+  saveSnapshot,
+  writeLinks,
+  type StackLink,
+  type TemplateLink,
+} from './template-link.js'
+
+export type TemplatedStack = TemplateLink & {
+  stack: string
+  // The compose deployed now, with the user's own edits
+  current: string
+  // The template's compose file now
+  latest: string
+}
+
+// A stack with no link yet that uses the image of one or more templates
+export type LinkCandidate = { stack: string; templates: string[] }
+
+// The template to link the stack to, 'ignore' to never ask again, or null to
+// leave it unlinked for now
+export type LinkDecision = string | 'ignore' | null
+
+export type StackDiff = TemplatedStack & {
+  // What applying would deploy
+  next: string
+  // The template as it is now, and its hash: the base of the next update
+  templateContent: string
+  nextBase: string
+  // Parts changed both by the user and by the template. `next` takes the
+  // template's version of them.
+  conflicts: number
+  // The deployed template version is unknown: the user's edits can't be kept
+  missingBase: boolean
+  missingVariables: string[]
+}
+
+// "acme/postgres" -> volumes/sources/acme/docker/postgres/<compose>
+export const resolveTemplateCompose = (template: string) => {
+  const [source, folder, ...rest] = template.split('/')
+  if (!source || !folder || rest.length > 0 || folder.startsWith('.')) {
+    return null
+  }
+
+  for (const name of COMPOSE_FILES) {
+    const path = join(SOURCES_DIR, source, 'docker', folder, name)
+    if (existsSync(path)) return path
+  }
+  return null
+}
+
+// A template's compose file as catalog-server serves it, so it compares
+// equal to the stacks deployed from it
+const readTemplateContent = (template: string, path: string) => {
+  const [source = '', folder = ''] = template.split('/')
+  // catalog-server gets HOST_HOME from the CLI's $HOME (compose.yaml)
+  return prepareTemplateCompose(readFileSync(path, 'utf8'), {
+    source,
+    folder,
+    buildPort: readConfig().buildPort,
+    hostHome: process.env.HOME ?? homedir(),
+  })
+}
+
+// postgres:17, docker.io/library/postgres@sha256:… -> postgres: the same app
+// whatever its version
+const imageRepository = (image: string) =>
+  image
+    .replace(/@.*$/, '')
+    .replace(/:[^/:]*$/, '')
+    .replace(/^(docker\.io\/)?(library\/)?/, '')
+
+// The images of a compose file's services, without their tag
+const composeImages = (compose: string) => {
+  try {
+    const parsed = Bun.YAML.parse(compose) as {
+      services?: Record<string, { image?: unknown } | null>
+    } | null
+    return new Set(
+      Object.values(parsed?.services ?? {}).flatMap((service) =>
+        typeof service?.image === 'string' && !service.image.startsWith('${')
+          ? [imageRepository(service.image)]
+          : [],
+      ),
+    )
+  } catch {
+    return new Set<string>()
+  }
+}
+
+// The compose file Dockhand generates when it deploys a container template:
+// built by its own API, from the entry as its template list reads it
+// (Finsys/dockhand src/routes/api/templates/+server.ts)
+const generateContainerCompose = async ({ slug, entry }: ContainerTemplate) => {
+  const env = Array.isArray(entry.env) ? entry.env : []
+  const { compose } = await dockhandPost<{ compose: string }>(
+    '/templates/compose',
+    {
+      template: {
+        type: 'container',
+        title: entry.title ?? entry.name ?? slug,
+        image: entry.image ?? '',
+        ports: Array.isArray(entry.ports) ? entry.ports : [],
+        volumes: Array.isArray(entry.volumes) ? entry.volumes : [],
+        env: env.map((item: Record<string, unknown>) => ({
+          name: item.name ?? '',
+          label: item.label ?? item.name ?? '',
+          default: item.default ?? item.set ?? '',
+        })),
+        restartPolicy: entry.restart_policy ?? 'unless-stopped',
+        ...(entry.network ? { network: entry.network } : {}),
+      },
+    },
+  )
+  return compose
+}
+
+type KnownTemplate = {
+  template: string
+  content: string
+  snapshots: ReturnType<typeof listSnapshots>
+  // The `name:` of its current and past versions
+  names: Set<string>
+  // The images of its services, without their tag
+  images: Set<string>
+  // A container template: its compose file is generated by Dockhand
+  generated: boolean
+}
+
+const knownTemplate = (
+  template: string,
+  content: string,
+  generated: boolean,
+): KnownTemplate => {
+  const snapshots = listSnapshots(template)
+  const names = [content, ...snapshots.map((snapshot) => snapshot.content)]
+    .map(composeName)
+    .filter((name): name is string => name !== null)
+  return {
+    template,
+    content,
+    snapshots,
+    names: new Set(names),
+    images: composeImages(content),
+    generated,
+  }
+}
+
+// Every template of every source: stack templates from their compose file,
+// container templates from the compose file Dockhand generates for them
+const listKnownTemplates = async (): Promise<KnownTemplate[]> => {
+  const known: KnownTemplate[] = []
+  for (const source of listSources()) {
+    for (const folder of readSourceContent(source).docker) {
+      const template = `${source}/${folder}`
+      const path = resolveTemplateCompose(template)
+      if (path) {
+        known.push(
+          knownTemplate(template, readTemplateContent(template, path), false),
+        )
+      }
+    }
+    for (const container of listContainerTemplates(source)) {
+      const template = `${source}/${container.slug}`
+      try {
+        const content = await generateContainerCompose(container)
+        // Like catalog-server for stack templates: the versions a stack may
+        // have been deployed from, the bases of its updates
+        saveSnapshot(template, content)
+        known.push(knownTemplate(template, content, true))
+      } catch {
+        // Dockhand couldn't generate it: the template can't be linked now
+      }
+    }
+  }
+  return known
+}
+
+// How many lines one file has that the other doesn't, in either direction
+const lineDistance = (a: string, b: string) => {
+  const counts = new Map<string, number>()
+  for (const line of a.split('\n'))
+    counts.set(line, (counts.get(line) ?? 0) + 1)
+  for (const line of b.split('\n'))
+    counts.set(line, (counts.get(line) ?? 0) - 1)
+  let distance = 0
+  for (const count of counts.values()) distance += Math.abs(count)
+  return distance
+}
+
+// The template version a stack was deployed from:
+// - the one it still matches exactly
+// - else, for a stack template, the newest one catalog-server served before
+//   the stack was created
+// - else the version closest to the stack, the newest on a tie: the stack's
+//   differences from it are the user's own edits, which merges keep.
+//   Container templates always get here when edited: Dockhand deploys them
+//   from its own copy of the list, cached for up to an hour.
+const findBase = (
+  known: KnownTemplate,
+  content: string,
+  createdAt: Date | null,
+) => {
+  if (known.content === content) {
+    saveSnapshot(known.template, content)
+    return hashTemplate(content)
+  }
+  const exact = known.snapshots.find((snapshot) => snapshot.content === content)
+  if (exact) return exact.hash
+  if (!known.generated && createdAt) {
+    const served = known.snapshots.find(
+      (snapshot) => snapshot.savedAt <= createdAt,
+    )
+    if (served) return served.hash
+  }
+
+  // The current version first: it wins a tie, as the newest
+  const versions = [
+    { hash: hashTemplate(known.content), content: known.content },
+    ...known.snapshots,
+  ]
+  let closest: { hash: string; content: string } | undefined
+  let best = Infinity
+  for (const version of versions) {
+    const distance = lineDistance(version.content, content)
+    if (distance < best) {
+      best = distance
+      closest = version
+    }
+  }
+  if (!closest) return null
+  saveSnapshot(known.template, closest.content)
+  return closest.hash
+}
+
+type DockhandStack = {
+  name: string
+  containerDetails?: { created: number }[]
+}
+
+// The template a stack is linked to, and how:
+// - none if the user unlinked it, or chose "never ask again"
+// - the template with the same compose `name:`
+// - else the one the user confirmed earlier
+// - else one using the same image, if `decide` (the user) picks it
+const matchTemplate = async (
+  stack: string,
+  content: string,
+  stored: StackLink | undefined,
+  known: KnownTemplate[],
+  decide: (candidate: LinkCandidate) => Promise<LinkDecision>,
+) => {
+  // Unlinked by the user, or "never ask again": wins over a matching name
+  if (stored && !isLinked(stored)) return { ignored: true }
+
+  const name = composeName(content)
+  if (name) {
+    const byName = known.filter((template) => template.names.has(name))
+    if (byName.length > 1) {
+      return { ambiguous: byName.map((match) => match.template), name }
+    }
+    if (byName[0]) return { match: byName[0], how: 'name' as const }
+  }
+
+  const confirmed =
+    stored?.how === 'image'
+      ? known.find((template) => template.template === stored.template)
+      : undefined
+  if (confirmed) return { match: confirmed, how: 'image' as const }
+
+  const images = composeImages(content)
+  const candidates = known.filter((template) =>
+    [...template.images].some((image) => images.has(image)),
+  )
+  if (candidates.length === 0) return {}
+  const templates = candidates.map((candidate) => candidate.template)
+  const answer = await decide({ stack, templates })
+  if (answer === 'ignore') return { ignored: true }
+  const match = candidates.find((candidate) => candidate.template === answer)
+  return match ? { match, how: 'image' as const } : { unlinked: templates }
+}
+
+// Dockhand stacks linked to a template (matchTemplate). `ambiguous` lists
+// stacks whose name several templates use, `unlinked` the stacks that look
+// like a template but aren't linked yet. Without `decide`, nothing is asked.
+export const findTemplatedStacks = async (
+  environmentId: number,
+  decide: (candidate: LinkCandidate) => Promise<LinkDecision> = async () =>
+    null,
+) => {
+  const query = `?env=${environmentId}`
+  const stacks = await dockhandApi<DockhandStack[]>(`/stacks${query}`)
+  const links = readLinks()
+  const nextLinks: Record<string, StackLink> = {}
+  const known = await listKnownTemplates()
+
+  const linked: TemplatedStack[] = []
+  const ambiguous: { stack: string; name: string; templates: string[] }[] = []
+  const unlinked: LinkCandidate[] = []
+  const ignored: string[] = []
+  for (const stack of stacks) {
+    let content: string
+    try {
+      ;({ content } = await dockhandApi<{ content: string }>(
+        `/stacks/${encodeURIComponent(stack.name)}/compose${query}`,
+      ))
+    } catch {
+      // Not managed by Dockhand, e.g. the local-env core stack
+      continue
+    }
+
+    const stored = links[stack.name]
+    const result = await matchTemplate(
+      stack.name,
+      content,
+      stored,
+      known,
+      decide,
+    )
+    if (result.ambiguous) {
+      ambiguous.push({
+        stack: stack.name,
+        name: result.name,
+        templates: result.ambiguous,
+      })
+      continue
+    }
+    if (result.ignored) {
+      nextLinks[stack.name] = { ignored: true }
+      ignored.push(stack.name)
+      continue
+    }
+    if (result.unlinked) {
+      unlinked.push({ stack: stack.name, templates: result.unlinked })
+      continue
+    }
+    const { match, how } = result
+    if (!match) continue
+
+    let link =
+      isLinked(stored) && stored.template === match.template
+        ? stored
+        : undefined
+    // A link recorded without a base gets one now, if a version is close
+    if (!link || link.base === null) {
+      const created = stack.containerDetails?.map((item) => item.created) ?? []
+      const createdAt = created.length
+        ? new Date(Math.min(...created) * 1000)
+        : null
+      link = {
+        ...link,
+        template: match.template,
+        base: findBase(match, content, createdAt),
+      }
+    }
+    link = { ...link, how }
+
+    nextLinks[stack.name] = link
+    linked.push({
+      stack: stack.name,
+      ...link,
+      current: content,
+      latest: match.content,
+    })
+  }
+
+  // Also drops the links of removed stacks
+  writeLinks(nextLinks)
+  // Every deployed stack now has its base recorded: older versions can go
+  pruneSnapshots(
+    nextLinks,
+    new Map(
+      known.map((template) => [
+        template.template,
+        hashTemplate(template.content),
+      ]),
+    ),
+  )
+  return {
+    stacks: linked.sort((a, b) => a.stack.localeCompare(b.stack)),
+    ambiguous,
+    unlinked,
+    ignored,
+  }
+}
+
+export const updateLink = (stack: string, update: Partial<TemplateLink>) => {
+  const links = readLinks()
+  const link = links[stack]
+  if (!isLinked(link)) return
+  links[stack] = { ...link, ...update }
+  writeLinks(links)
+}
+
+// The user unlinked the stack: never synced with a template again, even with
+// a matching `name:`, until `sources links --forget`
+export const unlinkStack = (stack: string) => {
+  const links = readLinks()
+  links[stack] = { ignored: true }
+  writeLinks(links)
+}
+
+// Removes what is recorded for a stack: its link, a skipped version, "never
+// ask again" or "unlinked". The next sync links it again or asks.
+export const forgetLink = (stack: string) => {
+  const links = readLinks()
+  if (!(stack in links)) return false
+  delete links[stack]
+  writeLinks(links)
+  return true
+}
+
+// Three-way merge: the template's changes since `base`, applied on top of
+// what is deployed. Returns the merge and how many parts conflict; with
+// `theirs`, conflicts take the template's version instead of markers.
+const merge = async (
+  current: string,
+  base: string,
+  next: string,
+  theirs: boolean,
+) => {
+  const dir = mkdtempSync(join(tmpdir(), 'local-env-merge-'))
+  try {
+    const files = { current, base, next }
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(join(dir, name), content)
+    }
+    // Exit code: the number of conflicts, or a negative error
+    const { stdout, exitCode } = await execa(
+      'git',
+      [
+        'merge-file',
+        '-p',
+        ...(theirs ? ['--theirs'] : []),
+        join(dir, 'current'),
+        join(dir, 'base'),
+        join(dir, 'next'),
+      ],
+      { reject: false, stripFinalNewline: false },
+    )
+    if (exitCode === undefined || exitCode < 0 || exitCode > 127) {
+      throw new Error('git merge-file failed')
+    }
+    return { content: stdout, conflicts: exitCode }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+export const diffStack = async (
+  environmentId: number,
+  stack: TemplatedStack,
+): Promise<StackDiff | null> => {
+  const templateContent = stack.latest
+  const nextBase = hashTemplate(templateContent)
+  if (nextBase === stack.base) return null
+
+  const base = stack.base ? readSnapshot(stack.template, stack.base) : null
+  let next = templateContent
+  let conflicts = 0
+  if (base) {
+    ;({ conflicts } = await merge(stack.current, base, templateContent, false))
+    ;({ content: next } = await merge(
+      stack.current,
+      base,
+      templateContent,
+      true,
+    ))
+  }
+
+  // Nothing new for this stack (it already has the change, or is an exact
+  // copy of the template): only move its base forward
+  if (next === stack.current) {
+    saveSnapshot(stack.template, templateContent)
+    updateLink(stack.stack, { base: nextBase })
+    return null
+  }
+
+  // New required variables would make the redeploy fail. Pass the stack's
+  // variables explicitly: without them Dockhand ignores the stack's .env file
+  const query = `?env=${environmentId}`
+  const name = encodeURIComponent(stack.stack)
+  const { variables, injectedSecretKeys } = await dockhandApi<{
+    variables: { key: string }[]
+    injectedSecretKeys: string[]
+  }>(`/stacks/${name}/env${query}`)
+  const { missing } = await dockhandPost<{ missing: string[] }>(
+    `/stacks/${name}/env/validate${query}`,
+    {
+      compose: next,
+      variables: [...variables.map(({ key }) => key), ...injectedSecretKeys],
+    },
+  )
+
+  return {
+    ...stack,
+    next,
+    templateContent,
+    nextBase,
+    conflicts,
+    missingBase: !base,
+    missingVariables: missing,
+  }
+}
+
+// Saves the merged compose into the stack and redeploys it
+export const applyStackDiff = async (
+  environmentId: number,
+  diff: StackDiff,
+) => {
+  const result = await dockhandPut<{ success?: boolean; error?: string }>(
+    `/stacks/${encodeURIComponent(diff.stack)}/compose?env=${environmentId}`,
+    { content: diff.next, restart: true },
+  )
+  if (result.success === false) {
+    throw new Error(result.error ?? 'redeploy failed')
+  }
+  // The next update merges from this version
+  saveSnapshot(diff.template, diff.templateContent)
+  updateLink(diff.stack, { base: diff.nextBase })
+}

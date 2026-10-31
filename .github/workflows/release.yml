@@ -1,0 +1,109 @@
+# Versions and releases with changesets, as the release GitHub App:
+# - pending changesets on main: opens or updates the "version packages" PR
+# - that PR merged: tags the version, creates its GitHub Release, attaches the
+#   macOS binary (Apple Silicon) and updates the formula in cgaube/homebrew-tap
+# Needs the RELEASE_APP_CLIENT_ID variable and RELEASE_APP_PRIVATE_KEY secret,
+# and the App installed on both repos.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time, never cancelled halfway
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# The App token does the writing
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Create the App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # This repo, and the tap the formula is pushed to
+          repositories: local-env,homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # changesets compares with the history
+          fetch-depth: 0
+
+      # Bun and Node, as pinned in mise.toml
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+
+      - name: Install dependencies
+        # prepare would compile for this runner: the release builds below
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Check
+        run: bun run check
+
+      - name: Test
+        run: bun run test
+
+      - name: Version or release
+        id: changesets
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          version-script: bun run version-packages
+          publish-script: bun run release
+          commit-message: version packages
+          pr-title: Version packages
+
+      - name: Build the macOS binary
+        if: steps.changesets.outputs.published == 'true'
+        # compile targets Apple Silicon, even on this Linux runner
+        run: |
+          bun run compile
+          shasum -a 256 local-env > SHA256SUMS
+
+      - name: Attach it to the release
+        id: attach
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PUBLISHED: ${{ steps.changesets.outputs.published-packages }}
+        run: |
+          version=$(jq -r '.[0].version' <<< "$PUBLISHED")
+          # changeset tag names a single-package repo's tags v<version>
+          tag="v$version"
+          gh release view "$tag" > /dev/null 2>&1 || tag="local-env@$version"
+          gh release upload "$tag" local-env SHA256SUMS --clobber
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Update the Homebrew formula
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.attach.outputs.version }}
+          TAG: ${{ steps.attach.outputs.tag }}
+        run: |
+          # The formula lives in the tap: only its version, tag and checksums
+          # change here
+          path=repos/cgaube/homebrew-tap/contents/Formula/local-env.rb
+          gh api "$path" > formula.json
+          jq -r .content formula.json | base64 -d > local-env.rb
+          bun .github/scripts/update-formula.ts local-env.rb "$VERSION" "$TAG" \
+            "$(awk '$2 == "local-env" { print $1 }' SHA256SUMS)"
+
+          # Through the API: the commit is signed and credited to the App
+          gh api -X PUT "$path" \
+            -f message="local-env $VERSION" \
+            -f content="$(base64 -w0 local-env.rb)" \
+            -f sha="$(jq -r .sha formula.json)" > /dev/null
+          echo "Formula updated to local-env $VERSION"

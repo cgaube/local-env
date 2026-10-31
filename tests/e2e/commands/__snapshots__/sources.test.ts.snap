@@ -1,0 +1,6 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env sources list summarizes the content of each source 1`] = `
+"│  acme   3 docker templates, 1 ansible role  <TMP>/repos/acme
+│  empty  empty  <TMP>/repos/empty"
+`;

@@ -1,0 +1,9 @@
+# `mise install` installs these tools, then the git hooks (lefthook.yml)
+[tools]
+bun = "1.4.4"
+# Runs the changesets CLI
+node = "26"
+lefthook = "2"
+
+[hooks]
+postinstall = "lefthook install"

@@ -1,0 +1,130 @@
+name: local-env
+
+networks:
+  default:
+    name: local-env
+    driver: bridge
+
+services:
+  nginx-proxy:
+    build: services/proxy
+    container_name: local-env-nginx-proxy
+    restart: unless-stopped
+    # Localhost only: *.dev.test resolves to 127.0.0.1, and Dockhand behind it
+    # has no login
+    ports: ['127.0.0.1:80:80', '127.0.0.1:443:443']
+    labels:
+      # Hash of services/<folder>: a change recreates the container
+      local-env.revision: ${LOCAL_ENV_REVISION_PROXY:-}
+      # Shown in the dashboard's Core services section
+      local-env.description:
+        'HTTPS proxy: serves every container with a VIRTUAL_HOST'
+      dockhand.tags: 'local-env'
+      # Built locally, no registry to check for updates
+      dockhand.update: 'false'
+    volumes:
+      - './services/proxy/certs:/etc/nginx/certs:ro'
+      # routes.conf, written by proxy-connector
+      - './volumes/proxy:/etc/nginx/routes:ro'
+
+  dockhand:
+    image: fnsys/dockhand:latest
+    container_name: local-env-dockhand
+    restart: unless-stopped
+    # Localhost only: no login, and it controls Docker
+    ports: ['127.0.0.1:3000:3000']
+    labels:
+      # Shown in the dashboard's Core services section
+      local-env.description:
+        'Docker UI: deploy and manage stacks from your templates'
+      # A card at the top of the dashboard, with the number of docker/
+      # templates in the sources
+      local-env.app: 'Dockhand'
+      local-env.app.content: 'docker'
+      dockhand.tags: 'local-env'
+    environment:
+      VIRTUAL_HOST: docker
+      VIRTUAL_PORT: 3000
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - './volumes/dockhand:/app/data'
+
+  # Serves the docker/ folder of every source to Dockhand
+  catalog-server:
+    image: oven/bun:1.4.4-alpine
+    container_name: local-env-catalog
+    restart: unless-stopped
+    working_dir: /app
+    command: ['bun', 'server.ts']
+    labels:
+      # Hash of services/<folder>: a change recreates the container
+      local-env.revision: ${LOCAL_ENV_REVISION_CATALOG_SERVER:-}
+      # Shown in the dashboard's Core services section
+      local-env.description:
+        "Serves your sources' templates and build folders to Dockhand"
+      dockhand.tags: 'local-env'
+    # https://catalog.<domain>: what it serves to Dockhand
+    environment:
+      VIRTUAL_HOST: catalog
+      VIRTUAL_PORT: 8080
+      # Replaces ${HOST_HOME} in templates: your Mac home folder
+      HOST_HOME: ${HOME}
+      # Written into template build URLs: the published port below
+      BUILD_PORT: ${LOCAL_ENV_BUILD_PORT:-17080}
+    # Docker's builder fetches template build contexts from here: it runs
+    # outside the local-env network. `buildPort` in config.json.
+    ports:
+      - '127.0.0.1:${LOCAL_ENV_BUILD_PORT:-17080}:8080'
+    volumes:
+      - './services/catalog-server:/app:ro'
+      - './volumes/sources:/sources:ro'
+      # One single-commit repo per source, for build contexts
+      - './volumes/build-contexts:/build-contexts:ro'
+      # Every compose version served to Dockhand: the base of template updates
+      - './volumes/template-snapshots:/snapshots'
+
+  # Web page listing every proxied URL, like `local-env proxy routes`
+  dashboard:
+    build: services/dashboard
+    container_name: local-env-dashboard
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: local-env
+      DOMAIN: ${LOCAL_ENV_DOMAIN:-dev.test}
+    labels:
+      # Hash of services/<folder>: a change recreates the container
+      local-env.revision: ${LOCAL_ENV_REVISION_DASHBOARD:-}
+      # Shown in the dashboard's Core services section
+      local-env.description: 'Lists routes, core services and sources'
+      dockhand.tags: 'local-env'
+      # Built locally, no registry to check for updates
+      dockhand.update: 'false'
+    volumes:
+      # routes.json, written by proxy-connector
+      - './volumes/proxy:/routes:ro'
+      - './volumes/sources:/sources:ro'
+
+  # Routes every container with a VIRTUAL_HOST: attaches it to the local-env
+  # network and generates the nginx config. VIRTUAL_HOST=mail is served at
+  # https://mail.<domain>
+  proxy-connector:
+    image: oven/bun:1.4.4-alpine
+    container_name: local-env-proxy-connector
+    restart: unless-stopped
+    working_dir: /app
+    command: ['bun', 'connector.ts']
+    environment:
+      PROXY_NETWORK: local-env
+      PROXY_SERVICE: nginx-proxy
+      DOMAIN: ${LOCAL_ENV_DOMAIN:-dev.test}
+    labels:
+      # Hash of services/<folder>: a change recreates the container
+      local-env.revision: ${LOCAL_ENV_REVISION_PROXY_CONNECTOR:-}
+      # Shown in the dashboard's Core services section
+      local-env.description:
+        'Connects containers with a VIRTUAL_HOST to the proxy'
+      dockhand.tags: 'local-env'
+    volumes:
+      - './services/proxy-connector/connector.ts:/app/connector.ts:ro'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - './volumes/proxy:/routes'
