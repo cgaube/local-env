@@ -192,9 +192,13 @@ Short, imperative, lowercase messages (for example `fix bucket script`).
 Versions and `CHANGELOG.md` are managed with changesets
 (`.changeset/config.json`).
 
-- For a change users would notice, add a changeset: `bun run changeset`, pick
-  patch, minor or major, and describe the change for users. Commit the generated
-  `.changeset/*.md` with it. Internal refactors and docs need none.
+- A pull request that changes what users get adds a changeset, which CI
+  requires. `changedFilePatterns` in `.changeset/config.json` lists those files
+  (`src/`, `services/`, `compose.yaml`): add a path there when the CLI starts
+  shipping it. For a change users would notice: `bun run changeset`, pick patch,
+  minor or major, and describe the change for users. For a refactor:
+  `bun run changeset --empty`, which releases nothing. Commit the generated
+  `.changeset/*.md` with the change. Other changes (docs, tests, CI) need none.
 - To release, `bun run version-packages` applies the pending changesets: it
   bumps `package.json` (which `local-env --version` reads) and writes
   `CHANGELOG.md`.
