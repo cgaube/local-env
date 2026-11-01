@@ -2,7 +2,7 @@
   "name": "local-env",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "scripts": {
     "cleanup": "rm -f .*.bun-build",
