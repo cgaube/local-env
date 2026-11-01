@@ -1,5 +1,6 @@
-import { rmSync, writeFileSync } from 'fs'
+import { readFileSync, rmSync, writeFileSync } from 'fs'
 import {
+  checkConfig,
   CONFIG_PATH,
   DEFAULT_CONFIG,
   isValidDomain,
@@ -60,5 +61,65 @@ describe('readConfig and writeConfig', () => {
   test('names the file when it is not valid JSON', () => {
     writeFileSync(CONFIG_PATH, '{ nope')
     expect(() => readConfig()).toThrow(`${CONFIG_PATH} is not valid JSON`)
+  })
+
+  test.each(['null', '42', '"dev.test"'])(
+    'names the file when it holds %s, not an object',
+    (content) => {
+      writeFileSync(CONFIG_PATH, content)
+      expect(() => checkConfig()).toThrow(`${CONFIG_PATH} is not valid JSON`)
+    },
+  )
+
+  test('rejects a domain that would name a path, and says how to fix it', () => {
+    writeFileSync(CONFIG_PATH, JSON.stringify({ domain: '../sudoers' }))
+    expect(() => readConfig()).toThrow(
+      'Fix it with `local-env config set domain <value>`',
+    )
+  })
+
+  test.each([null, false, 123])(
+    'rejects the domain %p, not a string',
+    (domain) => {
+      writeFileSync(CONFIG_PATH, JSON.stringify({ domain }))
+      expect(() => readConfig()).toThrow(
+        `Invalid domain ${JSON.stringify(domain)}.`,
+      )
+    },
+  )
+
+  test('normalizes a hand-edited domain', () => {
+    writeFileSync(CONFIG_PATH, JSON.stringify({ domain: ' .Acme.Test ' }))
+    expect(readConfig().domain).toBe('acme.test')
+  })
+
+  test('lists every invalid value in one error', () => {
+    writeFileSync(
+      CONFIG_PATH,
+      JSON.stringify({ domain: '../sudoers', buildPort: 80 }),
+    )
+    expect(() => readConfig()).toThrow(
+      /Invalid domain "..\/sudoers"[\s\S]*Invalid port "80"/,
+    )
+  })
+
+  test('checkConfig returns the errors and the defaults', () => {
+    writeFileSync(
+      CONFIG_PATH,
+      JSON.stringify({ domain: '../sudoers', buildPort: 18000 }),
+    )
+    const { config, errors } = checkConfig()
+    expect(config).toEqual({ domain: DEFAULT_CONFIG.domain, buildPort: 18000 })
+    expect(errors.map((error) => error.key)).toEqual(['domain'])
+  })
+
+  test('writes a patch while another value is invalid', () => {
+    writeFileSync(CONFIG_PATH, JSON.stringify({ domain: '../sudoers' }))
+    writeConfig({ buildPort: 18000 })
+    // Kept as stored, for `config set domain` to repair
+    expect(JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))).toEqual({
+      domain: '../sudoers',
+      buildPort: 18000,
+    })
   })
 })

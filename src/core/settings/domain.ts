@@ -3,20 +3,12 @@ import { execCompose, runCompose } from '../../utils/exec.js'
 import { logger } from '../../utils/logger.js'
 import { askConfirm, askText } from '../../utils/prompt.js'
 import { ensureCertificate, getCertPaths } from '../certificate.js'
-import { DEFAULT_CONFIG, isValidDomain, normalizeDomain } from '../config.js'
+import { DEFAULT_CONFIG, parseDomain as parse } from '../config.js'
 import { ensureWildcardDns, removeResolver } from '../dns.js'
 import type { Setting } from './types.js'
 
 // The services that read the domain from their environment
 const DOMAIN_SERVICES = ['proxy-connector', 'dashboard']
-
-const parse = (raw: string) => {
-  const domain = normalizeDomain(raw)
-  if (!isValidDomain(domain)) {
-    throw new Error(`Invalid domain "${raw}". Expected one like "dev.test".`)
-  }
-  return domain
-}
 
 // Recreates them with the new value; a stopped stack picks it up on start
 const restartDomainServices = async () => {

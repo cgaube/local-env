@@ -128,6 +128,23 @@ describe.concurrent('local-env config set, applied', () => {
     },
   )
 
+  test('repairs an invalid domain without cleaning up after it', async () => {
+    await using cli = await createCli()
+    machineReady(cli)
+    cli.home.writeJson('config.json', { domain: '../sudoers' })
+
+    const result = await cli.run(['config', 'set', 'domain', TEST_DOMAIN])
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.home.readJson('config.json')).toMatchObject({
+      domain: TEST_DOMAIN,
+    })
+    // No "previous domain" to remove: its paths would point anywhere
+    expect(cli.bin.calls('sudo').map((call) => call.args[0])).not.toContain(
+      'rm',
+    )
+  })
+
   test('rejects a build port out of range', async () => {
     await using cli = await createCli()
     cli.home.seedConfig()

@@ -11,6 +11,8 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import { HOME_DIR } from '../../core/paths.js'
+import { isValidSourceName } from '../../sources/sources.js'
+import { logger } from '../../utils/logger.js'
 
 // Links Dockhand stacks to the template they were deployed from, without
 // adding anything to their compose file.
@@ -70,6 +72,19 @@ export const composeName = (compose: string) => {
 
 export type Snapshot = { hash: string; content: string; savedAt: Date }
 
+// <source>/<folder>: a template id names folders, so it can't hold `..`
+export const isValidTemplate = (template: string) => {
+  const [source = '', folder, ...rest] = template.split('/')
+  return (
+    isValidSourceName(source) &&
+    !!folder &&
+    !folder.startsWith('.') &&
+    rest.length === 0
+  )
+}
+
+const isValidHash = (hash: string) => /^[0-9a-f]+$/.test(hash)
+
 const snapshotDir = (template: string) =>
   join(SNAPSHOTS_DIR, ...template.split('/'))
 
@@ -102,12 +117,43 @@ export const saveSnapshot = (template: string, content: string) => {
   writeFileSync(file, content)
 }
 
+// The file is written by the CLI, but a hand edit could point a link's
+// template or base outside SNAPSHOTS_DIR
+const isValidLink = (link: unknown): link is StackLink => {
+  if (typeof link !== 'object' || link === null) return false
+  // Like isLinked: an entry with a template is a link, whatever else it holds
+  if (!('template' in link)) return 'ignored' in link && link.ignored === true
+  const { template, base } = link as Partial<TemplateLink>
+  return (
+    typeof template === 'string' &&
+    isValidTemplate(template) &&
+    (base === null || (typeof base === 'string' && isValidHash(base)))
+  )
+}
+
+// Warned once per run: the links are read several times
+const warned = new Set<string>()
+
+// Invalid links are left out: the next sync links those stacks again, or asks
 export const readLinks = (): Record<string, StackLink> => {
+  let links: Record<string, unknown>
   try {
-    return JSON.parse(readFileSync(LINKS_FILE, 'utf8'))
+    links = JSON.parse(readFileSync(LINKS_FILE, 'utf8'))
   } catch {
     return {}
   }
+  // `null` or `42` parse too, but hold no links
+  if (typeof links !== 'object' || links === null) return {}
+  return Object.fromEntries(
+    Object.entries(links).flatMap(([stack, link]) => {
+      if (isValidLink(link)) return [[stack, link] as const]
+      if (!warned.has(stack)) {
+        warned.add(stack)
+        logger.warn(`${stack}: invalid link in ${LINKS_FILE}, ignored`)
+      }
+      return []
+    }),
+  )
 }
 
 export const writeLinks = (links: Record<string, StackLink>) => {
