@@ -49,10 +49,13 @@ const PARSERS: { [K in keyof Config]: (raw: string) => Config[K] } = {
 const readStoredConfig = (): Record<string, unknown> => {
   if (!existsSync(CONFIG_PATH)) return {}
   try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))
+    const stored = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))
+    // `null` or `42` parse too, but hold no settings
+    if (typeof stored === 'object' && stored !== null) return stored
   } catch {
-    throw new Error(`${CONFIG_PATH} is not valid JSON`)
+    // Reported below
   }
+  throw new Error(`${CONFIG_PATH} is not valid JSON`)
 }
 
 export type ConfigError = { key: keyof Config; message: string }
@@ -65,6 +68,14 @@ export const checkConfig = () => {
   const errors: ConfigError[] = []
   for (const key of Object.keys(PARSERS) as (keyof Config)[]) {
     if (!(key in stored)) continue
+    // String() would turn `null` or `123` into a valid-looking domain
+    if (typeof stored[key] !== typeof DEFAULT_CONFIG[key]) {
+      errors.push({
+        key,
+        message: `Invalid ${key} ${JSON.stringify(stored[key])}.`,
+      })
+      continue
+    }
     try {
       Object.assign(config, { [key]: PARSERS[key](String(stored[key])) })
     } catch (error) {

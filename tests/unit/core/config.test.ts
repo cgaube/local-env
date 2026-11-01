@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from 'fs'
+import { readFileSync, rmSync, writeFileSync } from 'fs'
 import {
   checkConfig,
   CONFIG_PATH,
@@ -63,12 +63,30 @@ describe('readConfig and writeConfig', () => {
     expect(() => readConfig()).toThrow(`${CONFIG_PATH} is not valid JSON`)
   })
 
+  test.each(['null', '42', '"dev.test"'])(
+    'names the file when it holds %s, not an object',
+    (content) => {
+      writeFileSync(CONFIG_PATH, content)
+      expect(() => checkConfig()).toThrow(`${CONFIG_PATH} is not valid JSON`)
+    },
+  )
+
   test('rejects a domain that would name a path, and says how to fix it', () => {
     writeFileSync(CONFIG_PATH, JSON.stringify({ domain: '../sudoers' }))
     expect(() => readConfig()).toThrow(
       'Fix it with `local-env config set domain <value>`',
     )
   })
+
+  test.each([null, false, 123])(
+    'rejects the domain %p, not a string',
+    (domain) => {
+      writeFileSync(CONFIG_PATH, JSON.stringify({ domain }))
+      expect(() => readConfig()).toThrow(
+        `Invalid domain ${JSON.stringify(domain)}.`,
+      )
+    },
+  )
 
   test('normalizes a hand-edited domain', () => {
     writeFileSync(CONFIG_PATH, JSON.stringify({ domain: ' .Acme.Test ' }))
@@ -97,7 +115,11 @@ describe('readConfig and writeConfig', () => {
 
   test('writes a patch while another value is invalid', () => {
     writeFileSync(CONFIG_PATH, JSON.stringify({ domain: '../sudoers' }))
-    writeConfig({ domain: 'acme.test' })
-    expect(readConfig().domain).toBe('acme.test')
+    writeConfig({ buildPort: 18000 })
+    // Kept as stored, for `config set domain` to repair
+    expect(JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))).toEqual({
+      domain: '../sudoers',
+      buildPort: 18000,
+    })
   })
 })

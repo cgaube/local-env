@@ -56,6 +56,12 @@ describe('isValidTemplate', () => {
 })
 
 describe('readLinks', () => {
+  test('reads no links from a file that holds no object', () => {
+    mkdirSync(join(HOME_DIR, 'volumes'), { recursive: true })
+    writeFileSync(join(HOME_DIR, 'volumes/template-links.json'), 'null')
+    expect(readLinks()).toEqual({})
+  })
+
   test('leaves out links whose template or base would name a path', () => {
     mkdirSync(join(HOME_DIR, 'volumes'), { recursive: true })
     writeFileSync(
@@ -67,6 +73,7 @@ describe('readLinks', () => {
         escape: { template: '../../etc', base: 'abc123' },
         base: { template: 'acme/mail', base: '../../x' },
         broken: 'nope',
+        hidden: { ignored: true, template: '../x', base: null },
       }),
     )
     // Collected, not printed: the test run stays quiet
@@ -84,6 +91,7 @@ describe('readLinks', () => {
       'escape',
       'base',
       'broken',
+      'hidden',
     ])
   })
 })

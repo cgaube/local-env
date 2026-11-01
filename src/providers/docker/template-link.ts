@@ -121,7 +121,8 @@ export const saveSnapshot = (template: string, content: string) => {
 // template or base outside SNAPSHOTS_DIR
 const isValidLink = (link: unknown): link is StackLink => {
   if (typeof link !== 'object' || link === null) return false
-  if ('ignored' in link) return link.ignored === true
+  // Like isLinked: an entry with a template is a link, whatever else it holds
+  if (!('template' in link)) return 'ignored' in link && link.ignored === true
   const { template, base } = link as Partial<TemplateLink>
   return (
     typeof template === 'string' &&
@@ -141,6 +142,8 @@ export const readLinks = (): Record<string, StackLink> => {
   } catch {
     return {}
   }
+  // `null` or `42` parse too, but hold no links
+  if (typeof links !== 'object' || links === null) return {}
   return Object.fromEntries(
     Object.entries(links).flatMap(([stack, link]) => {
       if (isValidLink(link)) return [[stack, link] as const]
