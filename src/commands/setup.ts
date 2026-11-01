@@ -2,8 +2,8 @@ import { Command } from 'commander'
 import { existsSync } from 'fs'
 import { installLocalCa } from '../core/certificate.js'
 import {
+  checkConfig,
   CONFIG_PATH,
-  readConfig,
   writeConfig,
   type Config,
 } from '../core/config.js'
@@ -69,8 +69,12 @@ export const runSetup = async ({ yes, values = {} }: SetupOptions) => {
   await ensureDependencies(yes)
   await installLocalCa()
 
-  const previous = existsSync(CONFIG_PATH) ? readConfig() : null
-  const current = readConfig()
+  // An invalid value (a hand edit) is asked again, and has nothing to clean
+  // up: its certificate and resolver paths would point anywhere
+  const { config: current, errors } = checkConfig()
+  for (const { message } of errors) logger.warn(`${CONFIG_PATH}: ${message}`)
+  const invalid = new Set(errors.map((error) => error.key))
+  const previous = existsSync(CONFIG_PATH) ? current : null
   const next: Record<string, unknown> = { ...current }
 
   logger.group('Settings')
@@ -83,11 +87,13 @@ export const runSetup = async ({ yes, values = {} }: SetupOptions) => {
           ? current[setting.key]
           : await setting.ask(current[setting.key])
   }
-  const saved = writeConfig(next as Config)
+  const saved = next as Config
+  writeConfig(saved)
   logger.success(`Saved in ${CONFIG_PATH}`)
 
   for (const setting of settings) {
-    await setting.apply(saved[setting.key], previous?.[setting.key] ?? null, {
+    const before = invalid.has(setting.key) ? null : previous?.[setting.key]
+    await setting.apply(saved[setting.key], before ?? null, {
       yes,
       review: true,
     })

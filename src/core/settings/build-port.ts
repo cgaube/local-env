@@ -1,7 +1,7 @@
 import { execCompose, runCompose } from '../../utils/exec.js'
 import { logger } from '../../utils/logger.js'
 import { askText } from '../../utils/prompt.js'
-import { DEFAULT_CONFIG } from '../config.js'
+import { DEFAULT_CONFIG, parseBuildPort as parse } from '../config.js'
 import type { Setting } from './types.js'
 
 // catalog-server serves template build folders to Docker's builder on this
@@ -54,14 +54,6 @@ export const findFreePort = (from: number) => {
     if (isFree(port)) return port
   }
   return null
-}
-
-const parse = (raw: string) => {
-  const port = Number(raw)
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-    throw new Error(`Invalid port "${raw}". Use a number from 1024 to 65535.`)
-  }
-  return port
 }
 
 // Recreates catalog-server on the new port; a stopped stack picks it up on

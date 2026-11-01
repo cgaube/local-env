@@ -1,7 +1,12 @@
 import { Command } from 'commander'
 import { existsSync, readFileSync } from 'fs'
 import { styleText } from 'node:util'
-import { CONFIG_PATH, readConfig, writeConfig } from '../core/config.js'
+import {
+  checkConfig,
+  CONFIG_PATH,
+  readConfig,
+  writeConfig,
+} from '../core/config.js'
 import { findSetting, settings } from '../core/settings/index.js'
 import { logger } from '../utils/index.js'
 
@@ -65,7 +70,13 @@ const setCommand = new Command('set')
   .action(async (key: string, value: string, options: { apply: boolean }) => {
     try {
       const setting = requireSetting(key)
-      const previous = readConfig()[setting.key]
+      // Repairs an invalid value: there is no previous one to clean up
+      const { config, errors } = checkConfig()
+      for (const { message } of errors) {
+        logger.warn(`${CONFIG_PATH}: ${message}`)
+      }
+      const invalid = errors.some((error) => error.key === setting.key)
+      const previous = invalid ? null : config[setting.key]
       const next = setting.parse(value)
 
       if (next !== previous) {
