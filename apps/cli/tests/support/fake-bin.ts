@@ -19,6 +19,8 @@ export const FAKED_COMMANDS = [
   'dnsmasq',
   'docker',
   'dscacheutil',
+  // The new version `update` hands over to, once brew installed it
+  'local-env',
   'mkcert',
   'open',
   'sudo',

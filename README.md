@@ -55,20 +55,20 @@ bun install          # also builds ./local-env
 
 ## Commands
 
-| Command                            | What it does                                       |
-| ---------------------------------- | -------------------------------------------------- |
-| `setup`                            | Wizard: domain, HTTPS certificate and DNS          |
-| `start` / `stop` / `status`        | Manage the core services                           |
-| `update`                           | Update core services, sources, stacks and images   |
-| `sources add <repo>`               | Clone a source from a git URL or a local git repo  |
-| `sources list` / `remove`          | Manage sources                                     |
-| `sources sync [source]`            | Pull sources, then sync installed stacks with them |
-| `sources links`                    | List installed stacks and the template of each     |
-| `install`                          | Install the tools picked in the dashboard          |
-| `proxy routes`                     | List the hosts the proxy serves                    |
-| `config get` / `set <key> <value>` | Read or change a setting, and apply it             |
-| `doctor`                           | Check DNS, certificates and the proxy              |
-| `reset`                            | Remove everything local-env created                |
+| Command                            | What it does                                                |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `setup`                            | Wizard: domain, HTTPS certificate and DNS                   |
+| `start` / `stop` / `status`        | Manage the core services                                    |
+| `update`                           | Update local-env, core services, sources, stacks and images |
+| `sources add <repo>`               | Clone a source from a git URL or a local git repo           |
+| `sources list` / `remove`          | Manage sources                                              |
+| `sources sync [source]`            | Pull sources, then sync installed stacks with them          |
+| `sources links`                    | List installed stacks and the template of each              |
+| `install`                          | Install the tools picked in the dashboard                   |
+| `proxy routes`                     | List the hosts the proxy serves                             |
+| `config get` / `set <key> <value>` | Read or change a setting, and apply it                      |
+| `doctor`                           | Check DNS, certificates and the proxy                       |
+| `reset`                            | Remove everything local-env created                         |
 
 ## Sources
 

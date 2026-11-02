@@ -1,41 +1,96 @@
-import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { SidebarProvider } from '#ui/components/ui/sidebar'
 import { NavVersion } from '#ui/features/layout/nav-version'
 
-describe('NavVersion', () => {
-  test('links the release version to the changelog', () => {
-    render(
-      <NavVersion
-        build={{ version: '0.2.0', kind: 'release', commit: 'abc1234' }}
-      />,
-    )
+type Build = Parameters<typeof NavVersion>[0]['build']
 
-    expect(screen.getByRole('link', { name: 'v0.2.0' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('CHANGELOG.md'),
-    )
-    expect(screen.queryByText(/abc1234/)).not.toBeInTheDocument()
+// The sidebar's version, the latest one already read (or not)
+const renderVersion = (build: Build, latest: string | null | undefined) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  if (latest !== undefined) {
+    queryClient.setQueryData(['latest-version'], latest)
+  }
+  render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <NavVersion build={build} />
+      </SidebarProvider>
+    </QueryClientProvider>,
+  )
+}
+
+const release = { version: '0.2.0', kind: 'release', commit: null } as const
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('NavVersion', () => {
+  test('shows the running and the latest version, and how to update', async () => {
+    const user = userEvent.setup()
+    renderVersion(release, '0.3.0')
+
+    await user.click(screen.getByRole('button', { name: /v0\.2\.0.*Update/ }))
+    expect(await screen.findByText('v0.3.0')).toBeInTheDocument()
+    await user.click(screen.getByRole('menuitem', { name: 'How to update' }))
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Update local-env',
+    })
+    expect(
+      within(dialog).getByText('local-env 0.3.0 is out.', { exact: false }),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText('local-env update')).toBeInTheDocument()
   })
 
-  test('marks a build of a checkout, with its commit', () => {
-    render(
-      <NavVersion
-        build={{ version: '0.2.0', kind: 'checkout', commit: 'abc1234-dirty' }}
-      />,
+  test('says nothing about updates when this is the latest', async () => {
+    const user = userEvent.setup()
+    renderVersion(release, '0.2.0')
+
+    await user.click(screen.getByRole('button', { name: /v0\.2\.0/ }))
+
+    const menu = await screen.findByRole('menu')
+    expect(screen.queryByText('Update')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('menuitem', { name: 'How to update' }),
+    ).not.toBeInTheDocument()
+    // Running and Latest
+    expect(within(menu).getAllByText('v0.2.0')).toHaveLength(2)
+  })
+
+  test('checks again on request', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('class LocalEnv\n  version "0.4.0"\nend')),
+    )
+    renderVersion(release, null)
+
+    await user.click(screen.getByRole('button', { name: /v0\.2\.0/ }))
+    expect(await screen.findByText('Unknown')).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Check for updates' }),
+    )
+
+    expect(await screen.findByText('v0.4.0')).toBeInTheDocument()
+  })
+
+  test('marks a build of a checkout, with its commit, and no update', async () => {
+    renderVersion(
+      { version: '0.1.1', kind: 'checkout', commit: 'abc1234-dirty' },
+      '0.3.0',
     )
 
     expect(screen.getByText('Dev build')).toBeInTheDocument()
-    expect(screen.getByText('v0.2.0 · abc1234-dirty')).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText('v0.1.1 · abc1234-dirty')).toBeInTheDocument()
+    expect(screen.queryByText('Update')).not.toBeInTheDocument()
   })
 
   test('marks the dev server', () => {
-    render(
-      <NavVersion
-        build={{ version: '0.2.0', kind: 'dev-server', commit: null }}
-      />,
-    )
+    renderVersion({ version: '0.2.0', kind: 'dev-server', commit: null }, null)
 
     expect(screen.getByText('Dev server')).toBeInTheDocument()
-    expect(screen.getByText('v0.2.0')).toBeInTheDocument()
   })
 })

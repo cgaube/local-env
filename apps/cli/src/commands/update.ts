@@ -3,6 +3,7 @@ import { providers, provisionProviders } from '../providers/index.js'
 import { ensureCertificate } from '../core/certificate.js'
 import { readConfig } from '../core/config.js'
 import { ensureRuntimeDirs } from '../core/home.js'
+import { updateSelf } from '../core/self-update.js'
 import { pullSources } from '../sources/sources.js'
 import {
   runCompose,
@@ -31,7 +32,7 @@ const updateCoreStack = async () => {
 
 export const updateCommand = new Command('update')
   .description(
-    'Update everything: core services, sources and what was installed from them',
+    'Update everything: local-env, core services, sources and what was installed from them',
   )
   .option('-y, --yes', 'Sync stacks with their templates without asking', false)
   .option(
@@ -41,6 +42,9 @@ export const updateCommand = new Command('update')
   )
   .action(async (options: { yes: boolean; dryRun: boolean }) => {
     try {
+      // Hands over to the new version, if Homebrew installs one
+      await updateSelf(options)
+
       if (!(await isDockerRunning())) {
         logger.error('Docker is not running. Start Docker and retry.')
         process.exit(1)

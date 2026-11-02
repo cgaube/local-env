@@ -1,4 +1,4 @@
-import { log, note } from '@clack/prompts'
+import { log, note, outro } from '@clack/prompts'
 import { styleText } from 'node:util'
 import {
   type CalloutLevel,
@@ -15,6 +15,17 @@ let gapBefore = false
 export const markIntro = () => {
   gapBefore = true
 }
+
+// Closed by a command that hands over to another process (update, once it
+// upgraded local-env): main.ts then leaves the frame alone
+let frameClosed = false
+export const closeFrame = (message: string) => {
+  // main.ts frames only a terminal's output
+  if (process.stdout.isTTY) outro(message)
+  else log.message(message)
+  frameClosed = true
+}
+export const isFrameClosed = () => frameClosed
 
 // A line under the current group, on clack's guide line without an icon
 const line = (text: string) => {

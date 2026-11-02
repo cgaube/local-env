@@ -22,11 +22,13 @@ holds what we build:
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
   `update`, `sources` (add, list, remove, sync, links), `install`,
-  `proxy routes`, `doctor`. `update` refreshes the core stack and the sources,
-  then lists the stacks whose template changed and offers to run the
-  `sources sync` flow. `sources sync` pulls the sources first (`--no-pull` to
-  skip): it is the everyday command after a template change, `update` refreshes
-  everything.
+  `proxy routes`, `doctor`. `update` first upgrades local-env with Homebrew when
+  a newer version is out, then hands over to the new version
+  (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
+  and the sources, then lists the stacks whose template changed and offers to
+  run the `sources sync` flow. `sources sync` pulls the sources first
+  (`--no-pull` to skip): it is the everyday command after a template change,
+  `update` refreshes everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The
@@ -34,6 +36,12 @@ holds what we build:
   (`config.json`, `services/proxy/certs/`, `volumes/`) lives only in the home
   folder. `src/core/config.ts` reads and writes `config.json` (the domain); the
   CLI passes it to compose as `LOCAL_ENV_DOMAIN`.
+- Before each command, `src/core/update-check.ts` says when a newer version can
+  be installed (an `info` callout). It reads the version of the Homebrew formula
+  (`src/core/homebrew.ts` names the tap), which the release workflow updates
+  last, at most once a day, and keeps the answer in `update-check.json` in the
+  home folder. A checkout skips it, except in tests, which point
+  `LOCAL_ENV_FORMULA_URL` at a fake.
 - When `LOCAL_ENV_HOME` points at a checkout, its files are used in place:
   `LOCAL_ENV_HOME=. bun run local-env start` runs your working tree.
 - `src/core/settings/` defines each `config.json` setting once (`parse`, `ask`,
