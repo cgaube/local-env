@@ -121,6 +121,7 @@ describe.concurrent('local-env update, of local-env itself', () => {
     await using cli = await createCli()
     using formula = fakeFormula('99.0.0')
     cli.bin.on('brew', ['list', 'local-env'])
+    cli.bin.on('brew', ['update'])
     cli.bin.on('brew', ['upgrade', 'local-env'])
     cli.bin.on('local-env', ['update'])
 
@@ -131,6 +132,9 @@ describe.concurrent('local-env update, of local-env itself', () => {
       `local-env 99.0.0 is out (you have ${packageJson.version})`,
     )
     expect(result.output).toContain('Upgraded to local-env 99.0.0')
+    // brew update first, or brew upgrade can miss the new version
+    const brew = cli.bin.calls('brew').map((call) => call.args)
+    expect(brew.slice(-2)).toEqual([['update'], ['upgrade', 'local-env']])
     expect(result.output).toContain('Continuing with local-env 99.0.0')
     // The rest of the update runs on the new version, with the same options
     const [next] = cli.bin.calls('local-env')
@@ -143,6 +147,7 @@ describe.concurrent('local-env update, of local-env itself', () => {
     await using cli = await createCli()
     using formula = fakeFormula('99.0.0')
     cli.bin.on('brew', ['list', 'local-env'])
+    cli.bin.on('brew', ['update'])
     cli.bin.on('brew', ['upgrade', 'local-env'])
     cli.bin.on('local-env', ['update'], { exitCode: 1 })
 
@@ -203,6 +208,19 @@ describe.concurrent('local-env update, of local-env itself', () => {
       `Updated from 0.1.0 to ${packageJson.version}`,
     )
     expect(formula.requests()).toBe(0)
+  })
+
+  test('warns when Homebrew installed the same version', async () => {
+    await using cli = await createCli()
+    using formula = fakeFormula('99.0.0')
+    dockerStopped(cli.bin)
+
+    const result = await cli.run(['update'], {
+      env: { ...formula.env, LOCAL_ENV_UPDATED_FROM: packageJson.version },
+    })
+
+    expect(result.output).toContain('Homebrew did not install a new version')
+    expect(result.output).not.toContain('Updated from')
   })
 
   test('says it could not check when the formula is out of reach', async () => {

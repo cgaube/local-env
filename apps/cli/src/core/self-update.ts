@@ -27,7 +27,11 @@ export const updateSelf = async ({ dryRun }: { dryRun: boolean }) => {
 
   const from = process.env[UPDATED_FROM]
   if (from) {
-    logger.success(`Updated from ${from} to ${current}`)
+    if (from === current) {
+      logger.warn(
+        `Homebrew did not install a new version: run brew update, then ${UPGRADE_COMMAND}`,
+      )
+    } else logger.success(`Updated from ${from} to ${current}`)
     return
   }
   // A checkout is behind or ahead on purpose. Tests run one, with a fake
@@ -58,12 +62,20 @@ export const updateSelf = async ({ dryRun }: { dryRun: boolean }) => {
     return
   }
 
+  // brew upgrade reads the formula from its local copy of the tap. It updates
+  // that copy only when its last update is old enough, so it can still see
+  // the old version. Update the taps first.
+  await runTask('Running brew update', 'brew', ['update'], {
+    done: 'Updated Homebrew',
+  })
   await runTask(
     `Running ${UPGRADE_COMMAND}`,
     'brew',
     ['upgrade', HOMEBREW_FORMULA],
     {
       done: `Upgraded to local-env ${latest}`,
+      // The taps are up to date: do not update them again
+      env: { HOMEBREW_NO_AUTO_UPDATE: '1' },
     },
   )
   closeFrame(`Continuing with local-env ${latest}`)
