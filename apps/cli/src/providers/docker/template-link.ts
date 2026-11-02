@@ -85,8 +85,12 @@ export const isValidTemplate = (template: string) => {
 
 const isValidHash = (hash: string) => /^[0-9a-f]+$/.test(hash)
 
-const snapshotDir = (template: string) =>
-  join(SNAPSHOTS_DIR, ...template.split('/'))
+const snapshotDir = (template: string) => {
+  if (!isValidTemplate(template)) {
+    throw new Error(`Invalid template "${template}"`)
+  }
+  return join(SNAPSHOTS_DIR, ...template.split('/'))
+}
 
 // Every version of a template served to Dockhand or applied, newest first
 export const listSnapshots = (template: string): Snapshot[] => {
@@ -106,6 +110,7 @@ export const listSnapshots = (template: string): Snapshot[] => {
 }
 
 export const readSnapshot = (template: string, hash: string) => {
+  if (!isValidHash(hash)) return null
   const file = join(snapshotDir(template), `${hash}.yml`)
   return existsSync(file) ? readFileSync(file, 'utf8') : null
 }
