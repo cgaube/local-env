@@ -1,12 +1,15 @@
-// Lists the proxy routes, the same data as `local-env proxy routes`, as a web
-// page served behind the proxy itself. proxy-connector writes the routes.
-//   /            -> index.html
+// The local-env dashboard, served behind the proxy itself: the web app built
+// from apps/web into public/, and the data it shows. proxy-connector
+// writes the routes.
+//   /api/...     -> the data below
+//   /assets/...  -> the app's files, cached for good (their names change)
+//   any other    -> public/index.html: the app routes itself (/docker/routes)
 //   /api/events  -> a Server-Sent Events stream: the current routes, services
 //                   and sources on connect, then each of them again when it
 //                   changes (watched files, no polling)
 //   /api/config  -> the domain, for the help section
-import { existsSync, readdirSync, readFileSync, watch } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
+import { join, normalize } from 'node:path'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
@@ -146,7 +149,15 @@ const events = () => {
   })
 }
 
-const page = Bun.file(new URL('./index.html', import.meta.url))
+const PUBLIC_DIR = join(import.meta.dir, 'public')
+const app = Bun.file(join(PUBLIC_DIR, 'index.html'))
+
+// A file of the built app, never one outside public/
+const staticFile = (pathname: string) => {
+  const path = normalize(join(PUBLIC_DIR, pathname))
+  if (!path.startsWith(`${PUBLIC_DIR}/`)) return null
+  return existsSync(path) && statSync(path).isFile() ? Bun.file(path) : null
+}
 
 Bun.serve({
   port: PORT,
@@ -156,8 +167,22 @@ Bun.serve({
     const { pathname } = new URL(request.url)
     if (pathname === '/api/events') return events()
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
-    if (pathname === '/') return new Response(page)
-    return new Response('Not found', { status: 404 })
+    if (pathname.startsWith('/api/')) {
+      return new Response('Not found', { status: 404 })
+    }
+    const file = staticFile(pathname)
+    if (file) {
+      return new Response(file, {
+        headers: pathname.startsWith('/assets/')
+          ? { 'Cache-Control': 'public, max-age=31536000, immutable' }
+          : {},
+      })
+    }
+    // A missing file of the app is an error, not a page of it
+    if (pathname.startsWith('/assets/')) {
+      return new Response('Not found', { status: 404 })
+    }
+    return new Response(app, { headers: { 'Cache-Control': 'no-cache' } })
   },
 })
 
