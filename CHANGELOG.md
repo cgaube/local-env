@@ -1,5 +1,19 @@
 # local-env
 
+## 0.3.0
+
+### Minor Changes
+
+- 14ad754: Say when a new version of local-env is out: the CLI checks the
+  Homebrew formula at most once a day, and the dashboard shows it in the version
+  menu. `local-env update` now installs it first, with Homebrew, then updates
+  the rest on the new version.
+- 14ad754: Install tools on your Mac from the Ansible roles of your sources. The
+  dashboard's Tools page lists every role of every source: pick the ones you
+  want there, then run `local-env install`, which installs them with Ansible.
+  Its status filter shows what is installed and what changed since.
+  `local-env setup` now installs Ansible with the other Homebrew packages.
+
 ## 0.2.0
 
 ### Minor Changes
