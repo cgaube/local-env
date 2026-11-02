@@ -1,5 +1,6 @@
 // The state of the developer's Mac, through the fake binaries: Docker
 // Desktop, Homebrew and its packages, mkcert
+import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { FakeBin } from './fake-bin.js'
 import { buildCertificate } from './factories/certificate.js'
@@ -24,12 +25,19 @@ export const dockerStopped = (bin: FakeBin) => {
   })
 }
 
-// mkcert trusts its CA and creates the fixture certificate
+// mkcert has a CA, which the user already trusts, and creates the fixture
+// certificate. The fixture is self-signed: it is its own CA.
 export const mkcertInstalled = (bin: FakeBin) => {
   const { cert, key } = buildCertificate()
+  const caroot = join(bin.env.FAKE_BIN_STATE, 'mkcert')
+  mkdirSync(caroot, { recursive: true })
+  writeFileSync(join(caroot, 'rootCA.pem'), cert)
   bin.on('which', ['mkcert'])
-  bin.on('mkcert', ['-install'])
-  bin.on('mkcert', ['-uninstall'])
+  bin.on('mkcert', ['-CAROOT'], { stdout: `${caroot}\n` })
+  bin.on('mkcert', ['-install'], { env: { TRUST_STORES: 'nss' } })
+  bin.on('mkcert', ['-uninstall'], { env: { TRUST_STORES: 'nss' } })
+  bin.on('security', ['verify-cert'])
+  bin.on('security', ['remove-trusted-cert'])
   bin.on('mkcert', ['-cert-file'], {
     writeArgs: { '-cert-file': cert, '-key-file': key },
   })

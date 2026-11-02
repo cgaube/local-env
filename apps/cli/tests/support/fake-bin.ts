@@ -23,6 +23,7 @@ export const FAKED_COMMANDS = [
   'local-env',
   'mkcert',
   'open',
+  'security',
   'sudo',
   'which',
 ] as const
@@ -38,12 +39,18 @@ export type FakeReply = {
   writeArgs?: Record<string, string>
 }
 
-export type FakeRule = FakeReply & { command: string; match: string[] }
+export type FakeRule = FakeReply & {
+  command: string
+  match: string[]
+  // Only calls with these variables set to these values
+  env?: Record<string, string>
+}
 
 export type FakeCall = {
   command: string
   args: string[]
-  // The LOCAL_ENV_* (compose settings) and ANSIBLE_* variables the call got
+  // The LOCAL_ENV_* (compose settings), ANSIBLE_* and TRUST_STORES (mkcert)
+  // variables the call got
   env: Record<string, string>
   // false when no rule answered: the stub failed
   matched: boolean
@@ -90,7 +97,11 @@ export const createFakeBin = (root: string) => {
 
     // Replies to calls of `command` whose args start with match[0], then
     // contain the rest of `match` in order. The last rule added wins.
-    on(command: FakedCommand, match: string[], reply: FakeReply = {}) {
+    on(
+      command: FakedCommand,
+      match: string[],
+      reply: FakeReply & Pick<FakeRule, 'env'> = {},
+    ) {
       rules.push({ command, match, ...reply })
       writeFileSync(rulesFile, JSON.stringify(rules, null, 2))
     },

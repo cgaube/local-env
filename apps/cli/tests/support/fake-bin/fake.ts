@@ -39,14 +39,20 @@ const rules: FakeRule[] = existsSync(rulesFile)
   : []
 // The last rule added wins, so a test can override the defaults
 const rule = rules.findLast(
-  (candidate) => candidate.command === command && matches(candidate.match),
+  (candidate) =>
+    candidate.command === command &&
+    matches(candidate.match) &&
+    Object.entries(candidate.env ?? {}).every(
+      ([name, value]) => process.env[name] === value,
+    ),
 )
 
-// The variables the CLI passes to compose and Ansible
+// The variables the CLI passes to compose, Ansible and mkcert
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      /^(LOCAL_ENV|ANSIBLE)_/.test(entry[0]) && entry[1] !== undefined,
+      /^(LOCAL_ENV_|ANSIBLE_|TRUST_STORES$)/.test(entry[0]) &&
+      entry[1] !== undefined,
   ),
 )
 const call: FakeCall = { command, args, env, matched: Boolean(rule) }

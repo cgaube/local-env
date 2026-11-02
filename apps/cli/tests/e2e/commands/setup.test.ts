@@ -22,9 +22,15 @@ describe.concurrent('local-env setup', () => {
     expect(cli.home.readJson('config.json')).toMatchObject({
       domain: TEST_DOMAIN,
     })
-    expect(cli.bin.calls('mkcert').map((call) => call.args[0])).toEqual([
-      '-install',
-      '-cert-file',
+    expect(
+      cli.bin
+        .calls('mkcert')
+        .filter((call) => call.args[0] !== '-CAROOT')
+        .map((call) => `${call.args[0]} ${call.env.TRUST_STORES ?? 'all'}`),
+    ).toEqual(['-install nss', '-cert-file all'])
+    // Already trusted: no password dialog
+    expect(cli.bin.calls('security').map((call) => call.args[0])).toEqual([
+      'verify-cert',
     ])
     expect(cli.home.exists(`services/proxy/certs/${TEST_DOMAIN}.crt`)).toBe(
       true,
@@ -154,11 +160,13 @@ describe.concurrent('local-env setup', () => {
     },
   )
 
-  test('fails when mkcert cannot install its CA', async () => {
+  test('fails when mkcert cannot create its CA', async () => {
     await using cli = await createCli()
     machineReady(cli)
+    cli.bin.on('mkcert', ['-CAROOT'], { stdout: `${cli.root}/no-ca\n` })
     cli.bin.on('mkcert', ['-install'], {
-      stderr: 'ERROR: failed to execute keychain\n',
+      env: { TRUST_STORES: 'nss' },
+      stderr: 'ERROR: failed to create the CA\n',
       exitCode: 1,
     })
 
@@ -167,5 +175,49 @@ describe.concurrent('local-env setup', () => {
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain('Setup failed')
     expect(cli.home.exists('config.json')).toBe(false)
+  })
+
+  test('trusts a new CA for the user, without sudo', async () => {
+    await using cli = await createCli()
+    machineReady(cli)
+    cli.bin.on('security', ['verify-cert'], { exitCode: 1 })
+    cli.bin.on('security', ['add-trusted-cert'])
+
+    const result = await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Local certificate authority trusted')
+    expect(cli.bin.calls('security').map((call) => call.args)).toEqual([
+      ['verify-cert', '-c', expect.stringContaining('rootCA.pem')],
+      [
+        'add-trusted-cert',
+        '-r',
+        'trustRoot',
+        expect.stringContaining('rootCA.pem'),
+      ],
+    ])
+    expect(
+      cli.bin.calls('sudo').filter((call) => call.args.includes('security')),
+    ).toEqual([])
+  })
+
+  test('continues with the manual steps when the CA cannot be trusted', async () => {
+    await using cli = await createCli()
+    machineReady(cli)
+    cli.bin.on('security', ['verify-cert'], { exitCode: 1 })
+    cli.bin.on('security', ['add-trusted-cert'], {
+      stderr:
+        'SecTrustSettingsSetTrustSettings: The authorization was canceled by the user.\n',
+      exitCode: 1,
+    })
+
+    const result = await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('not fully trusted')
+    expect(result.output).toContain('security add-trusted-cert -r trustRoot')
+    expect(cli.home.exists(`services/proxy/certs/${TEST_DOMAIN}.crt`)).toBe(
+      true,
+    )
   })
 })

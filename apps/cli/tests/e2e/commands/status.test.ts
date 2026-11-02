@@ -7,7 +7,7 @@ import { dockerRunning, dockerStopped } from '../../support/machine.js'
 import { createCli, type Cli } from '../../support/run-cli.js'
 
 const CORE_SERVICES = [
-  buildComposeService({ service: 'dockhand', ports: [3000] }),
+  buildComposeService({ service: 'dockhand', ports: [17300] }),
   buildComposeService({ service: 'nginx-proxy', ports: [80, 443] }),
   buildComposeService({ service: 'proxy-connector' }),
   buildComposeService({

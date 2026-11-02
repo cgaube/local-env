@@ -49,11 +49,35 @@ describe.concurrent('local-env start', () => {
     expect(writes).toEqual([])
   })
 
+  test('says when another app answers on the Dockhand port', async () => {
+    await using cli = await createCli()
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    machineReady(cli)
+    // A Rails app on the same port: its 404 page
+    cli.dockhand.on(
+      'GET /environments',
+      () =>
+        new Response('<!DOCTYPE html><title>Action Controller</title>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        }),
+    )
+
+    const result = await cli.run(['start'])
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain('Another app answers on')
+    expect(result.output).not.toContain('<!DOCTYPE html>')
+  })
+
   test('renews an expired certificate and reloads the proxy', async () => {
     await using cli = await createCli({ dockhand: provisionedDockhand() })
     cli.home.seedConfig()
     cli.home.seedCertificate('expired')
     machineReady(cli)
+    // The expired fixture is self-signed too: it is checked against no CA
+    cli.bin.on('mkcert', ['-CAROOT'], { exitCode: 1 })
 
     const result = await cli.run(['start'])
 
