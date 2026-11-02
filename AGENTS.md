@@ -2,6 +2,23 @@
 
 ## Project Structure
 
+One package: the root `package.json` holds every dependency and script. `apps/`
+holds what we build:
+
+- `apps/cli/` is the CLI and its tests. `src/` and `tests/` below are in it.
+- `apps/web/` is the dashboard's web app: Vite, React, TanStack Router and
+  shadcn (`components.json`, at the root: base-ui, nova, lucide). It is never
+  released on its own: `bun run compile` builds it into
+  `services/dashboard/public/` (gitignored), which the CLI ships.
+- The root holds the core stack the CLI ships, `compose.yaml` and `services/`
+  (the Docker images), and the shared tooling: oxlint, oxfmt, lefthook, mise,
+  changesets, `bunfig.toml` and `tsconfig.base.json`, which the `tsconfig.json`
+  of each folder extends.
+- Imports that leave their folder use the aliases of `tsconfig.base.json`
+  (`paths`), which Bun, its bundler and tsc all read: `#services/*`
+  (`services/`), `#cli/*` (`apps/cli/src`), `#ui/*` (`apps/web/src`). Imports
+  within `apps/cli` or `apps/web` stay relative.
+
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
   `update`, `sources` (add, list, remove, sync, links), `proxy routes`,
@@ -35,12 +52,20 @@
   `local-env setup`.
 - `services/catalog-server/server.ts` serves the `docker/` folder of every
   source to Dockhand.
-- `services/dashboard/` builds the routes page served at
-  `https://local-env.dev.test`, with help to add a route. It reads
-  `volumes/proxy/routes.json`, like `local-env proxy routes`. A core service
-  with a `local-env.app` label gets a card at the top, linking to it;
-  `local-env.app.content` (`docker`, `ansible`) adds the count of that folder in
-  the sources.
+- `services/dashboard/` serves the dashboard at `https://local-env.dev.test`:
+  `server.ts` serves the app built from `apps/web` (`public/`, with the app's
+  routes falling back to `index.html`) and streams its data on `/api/events`:
+  `volumes/proxy/routes.json` (like `local-env proxy routes`), the core services
+  and the sources' content counts. A core service with a `local-env.app` label
+  gets a card on the overview and a link in the sidebar; `local-env.app.content`
+  (`docker`, `ansible`) adds the count of that folder in the sources.
+- In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
+  adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
+  `package.json` beside `components.json`). Everything else is in
+  `features/<feature>/`: one folder per component with an `index.ts` that
+  re-exports it, and the feature's logic beside them
+  (`features/routes/routes.ts`). `lib/` is for helpers shared by features.
+  `features/layout/navigation.ts` lists the sidebar; `router.tsx` its routes.
 - `services/proxy-connector/connector.ts` turns running containers into routes:
   it attaches each container with a `VIRTUAL_HOST` to the proxy network, adds
   the domain to short hosts, writes `routes.conf` and `routes.json`, and reloads
@@ -114,13 +139,23 @@
 - `mise install` also installs lefthook and the git hooks (`lefthook.yml`).
   Before a commit, the hooks fix the staged files with oxlint and oxfmt; before
   a push, they run `bun run check`.
-- `bun install` installs dependencies and builds the `./local-env` binary.
-- `bun run local-env <command>` runs the CLI from source.
-- `bun run compile` typechecks and compiles `./local-env`. It isn't named
-  `build`: `bun build` is Bun's own bundler.
+- `bun install` installs the dependencies and builds the `./local-env` binary.
+  Every script runs from the root. `bun run local-env <command>` runs the CLI
+  from source, in the current directory.
+- `bun run compile` builds `./local-env`. The binary is what the repo produces
+  and it embeds the core stack (`services/`): `build:web` runs first (`apps/web`
+  into `services/dashboard/public/`), then everything typechecks and the CLI
+  compiles. `shipped-files.ts` embeds text as is and other files (the fonts) as
+  base64. The root `prepare` runs it on `bun install`. It isn't named `build`:
+  `bun build` is Bun's own bundler.
 - `bun run check` runs typecheck, oxlint and the oxfmt check: the pre-push hook,
   kept fast. The tests run in CI.
 - `bun run fmt` formats with oxfmt.
+- `bun run dev` serves the dashboard with hot reload. Its `/api` goes to the
+  running dashboard (`https://local-env.<domain>`, the domain of `config.json`
+  in the home folder, or `LOCAL_ENV_DASHBOARD_URL`), so it shows your live data.
+  To see a change in the real dashboard, `bun run compile` then
+  `local-env start` (or `bun run local-env start`) rebuilds it.
 
 ## Coding Style
 
@@ -128,28 +163,36 @@
 - oxfmt: single quotes, no semicolons, trailing commas, print width 80.
 - ESM with `.js` import extensions. Command files are kebab-case; exported
   commands are camelCase with a `Command` suffix (`startCommand`).
+- In `apps/web`, imports name the `.ts`/`.tsx` file, or a component's folder
+  (`#ui/features/copy/copy-button`); files are kebab-case and components
+  PascalCase. Use shadcn components and their variants, with semantic colors
+  (`text-muted-foreground`), before custom markup.
 
 ## Testing
 
-`bun run test` runs every test, one process per file, then lists the 5 slowest
-(`tests/run.ts`); `test:unit` and `test:e2e` run one folder. While working on a
-change, run the tests of what you change (`bun test <file>`), and `bun run test`
+`bun run test` runs `test:cli`, then `test:web`. `test:cli` runs every CLI test,
+one process per file, then lists the 5 slowest (`tests/run.ts`); `test:cli:unit`
+and `test:cli:e2e` run one folder, and `test:cli:coverage` the unit tests. While
+working on a change, run the tests of what you change (`bun test <file>`, from
+the root, where `bunfig.toml` preloads `tests/setup.ts`), and `bun run test`
 before opening a pull request. CI runs them all on every pull request; the
 pre-push hook doesn't, to stay fast. `bun test <file>` runs Bun's own runner,
-not the `test` script: fine for one file, without the report.
-`bun run test:coverage` shows the lines the unit tests miss: Bun can't measure
-the CLI processes the e2e tests start, and lists only the files the tests
-import, so its total says little.
+not the `test` script: fine for one file, without the report. `test:web` runs
+Vitest (jsdom, React Testing Library, user-event) on `tests/`, which mirrors
+`src/`; `tests/support/render-app.tsx` renders the whole app at a path, fed by a
+fake event stream. `bun run test:cli:coverage` shows the lines the unit tests
+miss: Bun can't measure the CLI processes the e2e tests start, and lists only
+the files the tests import, so its total says little.
 
 - `tests/e2e/commands/<command>.test.ts`: every command has a
   `describe('local-env <command>')` block (`sources add`, `config set`…), which
   `tests/e2e/commands.test.ts` enforces. Each test runs the CLI as a child
   process through `createCli()` (`tests/support/run-cli.ts`): a temporary
   `LOCAL_ENV_HOME`, fake binaries, a fake Dockhand and scripted answers.
-  `bun run test:bin` compiles `./local-env` and runs the e2e tests against it
-  (`LOCAL_ENV_BIN`), which also checks the files it embeds; tests with answers
-  skip then (`test.skipIf(COMPILED)`). It needs macOS on Apple Silicon: run it
-  before a release.
+  `bun run test:cli:bin` compiles `./local-env` and runs the e2e tests against
+  it (`LOCAL_ENV_BIN`), which also checks the files it embeds; tests with
+  answers skip then (`test.skipIf(COMPILED)`). It needs macOS on Apple Silicon:
+  run it before a release.
 - `tests/unit/` mirrors `src/` and `services/`, for logic without processes.
   `tests/setup.ts` gives them a temporary `LOCAL_ENV_HOME` first.
 - Questions: `cli.run(args, { answers: [{ ask, answer }] })`. A Bun plugin
@@ -190,15 +233,18 @@ Short, imperative, lowercase messages (for example `fix bucket script`).
 ## Changesets
 
 Versions and `CHANGELOG.md` are managed with changesets
-(`.changeset/config.json`).
+(`.changeset/config.json`). It versions the root package, `local-env`, and tags
+its releases `v<version>`.
 
 - A pull request that changes what users get adds a changeset, which CI
-  requires. `changedFilePatterns` in `.changeset/config.json` lists those files
-  (`src/`, `services/`, `compose.yaml`): add a path there when the CLI starts
-  shipping it. For a change users would notice: `bun run changeset`, pick patch,
-  minor or major, and describe the change for users. For a refactor:
-  `bun run changeset --empty`, which releases nothing. Commit the generated
-  `.changeset/*.md` with the change. Other changes (docs, tests, CI) need none.
+  requires: `changeset status` checks the files the binary ships
+  (`changedFilePatterns` in `.changeset/config.json`). Add a path there when the
+  binary starts shipping it. For a change users would notice:
+  `bun run changeset`, pick patch, minor or major, and describe the change for
+  users. For a refactor, or a `bun.lock` change that only updates tooling
+  (oxlint, Vitest…): `bun run changeset --empty`, which releases nothing. Commit
+  the generated `.changeset/*.md` with the change. Other changes (docs, tests,
+  CI) need none.
 - To release, `bun run version-packages` applies the pending changesets: it
   bumps `package.json` (which `local-env --version` reads) and writes
   `CHANGELOG.md`.

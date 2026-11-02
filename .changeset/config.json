@@ -1,7 +1,15 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "baseBranch": "main",
-  "changedFilePatterns": ["src/**", "services/**", "compose.yaml"],
+  "changedFilePatterns": [
+    "apps/cli/src/**",
+    "apps/web/src/**",
+    "apps/web/index.html",
+    "apps/web/vite.config.ts",
+    "services/**",
+    "compose.yaml",
+    "bun.lock"
+  ],
   "access": "restricted",
   "ignore": [],
   "fixed": [],

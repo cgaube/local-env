@@ -43,9 +43,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: bun run changeset status --since=origin/main
 
-      - name: Test
+      - name: Test the CLI
         if: ${{ !cancelled() }}
-        run: bun run test
+        run: bun run test:cli
+
+      - name: Test the web app
+        if: ${{ !cancelled() }}
+        run: bun run test:web
 
       - name: Build
         if: ${{ !cancelled() }}

@@ -1,16 +1,6 @@
 {
-  "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "types": ["bun"],
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true
-  },
-  "include": ["src/**/*", "services/**/*", "tests/**/*", ".github/scripts/**/*"]
+  "extends": "./tsconfig.base.json",
+  // The core stack's services and the repo's scripts: each package has its
+  // tsconfig
+  "include": ["services/**/*", ".github/scripts/**/*"]
 }
