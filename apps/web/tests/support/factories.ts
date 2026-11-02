@@ -1,7 +1,9 @@
 import type {
+  Role,
   Route,
   Service,
   Source,
+  Tools,
 } from '#ui/features/live-data/live-data.ts'
 
 export const buildRoute = (overrides: Partial<Route> = {}): Route => ({
@@ -30,5 +32,28 @@ export const buildSource = (overrides: Partial<Source> = {}): Source => ({
   origin: 'https://github.com/acme/local-env-templates',
   docker: 3,
   ansible: 0,
+  ...overrides,
+})
+
+export const buildRole = (overrides: Partial<Role> = {}): Role => {
+  const source = overrides.source ?? 'acme'
+  const name = overrides.name ?? 'git'
+  return {
+    id: `${source}/${name}`,
+    source,
+    name,
+    description: 'Git, from Homebrew',
+    tags: ['vcs'],
+    dependencies: [],
+    revision: 'a1b2c3d4e5f6',
+    needsSudo: false,
+    ...overrides,
+  }
+}
+
+export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
+  roles: [buildRole()],
+  picked: [],
+  installed: {},
   ...overrides,
 })

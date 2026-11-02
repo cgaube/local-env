@@ -10,8 +10,11 @@ A local development environment for macOS:
   `https://docker.dev.test`, preconfigured with your Docker. It lists the Docker
   templates of every source you add. Click a template to install it; installed
   containers update automatically.
-- **Sources**: git repos of Docker templates (and, soon, Ansible roles). The CLI
-  ships none: add your own with `local-env sources add`.
+- **Tools**: the Ansible roles of your sources (Git, Node.js…), listed in the
+  dashboard at `https://local-env.dev.test/tools`. Pick the ones you want there,
+  then `local-env install` installs them on your Mac.
+- **Sources**: git repos of Docker templates and Ansible roles. The CLI ships
+  none: add your own with `local-env sources add`.
 
 ## Install
 
@@ -61,6 +64,7 @@ bun install          # also builds ./local-env
 | `sources list` / `remove`          | Manage sources                                     |
 | `sources sync [source]`            | Pull sources, then sync installed stacks with them |
 | `sources links`                    | List installed stacks and the template of each     |
+| `install`                          | Install the tools picked in the dashboard          |
 | `proxy routes`                     | List the hosts the proxy serves                    |
 | `config get` / `set <key> <value>` | Read or change a setting, and apply it             |
 | `doctor`                           | Check DNS, certificates and the proxy              |
@@ -69,14 +73,15 @@ bun install          # also builds ./local-env
 ## Sources
 
 A source is a git repo of templates: a `docker/templates.json` list (Portainer
-format) and a folder with a `compose.yaml` for each stack.
+format) and a folder with a `compose.yaml` for each stack, and of tools: an
+Ansible role per folder of `ansible/`.
 
 ```
 <repo>/
 ├── docker/
 │   ├── templates.json            # Portainer template list (version 3)
 │   └── mailpit/compose.yaml      # one folder per stack
-└── ansible/<role>/               # coming soon
+└── ansible/git/                  # one Ansible role per tool
 ```
 
 Add one with `local-env sources add <repo>`. After you commit a change to it,

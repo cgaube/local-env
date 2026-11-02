@@ -21,6 +21,7 @@ const BREW_PACKAGES = [
   { name: 'mkcert', description: 'local certificate authority' },
   { name: 'nss', description: 'Firefox certificate trust support' },
   { name: 'dnsmasq', description: 'wildcard DNS resolver' },
+  { name: 'ansible', description: 'installs the tools of your sources' },
 ]
 
 const ensureDependencies = async (yes: boolean) => {

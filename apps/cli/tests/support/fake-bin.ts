@@ -12,6 +12,7 @@ import { dirname, join } from 'path'
 // as sources. Anything else is missing from PATH, so a test can never reach
 // the real Docker, Homebrew or sudo.
 export const FAKED_COMMANDS = [
+  'ansible-playbook',
   'brew',
   'curl',
   'dig',
@@ -19,6 +20,7 @@ export const FAKED_COMMANDS = [
   'docker',
   'dscacheutil',
   'mkcert',
+  'open',
   'sudo',
   'which',
 ] as const
@@ -39,7 +41,7 @@ export type FakeRule = FakeReply & { command: string; match: string[] }
 export type FakeCall = {
   command: string
   args: string[]
-  // The LOCAL_ENV_* variables the call got (compose settings)
+  // The LOCAL_ENV_* (compose settings) and ANSIBLE_* variables the call got
   env: Record<string, string>
   // false when no rule answered: the stub failed
   matched: boolean

@@ -6,33 +6,24 @@ import { renderApp } from '../../support/render-app.tsx'
 
 describe('App shell', () => {
   test('shows where you are in the breadcrumb', async () => {
-    await renderApp('/tools/catalog')
+    await renderApp('/tools')
 
     const breadcrumb = screen.getByRole('navigation', { name: 'breadcrumb' })
     expect(breadcrumb).toHaveTextContent('Tools')
-    expect(breadcrumb).toHaveTextContent('Catalog')
   })
 
-  test('navigates from the sidebar', async () => {
+  test('navigates from the sidebar, one link a page', async () => {
     const user = userEvent.setup()
     await renderApp('/')
 
-    await user.click(screen.getByRole('link', { name: 'Routes' }))
-
+    await user.click(screen.getByRole('link', { name: 'Docker' }))
     expect(
       await screen.findByRole('heading', { name: 'Routes', level: 1 }),
     ).toBeInTheDocument()
-  })
 
-  test('shows every page, and a section links to its first one', async () => {
-    const user = userEvent.setup()
-    await renderApp('/')
-
-    expect(screen.getByRole('link', { name: 'Installed' })).toBeVisible()
     await user.click(screen.getByRole('link', { name: 'Tools' }))
-
     expect(
-      await screen.findByRole('heading', { name: 'Catalog', level: 1 }),
+      await screen.findByRole('heading', { name: 'Tools', level: 1 }),
     ).toBeInTheDocument()
   })
 
@@ -47,12 +38,11 @@ describe('App shell', () => {
     )
   })
 
-  test("shows the CLI's version", async () => {
+  test("shows the CLI's version, as a dev build outside a release", async () => {
     await renderApp('/')
 
-    expect(
-      screen.getByRole('link', { name: `v${cli.version}` }),
-    ).toHaveAttribute('href', expect.stringContaining('CHANGELOG.md'))
+    expect(screen.getByText('Dev build')).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`^v${cli.version}`))).toBeInTheDocument()
   })
 
   test('sends an unknown path to the overview', async () => {

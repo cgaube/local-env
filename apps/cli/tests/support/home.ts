@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import type { Config } from '#cli/core/config.js'
+import { writeSelection } from '#services/dashboard/tools.js'
 import { buildCertificate } from './factories/certificate.js'
 import { buildConfig } from './factories/config.js'
 
@@ -41,6 +42,11 @@ export const createHome = (dir: string) => {
       writeJson('volumes/proxy/routes.json', routes),
     seedLinks: (links: Record<string, unknown>) =>
       writeJson('volumes/template-links.json', links),
+    // The tools picked in the dashboard: <source>/<role>
+    seedPickedTools: (ids: string[]) => {
+      mkdirSync(path('volumes/tools'), { recursive: true })
+      writeSelection(path('volumes/tools'), ids)
+    },
   }
 }
 

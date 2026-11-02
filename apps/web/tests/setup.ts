@@ -21,3 +21,11 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 })
+
+// The filters' lists (cmdk) watch their size and scroll to the active item
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Element.prototype.scrollIntoView = () => {}

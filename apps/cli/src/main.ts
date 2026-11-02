@@ -34,6 +34,7 @@ const TITLES: Record<string, string> = {
   'sources list': 'Sources',
   'sources remove': 'Remove a source',
   'sources sync': 'Sync stacks with their templates',
+  install: 'Install tools',
   'proxy routes': 'Proxy routes',
   doctor: 'Doctor',
   reset: 'Reset local-env',
@@ -65,8 +66,14 @@ program.hook('preAction', (_, command) => {
     framed = true
   }
   if (outdated.length > 0) {
-    logger.info(
-      `The core services run an older version of local-env (${outdated.join(', ')}). Run \`local-env start\` to update them.`,
+    logger.callout(
+      'warn',
+      [
+        'Outdated core services',
+        `They run an older version of local-env: ${outdated.join(', ')}.`,
+        'Run `local-env start` to update them.',
+      ].join('\n'),
+      { tinted: true, padded: false },
     )
   }
 })

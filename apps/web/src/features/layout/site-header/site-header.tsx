@@ -3,6 +3,7 @@ import { Button } from '#ui/components/ui/button'
 import { Separator } from '#ui/components/ui/separator'
 import { useSidebar } from '#ui/components/ui/sidebar'
 import { ThemeSwitcher } from '#ui/features/theme/theme-switcher'
+import { InstallButton } from '#ui/features/tools/install-button'
 import { PageBreadcrumb } from '../page-breadcrumb'
 
 // sidebar-16: a sticky header across the page, above the sidebar
@@ -28,7 +29,8 @@ export function SiteHeader() {
         <div className="hidden sm:block">
           <PageBreadcrumb />
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <InstallButton />
           <ThemeSwitcher />
         </div>
       </div>

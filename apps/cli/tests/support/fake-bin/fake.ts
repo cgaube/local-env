@@ -42,11 +42,11 @@ const rule = rules.findLast(
   (candidate) => candidate.command === command && matches(candidate.match),
 )
 
-// The variables the CLI passes to compose
+// The variables the CLI passes to compose and Ansible
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      entry[0].startsWith('LOCAL_ENV_') && entry[1] !== undefined,
+      /^(LOCAL_ENV|ANSIBLE)_/.test(entry[0]) && entry[1] !== undefined,
   ),
 )
 const call: FakeCall = { command, args, env, matched: Boolean(rule) }

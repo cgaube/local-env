@@ -16,7 +16,8 @@ your later changes too.
 │   └── hello/
 │       ├── compose.yaml
 │       └── site/Dockerfile   # files a template builds from
-└── ansible/<role>/           # Ansible roles (coming soon)
+└── ansible/
+    └── git/                  # one Ansible role per tool (see Tools)
 ```
 
 Add it once, then sync it after each change:
@@ -188,6 +189,54 @@ The [local-env-templates](https://github.com/cgaube/local-env-templates) repo
 does this in a git hook: before each commit, it formats the files and checks
 that every `stackfile` exists, every compose file is valid and every `name:` is
 unique (`scripts/check-templates.ts`). Copy it into your source.
+
+## Tools
+
+A tool is something installed on the Mac itself, not in Docker: Git, Node.js, a
+CLI. Each folder of `ansible/` is a plain Ansible role, and a tool in the
+dashboard's catalog (`https://local-env.dev.test/tools`). People pick the ones
+they want there, then run `local-env install`, which runs the picked roles on
+their Mac with `ansible-playbook` (`connection: local`, as them).
+
+```
+ansible/git/
+├── meta/main.yml     # the catalog's description and tags
+└── tasks/main.yml    # what installing does
+```
+
+```yaml
+# ansible/git/meta/main.yml
+galaxy_info:
+  description: Git, the version control system, from Homebrew
+  galaxy_tags: [vcs]
+dependencies: []
+```
+
+```yaml
+# ansible/git/tasks/main.yml
+- name: Install git
+  community.general.homebrew:
+    name: git
+    state: present
+```
+
+- The catalog shows the folder name, `galaxy_info.description` and
+  `galaxy_tags`. A role without `meta/main.yml` is listed too, with no
+  description.
+- Write tasks that can run again: `local-env install` runs every picked tool
+  each time, and Ansible only changes what isn't in the expected state.
+- A task with `become: true` runs with sudo: `local-env install` then asks for
+  the password first, and the catalog says so.
+- `dependencies` name other roles, in any source: a role made of other roles can
+  stand for a whole setup (a backend engineer's tools).
+- When a role's files change, the dashboard shows its tool as **Update
+  available** until the next `local-env install`.
+- Unpicking a tool doesn't uninstall it: local-env only adds. The next
+  `local-env install` forgets it, and the dashboard no longer lists it as
+  installed.
+
+To try a role, commit it, run `local-env sources sync`, pick it in the catalog
+and run `local-env install`.
 
 ## Other catalogs
 

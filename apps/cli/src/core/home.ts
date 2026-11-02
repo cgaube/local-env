@@ -157,6 +157,8 @@ const RUNTIME_DIRS = [
   'volumes/proxy',
   'volumes/template-snapshots',
   'volumes/build-contexts',
+  // The tools picked in the dashboard, installed by `local-env install`
+  'volumes/tools',
 ]
 
 export const ensureRuntimeDirs = () => {
