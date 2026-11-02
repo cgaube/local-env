@@ -23,6 +23,7 @@ import {
   composeName,
   hashTemplate,
   isLinked,
+  isValidTemplate,
   listSnapshots,
   pruneSnapshots,
   readLinks,
@@ -64,10 +65,8 @@ export type StackDiff = TemplatedStack & {
 
 // "acme/postgres" -> volumes/sources/acme/docker/postgres/<compose>
 export const resolveTemplateCompose = (template: string) => {
-  const [source, folder, ...rest] = template.split('/')
-  if (!source || !folder || rest.length > 0 || folder.startsWith('.')) {
-    return null
-  }
+  if (!isValidTemplate(template)) return null
+  const [source, folder] = template.split('/')
 
   for (const name of COMPOSE_FILES) {
     const path = join(SOURCES_DIR, source, 'docker', folder, name)
