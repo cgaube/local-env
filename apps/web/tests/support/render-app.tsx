@@ -13,14 +13,18 @@ import { router } from '#ui/router.tsx'
 import { FakeEventSource } from './fake-event-source.ts'
 
 // The whole app at a path, with the data of a fake event stream. The domain
-// is already loaded: no request leaves the test.
-export const renderApp = async (path = '/') => {
+// and the latest version are already loaded: no request leaves the test.
+export const renderApp = async (
+  path = '/',
+  { latestVersion = null }: { latestVersion?: string | null } = {},
+) => {
   const events = new FakeEventSource()
   const store = createLiveDataStore(() => events as unknown as EventSource)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   queryClient.setQueryData(['config'], { domain: 'dev.test' })
+  queryClient.setQueryData(['latest-version'], latestVersion)
   const testRouter = createRouter({
     routeTree: router.routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),

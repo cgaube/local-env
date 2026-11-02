@@ -1,5 +1,6 @@
 import { configCommand } from './config.js'
 import { doctorCommand } from './doctor.js'
+import { installCommand } from './install.js'
 import { proxyCommand } from './proxy.js'
 import { resetCommand } from './reset.js'
 import { setupCommand } from './setup.js'
@@ -17,6 +18,7 @@ export const commands = [
   configCommand,
   updateCommand,
   sourcesCommand,
+  installCommand,
   proxyCommand,
   doctorCommand,
   resetCommand,

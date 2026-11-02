@@ -21,11 +21,14 @@ holds what we build:
 
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
-  `update`, `sources` (add, list, remove, sync, links), `proxy routes`,
-  `doctor`. `update` refreshes the core stack and the sources, then lists the
-  stacks whose template changed and offers to run the `sources sync` flow.
-  `sources sync` pulls the sources first (`--no-pull` to skip): it is the
-  everyday command after a template change, `update` refreshes everything.
+  `update`, `sources` (add, list, remove, sync, links), `install`,
+  `proxy routes`, `doctor`. `update` first upgrades local-env with Homebrew when
+  a newer version is out, then hands over to the new version
+  (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
+  and the sources, then lists the stacks whose template changed and offers to
+  run the `sources sync` flow. `sources sync` pulls the sources first
+  (`--no-pull` to skip): it is the everyday command after a template change,
+  `update` refreshes everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The
@@ -33,6 +36,12 @@ holds what we build:
   (`config.json`, `services/proxy/certs/`, `volumes/`) lives only in the home
   folder. `src/core/config.ts` reads and writes `config.json` (the domain); the
   CLI passes it to compose as `LOCAL_ENV_DOMAIN`.
+- Before each command, `src/core/update-check.ts` says when a newer version can
+  be installed (an `info` callout). It reads the version of the Homebrew formula
+  (`src/core/homebrew.ts` names the tap), which the release workflow updates
+  last, at most once a day, and keeps the answer in `update-check.json` in the
+  home folder. A checkout skips it, except in tests, which point
+  `LOCAL_ENV_FORMULA_URL` at a fake.
 - When `LOCAL_ENV_HOME` points at a checkout, its files are used in place:
   `LOCAL_ENV_HOME=. bun run local-env start` runs your working tree.
 - `src/core/settings/` defines each `config.json` setting once (`parse`, `ask`,
@@ -43,6 +52,8 @@ holds what we build:
   `update` call it. `src/core/dns.ts` sets up dnsmasq and `/etc/resolver`, and
   skips sudo when they are already correct.
 - `src/utils/` holds shared helpers: logger, exec, brew, dnsmasq, prompts.
+  `logger.callout(level, text)` (`callout.ts`: info, success, warn, error) is
+  for what must not be missed; `logger.box` for summaries.
 - `compose.yaml` defines the core stack: `nginx-proxy`, `dockhand`,
   `catalog-server`, `proxy-connector`, `dashboard`. The CLI always passes
   `-f <home>/compose.yaml`.
@@ -55,10 +66,11 @@ holds what we build:
 - `services/dashboard/` serves the dashboard at `https://local-env.dev.test`:
   `server.ts` serves the app built from `apps/web` (`public/`, with the app's
   routes falling back to `index.html`) and streams its data on `/api/events`:
-  `volumes/proxy/routes.json` (like `local-env proxy routes`), the core services
-  and the sources' content counts. A core service with a `local-env.app` label
-  gets a card on the overview and a link in the sidebar; `local-env.app.content`
-  (`docker`, `ansible`) adds the count of that folder in the sources.
+  `volumes/proxy/routes.json` (like `local-env proxy routes`), the core
+  services, the sources' content counts and the tools. A core service with a
+  `local-env.app` label gets a card on the overview and a link in the sidebar;
+  `local-env.app.content` (`docker`, `ansible`) adds the count of that folder in
+  the sources.
 - In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
   adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
   `package.json` beside `components.json`). Everything else is in
@@ -76,9 +88,27 @@ holds what we build:
   `docker` (Dockhand, reads `docker/`; `steps/` are idempotent provisioning
   steps run on every `start`). Each provider implements `Provider` from
   `src/providers/types.ts` (`provision`, `update`) and is listed in
-  `src/providers/index.ts`. `ansible` (Semaphore, reads `ansible/`) comes next.
-- `volumes/` in the home folder holds runtime data: the Dockhand database and
-  the sources.
+  `src/providers/index.ts`.
+- Tools are the Ansible roles of the sources (`ansible/<role>/`).
+  `services/dashboard/tools.ts`, shared by the dashboard and the CLI, lists them
+  (`meta/main.yml`: description, tags, dependencies; a revision hash of the
+  files; whether a task uses `become`) and reads and writes `volumes/tools/`:
+  `playbook.yml`, the picked roles by path
+  (`../sources/<source>/ansible/<role>`), written by the dashboard
+  (`PUT /api/tools/picked`), and `installed.json`, written by
+  `local-env install` (`src/core/tools.ts`), which also forgets the tools no
+  longer picked (it never uninstalls). `install` runs `ansible-playbook` on the
+  Mac, as the user, with `ANSIBLE_ROLES_PATH` set to every source's `ansible/`
+  for dependencies by name. When a role or a dependency uses `become`, the CLI
+  asks for the password (`askPassword`) and hands it to Ansible in a file only
+  the user can read (`ANSIBLE_BECOME_PASSWORD_FILE`), removed after the run.
+  Ansible prints its events as JSON lines (`ansible.posix.jsonl`), which
+  `src/core/playbook-output.ts` draws with clack: a group per role, a spinner
+  per task, a line per result (`install --verbose` shows Ansible's own output).
+  Tests fake them with `tests/support/factories/ansible.ts`. The dashboard never
+  runs anything on the Mac.
+- `volumes/` in the home folder holds runtime data: the Dockhand database, the
+  sources and the tools (`volumes/tools/`).
 
 ## Sources
 

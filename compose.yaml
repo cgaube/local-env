@@ -103,6 +103,9 @@ services:
       # routes.json, written by proxy-connector
       - './volumes/proxy:/routes:ro'
       - './volumes/sources:/sources:ro'
+      # The tools picked in the catalog: written here, installed by
+      # `local-env install`
+      - './volumes/tools:/tools'
 
   # Routes every container with a VIRTUAL_HOST: attaches it to the local-env
   # network and generates the nginx config. VIRTUAL_HOST=mail is served at

@@ -1,5 +1,6 @@
 // What services/dashboard/server.ts streams on /api/events: proxy-connector's
-// routes and core services, and the sources' content counts
+// routes and core services, the sources' content counts and the tools
+// (services/dashboard/tools.ts)
 
 export type Route = {
   hosts: string[]
@@ -29,16 +30,39 @@ export type Source = {
   ansible: number
 }
 
+// An Ansible role of a source
+export type Role = {
+  // <source>/<role>
+  id: string
+  source: string
+  name: string
+  description: string | null
+  tags: string[]
+  dependencies: string[]
+  // Hash of its files, recorded by each install
+  revision: string
+  needsSudo: boolean
+}
+
+export type Tools = {
+  roles: Role[]
+  // Ids of the roles picked in the catalog
+  picked: string[]
+  // What `local-env install` ran, by id
+  installed: Record<string, { revision: string; installedAt: string }>
+}
+
 export type LiveData = {
   // null until the server sent the list
   routes: Route[] | null
   services: Service[] | null
   sources: Source[] | null
+  tools: Tools | null
   connected: boolean
   updatedAt: Date | null
 }
 
-const TOPICS = ['routes', 'services', 'sources'] as const
+const TOPICS = ['routes', 'services', 'sources', 'tools'] as const
 
 type Listener = () => void
 
@@ -52,6 +76,7 @@ export const createLiveDataStore = (
     routes: null,
     services: null,
     sources: null,
+    tools: null,
     connected: false,
     updatedAt: null,
   }

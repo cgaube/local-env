@@ -6,9 +6,12 @@ import { styleText } from 'node:util'
 import packageJson from '../../../package.json' with { type: 'json' }
 import { commands } from './commands/index.js'
 import { prepareHome } from './core/home.js'
+import { UPDATE_COMMAND } from './core/homebrew.js'
 import { findOutdatedServices } from './core/outdated.js'
+import { CHECKOUT_DIR } from './core/paths.js'
+import { findNewerVersion } from './core/update-check.js'
 import { brandTitle } from './utils/brand.js'
-import { logger, markIntro } from './utils/logger.js'
+import { isFrameClosed, logger, markIntro } from './utils/logger.js'
 import { CANCELLED_EXIT_CODE } from './utils/prompt.js'
 
 const program = new Command()
@@ -34,6 +37,7 @@ const TITLES: Record<string, string> = {
   'sources list': 'Sources',
   'sources remove': 'Remove a source',
   'sources sync': 'Sync stacks with their templates',
+  install: 'Install tools',
   'proxy routes': 'Proxy routes',
   doctor: 'Doctor',
   reset: 'Reset local-env',
@@ -43,11 +47,18 @@ const TITLES: Record<string, string> = {
 let framed = false
 // Core services running an older version of local-env, said inside the frame
 let outdated: string[] = []
+// A newer release of local-env, said inside the frame too
+let newer: string | null = null
 
 // Commands exit with process.exit(1) on errors: close the frame in red then.
 // A cancelled prompt has closed it already.
 process.on('exit', (code) => {
-  if (framed && code !== 0 && code !== CANCELLED_EXIT_CODE) {
+  if (
+    framed &&
+    !isFrameClosed() &&
+    code !== 0 &&
+    code !== CANCELLED_EXIT_CODE
+  ) {
     outro(styleText('red', 'Failed'))
   }
 })
@@ -65,8 +76,23 @@ program.hook('preAction', (_, command) => {
     framed = true
   }
   if (outdated.length > 0) {
-    logger.info(
-      `The core services run an older version of local-env (${outdated.join(', ')}). Run \`local-env start\` to update them.`,
+    logger.callout(
+      'warn',
+      [
+        'Outdated core services',
+        `They run an older version of local-env: ${outdated.join(', ')}.`,
+        'Run `local-env start` to update them.',
+      ].join('\n'),
+      { tinted: true, padded: false },
+    )
+  }
+  if (newer) {
+    logger.callout(
+      'info',
+      [
+        'A new version is available',
+        `local-env ${newer} is out. Run \`${UPDATE_COMMAND}\` to get it.`,
+      ].join('\n'),
     )
   }
 })
@@ -79,10 +105,19 @@ if (command && !command.startsWith('-') && command !== 'help') {
   if (!['start', 'update'].includes(command)) {
     outdated = await findOutdatedServices()
   }
+  // A checkout is behind or ahead on purpose, and brew doesn't update it.
+  // Tests run one, with a fake formula. update checks itself, and installs
+  // the new version.
+  if (
+    command !== 'update' &&
+    (!CHECKOUT_DIR || process.env.LOCAL_ENV_FORMULA_URL)
+  ) {
+    newer = await findNewerVersion(packageJson.version)
+  }
 }
 await program.parseAsync()
 // Piped output (scripts, CI) gets no frame
-if (framed) {
+if (framed && !isFrameClosed()) {
   framed = false
   outro('Done')
 }

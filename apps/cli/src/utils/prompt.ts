@@ -1,4 +1,11 @@
-import { cancel, confirm, isCancel, select, text } from '@clack/prompts'
+import {
+  cancel,
+  confirm,
+  isCancel,
+  password,
+  select,
+  text,
+} from '@clack/prompts'
 
 // The usual exit code of an interrupted command: main.ts closes the frame
 // with "Cancelled" only, not "Failed"
@@ -20,6 +27,13 @@ export const askConfirm = async (message: string, initialValue: boolean) => {
 
 export const askText = async (message: string, initialValue: string) => {
   const answer = await text({ message, initialValue })
+  exitOnCancel(answer)
+  return String(answer)
+}
+
+// Masked as it is typed
+export const askPassword = async (message: string) => {
+  const answer = await password({ message })
   exitOnCancel(answer)
   return String(answer)
 }

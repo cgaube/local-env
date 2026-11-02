@@ -8,6 +8,7 @@ import {
 import { Skeleton } from '#ui/components/ui/skeleton'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
+import { SourcesCard } from '#ui/features/sources/sources-card'
 import { AppCards } from '../app-cards'
 import { CoreServicesTable } from '../core-services-table'
 import { servicesSummary } from '../overview.ts'
@@ -19,7 +20,7 @@ export function OverviewPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Overview"
-        description="Your local environment: the apps and the services behind them"
+        description="Your local environment: the apps, the services behind them and your sources"
       />
 
       {services ? (
@@ -41,6 +42,8 @@ export function OverviewPage() {
           </CardContent>
         ) : null}
       </Card>
+
+      <SourcesCard />
     </div>
   )
 }

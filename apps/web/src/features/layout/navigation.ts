@@ -1,9 +1,4 @@
-import {
-  ContainerIcon,
-  GitBranchIcon,
-  LayoutDashboardIcon,
-  WrenchIcon,
-} from 'lucide-react'
+import { ContainerIcon, LayoutDashboardIcon, WrenchIcon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export type NavLink = { title: string; to: string }
@@ -16,20 +11,8 @@ export type NavSection = {
 // The sidebar. Each path is a route in router.tsx.
 export const NAVIGATION: NavSection[] = [
   { title: 'Overview', icon: LayoutDashboardIcon, to: '/' },
-  {
-    title: 'Docker',
-    icon: ContainerIcon,
-    items: [{ title: 'Routes', to: '/docker/routes' }],
-  },
-  {
-    title: 'Tools',
-    icon: WrenchIcon,
-    items: [
-      { title: 'Catalog', to: '/tools/catalog' },
-      { title: 'Installed', to: '/tools/installed' },
-    ],
-  },
-  { title: 'Sources', icon: GitBranchIcon, to: '/sources' },
+  { title: 'Docker', icon: ContainerIcon, to: '/docker' },
+  { title: 'Tools', icon: WrenchIcon, to: '/tools' },
 ]
 
 // The section and page of a path, for the breadcrumb

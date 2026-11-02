@@ -8,12 +8,21 @@
 //                   and sources on connect, then each of them again when it
 //                   changes (watched files, no polling)
 //   /api/config  -> the domain, for the help section
+//   PUT /api/tools/picked -> the tools picked in the catalog, written as the
+//                   playbook `local-env install` runs (tools.ts)
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
+import {
+  listRoles,
+  readInstalled,
+  readSelection,
+  writeSelection,
+} from './tools.js'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
 const SOURCES_DIR = '/sources'
+const TOOLS_DIR = '/tools'
 const DOMAIN = process.env.DOMAIN ?? 'dev.test'
 const PORT = 80
 
@@ -90,6 +99,12 @@ const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
   sources: async () => JSON.stringify(listSources()),
+  tools: async () =>
+    JSON.stringify({
+      roles: listRoles(SOURCES_DIR),
+      picked: readSelection(TOOLS_DIR),
+      installed: readInstalled(TOOLS_DIR),
+    }),
 }
 type Topic = keyof typeof readers
 
@@ -123,7 +138,38 @@ watch('/routes', (_event, file) => {
   if (file === 'routes.json') publish('routes')
   if (file === 'services.json') publish('services')
 })
-watch(SOURCES_DIR, { recursive: true }, () => publish('sources'))
+watch(SOURCES_DIR, { recursive: true }, () => {
+  publish('sources')
+  publish('tools')
+})
+// The playbook, written below, and installed.json, by `local-env install`
+watch(TOOLS_DIR, () => publish('tools'))
+
+// Only roles of the catalog, or ones picked before and gone since (to unpick
+// them). JSON only: another site can't send it without a CORS preflight,
+// which this server never allows.
+const pickTools = async (request: Request) => {
+  if (request.method !== 'PUT') {
+    return new Response('Method not allowed', { status: 405 })
+  }
+  if (request.headers.get('Content-Type') !== 'application/json') {
+    return new Response('Expected JSON', { status: 415 })
+  }
+  const body = await request.json().catch(() => null)
+  const known = new Set([
+    ...listRoles(SOURCES_DIR).map(({ id }) => id),
+    ...readSelection(TOOLS_DIR),
+  ])
+  const roles: unknown = body?.roles
+  if (
+    !Array.isArray(roles) ||
+    !roles.every((id) => typeof id === 'string' && known.has(id))
+  ) {
+    return new Response('Unknown roles', { status: 400 })
+  }
+  writeSelection(TOOLS_DIR, [...new Set(roles as string[])])
+  return new Response(null, { status: 204 })
+}
 
 const events = () => {
   let client: Client
@@ -167,6 +213,7 @@ Bun.serve({
     const { pathname } = new URL(request.url)
     if (pathname === '/api/events') return events()
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
+    if (pathname === '/api/tools/picked') return pickTools(request)
     if (pathname.startsWith('/api/')) {
       return new Response('Not found', { status: 404 })
     }

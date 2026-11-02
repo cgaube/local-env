@@ -1,0 +1,136 @@
+import { createColumnHelper } from '@tanstack/react-table'
+import { ArrowUpDownIcon } from 'lucide-react'
+import { use } from 'react'
+import { Badge } from '#ui/components/ui/badge'
+import { Button } from '#ui/components/ui/button'
+import { Switch } from '#ui/components/ui/switch'
+import { ToolStatusBadge } from '../tool-status-badge'
+import type { CatalogRow } from '../tools.ts'
+import type { CatalogFeatures } from './catalog-features.ts'
+import { PickContext } from './pick-context.ts'
+
+const column = createColumnHelper<CatalogFeatures, CatalogRow>()
+
+const DATE = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
+function PickSwitch({ tool }: { tool: CatalogRow }) {
+  const onPick = use(PickContext)
+  const included = tool.includedBy.length > 0
+  return (
+    // The switch's click area reaches 12px past it: past the cell's padding,
+    // it would overflow the table and keep a horizontal scrollbar on
+    <div className="flex justify-end px-1.5">
+      <Switch
+        aria-label={`Install ${tool.name}`}
+        // A picked role includes it: it is installed with that role
+        checked={tool.picked || included}
+        disabled={included}
+        onCheckedChange={(on) => onPick(tool.id, on)}
+      />
+    </div>
+  )
+}
+
+export const catalogColumns = column.columns([
+  // Searched by its name, description and tags
+  column.accessor(
+    (tool) => [tool.name, tool.description, ...tool.tags].join(' '),
+    {
+      id: 'tool',
+      enableHiding: false,
+      filterFn: 'includesString',
+      sortFn: 'text',
+      header: ({ column: header }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2"
+          onClick={() => header.toggleSorting()}
+        >
+          Tool
+          <ArrowUpDownIcon data-icon="inline-end" />
+        </Button>
+      ),
+      cell: ({ row: { original: tool } }) => (
+        <div className="flex flex-col gap-1 whitespace-normal">
+          <span className="font-medium">{tool.name}</span>
+          {tool.description ? (
+            <span className="text-muted-foreground text-xs">
+              {tool.description}
+            </span>
+          ) : null}
+          {tool.includedBy.length > 0 ? (
+            <span className="text-muted-foreground text-xs">
+              Included in {tool.includedBy.join(', ')}
+            </span>
+          ) : null}
+          {tool.tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {tool.tags.map((tag) => (
+                <Badge key={tag} variant="outline">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+  ),
+  column.accessor('source', {
+    filterFn: 'oneOf',
+    sortFn: 'text',
+    header: 'Source',
+    cell: ({ getValue }) => (
+      <span className="text-muted-foreground">{getValue()}</span>
+    ),
+  }),
+  // Never shown (the tool column shows them): the tag filter
+  column.accessor('tags', {
+    enableHiding: false,
+    enableSorting: false,
+    filterFn: 'arrIncludesSome',
+    // Each tag counts in the filter, not the list
+    getUniqueValues: (tool) => tool.tags,
+  }),
+  // A value for every row, so the status filter can pick the tools that are
+  // neither picked nor installed
+  column.accessor((tool) => tool.status ?? 'available', {
+    id: 'status',
+    header: 'Status',
+    enableSorting: false,
+    filterFn: 'oneOf',
+    cell: ({ row: { original: tool } }) =>
+      tool.status ? <ToolStatusBadge status={tool.status} /> : null,
+  }),
+  column.accessor((tool) => tool.installedAt ?? '', {
+    id: 'installed',
+    sortFn: 'text',
+    header: ({ column: header }) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
+        onClick={() => header.toggleSorting()}
+      >
+        Installed
+        <ArrowUpDownIcon data-icon="inline-end" />
+      </Button>
+    ),
+    cell: ({ row: { original: tool } }) =>
+      tool.installedAt ? (
+        <time dateTime={tool.installedAt} className="text-muted-foreground">
+          {DATE.format(new Date(tool.installedAt))}
+        </time>
+      ) : null,
+  }),
+  column.display({
+    id: 'pick',
+    enableHiding: false,
+    header: () => <span className="sr-only">Install</span>,
+    cell: ({ row }) => <PickSwitch tool={row.original} />,
+  }),
+])

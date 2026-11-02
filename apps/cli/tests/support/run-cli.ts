@@ -98,6 +98,9 @@ export const createCli = async ({
         NO_COLOR: '1',
         LOCAL_ENV_HOME: home.dir,
         LOCAL_ENV_DOCKHAND_URL: dockhand.url,
+        // Nothing listens there: the new version check fails at once, and
+        // never reaches GitHub. Tests of the check pass their own.
+        LOCAL_ENV_FORMULA_URL: 'http://127.0.0.1:9/',
         FAKE_PROMPTS_DIR: prompts,
         ...bin.env,
         ...GIT_ENV,

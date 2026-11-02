@@ -1,0 +1,13 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env install output a group per role and a line per task, like the rest of the CLI 1`] = `
+"│
+◇  hello
+│  ✓ Say hello  Hello!
+│
+◇  colima
+│  ● Install Colima  Package installed: colima
+│  ✓ Look for a docker CLI
+│  ↷ Install the docker CLI  skipped
+│  Installed 2 tools · 1 changed"
+`;

@@ -72,6 +72,14 @@ export const askText = async (message: string, _initialValue: string) => {
   return answer
 }
 
+export const askPassword = async (message: string) => {
+  const answer = next(message)
+  if (typeof answer !== 'string') {
+    return fail(message, `a password question, answered ${answer}`)
+  }
+  return answer
+}
+
 export const askSelect = async (
   message: string,
   options: { value: string; label: string; hint?: string }[],
@@ -89,5 +97,6 @@ export const fakePrompts = {
   CANCELLED_EXIT_CODE,
   askConfirm,
   askText,
+  askPassword,
   askSelect,
 } satisfies typeof import('#cli/utils/prompt.js')
