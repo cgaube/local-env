@@ -1,5 +1,13 @@
 # local-env
 
+## 0.3.2
+
+### Patch Changes
+
+- 45b575c: `local-env update` runs `brew update` before
+  `brew upgrade local-env`, so Homebrew sees the new version. When Homebrew
+  installs no new version, `update` tells you.
+
 ## 0.3.1
 
 ### Patch Changes
