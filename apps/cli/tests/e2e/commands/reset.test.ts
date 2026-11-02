@@ -118,8 +118,14 @@ describe.concurrent('local-env reset', () => {
     })
 
     expect(result.exitCode).toBe(0)
-    expect(cli.bin.calls('mkcert').map((call) => call.args)).toEqual([
-      ['-uninstall'],
+    expect(
+      cli.bin
+        .calls('mkcert')
+        .filter((call) => call.args[0] !== '-CAROOT')
+        .map((call) => `${call.args[0]} ${call.env.TRUST_STORES ?? 'all'}`),
+    ).toEqual(['-uninstall nss'])
+    expect(cli.bin.calls('security').map((call) => call.args)).toEqual([
+      ['remove-trusted-cert', expect.stringContaining('rootCA.pem')],
     ])
   })
 

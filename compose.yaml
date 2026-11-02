@@ -31,8 +31,10 @@ services:
     image: fnsys/dockhand:latest
     container_name: local-env-dockhand
     restart: unless-stopped
-    # Localhost only: no login, and it controls Docker
-    ports: ['127.0.0.1:3000:3000']
+    # Localhost only: no login, and it controls Docker. The host port is
+    # uncommon, so an app on the Mac does not take it (DOCKHAND_URL in
+    # apps/cli/src/providers/docker/api.ts).
+    ports: ['127.0.0.1:17300:3000']
     labels:
       # Shown in the dashboard's Core services section
       local-env.description:

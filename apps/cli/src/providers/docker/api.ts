@@ -1,7 +1,10 @@
 // Published on 127.0.0.1 only: localhost could resolve to ::1 first. Tests
 // point it at a fake Dockhand (tests/support/fake-dockhand.ts).
+// The port is uncommon on purpose: an app on the Mac that listens on
+// 127.0.0.1 with the same port (3000 for Rails or Next.js) gets the requests
+// instead of Docker. Keep it in sync with compose.yaml.
 const DOCKHAND_URL =
-  process.env.LOCAL_ENV_DOCKHAND_URL ?? 'http://127.0.0.1:3000'
+  process.env.LOCAL_ENV_DOCKHAND_URL ?? 'http://127.0.0.1:17300'
 
 export const dockhandApi = async <T = unknown>(
   path: string,
@@ -16,6 +19,13 @@ export const dockhandApi = async <T = unknown>(
       ...init?.headers,
     },
   })
+
+  // Dockhand answers its API in JSON: an HTML page comes from another app
+  if (response.headers.get('content-type')?.includes('text/html')) {
+    throw new Error(
+      `Another app answers on ${DOCKHAND_URL}, not Dockhand. Stop it, or move it to another port, then try again (lsof -nP -iTCP:${new URL(DOCKHAND_URL).port} -sTCP:LISTEN shows it).`,
+    )
+  }
 
   if (!response.ok) {
     throw new Error(

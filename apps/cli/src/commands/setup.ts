@@ -115,7 +115,8 @@ export const setupCommand = new Command('setup')
         [
           'Setup complete',
           'Run `local-env start` to start the services.',
-          'If Firefox warns, enable security.enterprise_roots.enabled in about:config.',
+          // Firefox reads the trust of the macOS keychain only when it starts
+          'If Firefox warns about a local-env site, restart it.',
         ].join('\n'),
       )
     } catch (error) {
