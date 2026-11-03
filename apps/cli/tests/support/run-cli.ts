@@ -79,7 +79,13 @@ export const createCli = async ({
     {
       answers = [],
       env = {},
-    }: { answers?: FakeAnswer[]; env?: Record<string, string> } = {},
+      stdin,
+    }: {
+      answers?: FakeAnswer[]
+      env?: Record<string, string>
+      // Piped to the CLI, e.g. a token for --password-stdin
+      stdin?: string
+    } = {},
   ): Promise<CliResult> => {
     if (COMPILED && answers.length > 0) {
       throw new Error('Answers need the sources: skip this test with COMPILED')
@@ -106,7 +112,7 @@ export const createCli = async ({
         ...GIT_ENV,
         ...env,
       },
-      stdin: 'ignore',
+      stdin: stdin === undefined ? 'ignore' : new Blob([stdin]),
       stdout: 'pipe',
       stderr: 'pipe',
     })

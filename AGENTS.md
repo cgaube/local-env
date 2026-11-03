@@ -21,9 +21,9 @@ holds what we build:
 
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
-  `update`, `sources` (add, list, remove, sync, links), `install`,
-  `proxy routes`, `doctor`. `update` first upgrades local-env with Homebrew when
-  a newer version is out, then hands over to the new version
+  `update`, `sources` (add, list, remove, sync, links, login, logout),
+  `install`, `proxy routes`, `doctor`. `update` first upgrades local-env with
+  Homebrew when a newer version is out, then hands over to the new version
   (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
   and the sources, then lists the stacks whose template changed and offers to
   run the `sources sync` flow. `sources sync` pulls the sources first
@@ -157,6 +157,20 @@ holds what we build:
   nginx every routed host as an alias: containers can call
   `https://<host>.<domain>`, which otherwise resolves to themselves. They trust
   the certificate once the mkcert CA is mounted (`SSL_CERT_FILE`).
+- A source lists the registries of its private images in
+  `docker/registries.json` (`host`, optional `usernameHelp` and `tokenHelp`,
+  shown in the prompts). The `registryLoginsStep`
+  (`src/providers/docker/registries.ts`) asks for a login for each host that
+  Dockhand has no login for, on every provisioning and `sources sync` (only a
+  hint without a terminal), and saves it in Dockhand with its registry API.
+  "Don't ask again" goes in `volumes/registries.json`.
+  `local-env sources login [name]` and `logout [name]`
+  (`src/commands/sources/login.ts`) manage the logins of a source's registries;
+  without a name, they list the sources and the state of their logins. A login
+  stays per host in Dockhand, shared by the sources that use that host. The CLI
+  only changes the Dockhand registry of a full host (`ghcr.io`, not
+  `ghcr.io/team`), and never shows, stores or passes the token on a command
+  line.
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.

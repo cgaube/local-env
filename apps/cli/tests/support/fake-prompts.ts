@@ -72,6 +72,9 @@ export const askText = async (message: string, _initialValue: string) => {
   return answer
 }
 
+// A test can run the CLI as if without a terminal: FAKE_PROMPTS_NO_TTY=1
+export const canAsk = () => process.env.FAKE_PROMPTS_NO_TTY !== '1'
+
 export const askPassword = async (message: string) => {
   const answer = next(message)
   if (typeof answer !== 'string') {
@@ -99,4 +102,5 @@ export const fakePrompts = {
   askText,
   askPassword,
   askSelect,
+  canAsk,
 } satisfies typeof import('#cli/utils/prompt.js')

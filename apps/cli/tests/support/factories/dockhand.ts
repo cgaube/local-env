@@ -28,6 +28,28 @@ export type DockhandContainerUpdate = {
   updateDisabled: boolean
 }
 
+// A registry in Dockhand's database, password included
+export type DockhandRegistryRow = {
+  id: number
+  name: string
+  url: string
+  username?: string
+  password?: string
+  isDefault: boolean
+}
+
+export const buildDockhandRegistry = (
+  overrides: Partial<DockhandRegistryRow> = {},
+): DockhandRegistryRow => ({
+  id: 1,
+  name: 'ghcr.io',
+  url: 'ghcr.io',
+  username: 'octocat',
+  password: 'ghp_stored',
+  isDefault: false,
+  ...overrides,
+})
+
 // The Local environment provisioning creates
 export const buildDockhandEnvironment = (
   overrides: Partial<DockhandEnvironment> = {},

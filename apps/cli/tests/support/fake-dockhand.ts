@@ -4,6 +4,7 @@
 import {
   buildDockhandEnvironment,
   type DockhandContainerUpdate,
+  type DockhandRegistryRow,
   type DockhandEnvironment,
   type DockhandStack,
   type DockhandTemplateSource,
@@ -23,6 +24,8 @@ export type DockhandState = {
   updatedContainers: string[]
   // Stacks redeployed with a build
   builtStacks: string[]
+  // With their password, which the API never returns
+  registries: DockhandRegistryRow[]
 }
 
 export type DockhandRequest = {
@@ -45,6 +48,13 @@ const freshState = (): DockhandState => ({
   containerUpdates: [],
   updatedContainers: [],
   builtStacks: [],
+  registries: [],
+})
+
+// What GET /registries returns: no password, only whether there is one
+const publicRegistry = ({ password, ...registry }: DockhandRegistryRow) => ({
+  ...registry,
+  hasCredentials: Boolean(password),
 })
 
 const json = (data: unknown, status = 200) => Response.json(data, { status })
@@ -168,6 +178,43 @@ const ROUTES: Record<string, Handler> = {
     if (!findStack(state, params.name)) return notFound('stack')
     state.builtStacks.push(params.name!)
     return { success: true }
+  },
+
+  'GET /registries': (_, state) => state.registries.map(publicRegistry),
+  'POST /registries': ({ body }, state) => {
+    const registry = {
+      ...(body as Omit<DockhandRegistryRow, 'id'>),
+      id: nextId(state.registries),
+    }
+    state.registries.push(registry)
+    return publicRegistry(registry)
+  },
+  'PUT /registries/:id': ({ params, body }, state) => {
+    const registry = state.registries.find(({ id }) => id === Number(params.id))
+    if (!registry) return notFound('registry')
+    Object.assign(registry, body)
+    return publicRegistry(registry)
+  },
+  'DELETE /registries/:id': ({ params }, state) => {
+    state.registries = state.registries.filter(
+      ({ id }) => id !== Number(params.id),
+    )
+    return { success: true }
+  },
+  // Every login works; a test overrides the route to reject one
+  'POST /registries/test': ({ body }, state) => {
+    const { registryId, username } = body as {
+      registryId?: number
+      username?: string
+    }
+    const user =
+      state.registries.find(({ id }) => id === registryId)?.username ?? username
+    return {
+      success: true,
+      connectivity: true,
+      authenticated: true,
+      message: `Connected and authenticated as ${user}`,
+    }
   },
 
   'POST /containers/check-updates': (_, state) => ({

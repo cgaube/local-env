@@ -8,6 +8,14 @@ import { isValidDomain, normalizeDomain, readConfig } from '../core/config.js'
 import { COMPOSE_FILE } from '../core/paths.js'
 import { checkBuildPort, findFreePort } from '../core/settings/build-port.js'
 import { dockhandApi } from '../providers/docker/api.js'
+import {
+  findLogin,
+  getRegistries,
+  isIgnored,
+  listDeclaredRegistries,
+  loginCommandFor,
+  testRegistryLogin,
+} from '../providers/docker/registries.js'
 import { resolveTemplateCompose } from '../providers/docker/template-sync.js'
 import {
   BUILD_CONTEXTS_DIR,
@@ -69,6 +77,61 @@ const checkRemote = async (name: string): Promise<CheckResult> => {
         level: 'warn',
         message: `${name}: new commits available. Run \`local-env update\`.`,
       }
+}
+
+// Each registry the sources need has a login in Dockhand that the registry
+// accepts. Dockhand tests the stored login: the CLI never sees the token.
+const checkRegistries = async (): Promise<CheckResult[]> => {
+  const declared = listDeclaredRegistries()
+  if (declared.length === 0) {
+    return [{ level: 'pass', message: 'No source needs a registry login' }]
+  }
+  let registries
+  try {
+    registries = await getRegistries()
+  } catch {
+    return [
+      {
+        level: 'warn',
+        message: "Can't reach Dockhand to check the registry logins",
+      },
+    ]
+  }
+  const results: CheckResult[] = []
+  for (const { host, sources } of declared) {
+    const login = findLogin(registries, host)
+    if (!login) {
+      results.push({
+        level: 'warn',
+        message: `${host}: no login, needed by ${sources.join(', ')}${isIgnored(host) ? ' (not asked, as you chose)' : ''}. Run \`${loginCommandFor(sources[0]!)}\`.`,
+      })
+      continue
+    }
+    const test = await testRegistryLogin({ registryId: login.id }).catch(
+      (error: unknown) => ({
+        success: false,
+        connectivity: false,
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    )
+    if (test.success) {
+      results.push({
+        level: 'pass',
+        message: `${host}: logged in as ${login.username}`,
+      })
+    } else if (!test.connectivity) {
+      results.push({
+        level: 'warn',
+        message: `${host}: can't reach the registry to test the login: ${test.message}`,
+      })
+    } else {
+      results.push({
+        level: 'fail',
+        message: `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(sources[0]!)}\`.`,
+      })
+    }
+  }
+  return results
 }
 
 const checkSources = async (): Promise<CheckResult[]> => {
@@ -428,6 +491,9 @@ export const doctorCommand = new Command('doctor')
 
       logger.group('Templates')
       for (const result of await checkTemplates()) addResult(result)
+
+      logger.group('Registries')
+      for (const result of await checkRegistries()) addResult(result)
 
       logger.group('Summary')
       logger.success(
