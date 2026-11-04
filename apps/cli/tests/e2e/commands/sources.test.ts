@@ -1,16 +1,21 @@
 import { dockerRunning } from '../../support/machine.js'
-import { buildDockhandEnvironment } from '../../support/factories/dockhand.js'
+import {
+  buildDockhandEnvironment,
+  buildDockhandRegistry,
+} from '../../support/factories/dockhand.js'
 import {
   buildContainerTemplate,
   buildTemplate,
 } from '../../support/factories/template.js'
+import type { DockhandState } from '../../support/fake-dockhand.js'
 import { createCli } from '../../support/run-cli.js'
 
 // A provisioned Dockhand: adding or removing a source only changes its
 // template sources
-const createProvisionedCli = () =>
+const createProvisionedCli = (dockhand: Partial<DockhandState> = {}) =>
   createCli({
     dockhand: {
+      ...dockhand,
       environments: [buildDockhandEnvironment()],
       exposure: { warn: true, dismissed: true },
       updateChecks: {
@@ -103,6 +108,38 @@ describe('local-env sources list', () => {
     const empty = cli.createSource('empty', { templates: [] })
     await cli.run(['sources', 'add', acme.dir])
     await cli.run(['sources', 'add', empty.dir])
+
+    const result = await cli.run(['sources', 'list'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toMatchSnapshot()
+  })
+
+  test('shows whether the sources that need a registry login have one', async () => {
+    await using cli = await createProvisionedCli({
+      registries: [buildDockhandRegistry()],
+    })
+    cli.home.seedConfig()
+    dockerRunning(cli.bin)
+    const needs = (name: string, hosts: string[]) => {
+      const repo = cli.createSource(name)
+      repo.commit({
+        'docker/registries.json': JSON.stringify(
+          hosts.map((host) => ({ host })),
+        ),
+      })
+      return repo
+    }
+    const sources = [
+      needs('acme', ['ghcr.io']),
+      needs('beta', ['ghcr.io', 'quay.io']),
+      cli.createSource('plain'),
+    ]
+    for (const repo of sources) {
+      await cli.run(['sources', 'add', repo.dir], {
+        env: { FAKE_PROMPTS_NO_TTY: '1' },
+      })
+    }
 
     const result = await cli.run(['sources', 'list'])
 

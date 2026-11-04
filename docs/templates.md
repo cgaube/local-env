@@ -11,6 +11,7 @@ your later changes too.
 <repo>/
 ├── docker/
 │   ├── templates.json        # the list of templates (Portainer format)
+│   ├── registries.json       # optional: registries of private images
 │   ├── mailpit/
 │   │   └── compose.yaml      # one folder per stack template
 │   └── hello/
@@ -151,6 +152,55 @@ volumes:
 
 Containers with a route can also reach each other by container name, on the
 app's own port: `mailpit:1025`.
+
+### Private images
+
+When a template uses private images, list their registries in
+`docker/registries.json`:
+
+```json
+[
+  {
+    "host": "ghcr.io",
+    "usernameHelp": "your GitHub username",
+    "tokenHelp": "a classic token with read:packages only: https://github.com/settings/tokens/new?scopes=read:packages&description=local-env"
+  }
+]
+```
+
+`host` is the registry host. `usernameHelp` and `tokenHelp` are optional:
+local-env shows them when it asks for the username and the token. Write what the
+user must give, and where to get it. local-env has no help of its own.
+
+When a user adds the source, local-env asks for a username and a token for each
+host that has no login yet. `start`, `update` and `sources sync` ask again,
+until the user logs in or selects "Don't ask again". Without a terminal,
+local-env only shows the command to run. Dockhand tests the login, then keeps
+it, and logs in to the registry before each deploy. To log in, change the token
+or remove it:
+
+```sh
+local-env sources login       # the sources that need a login, and their login
+local-env sources login acme  # asks for each registry of the source
+echo "$TOKEN" | local-env sources login acme --registry ghcr.io -u octocat --password-stdin
+local-env sources logout acme
+```
+
+`sources login` asks for each registry of the source that has no login. For a
+registry that has a login, it asks first if the user wants to log in again.
+`--registry` selects one registry of the source. A login is for a host, not for
+a source: sources that use the same host use the same login.
+
+`local-env sources list` shows whether each source that needs a login has one.
+`local-env doctor` tests each login against its registry.
+
+For images on ghcr.io, each user creates a classic personal access token with
+the `read:packages` scope only, one time. Do not use the token of
+`gh auth token`: it can also push code and change workflows. One token gives
+access to the packages of all the organizations of the user.
+
+Docker keeps one login for each host. Thus, sources that need two different
+accounts on the same host cannot both work.
 
 ## How updates reach users
 

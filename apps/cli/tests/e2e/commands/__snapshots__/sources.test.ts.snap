@@ -2,5 +2,11 @@
 
 exports[`local-env sources list summarizes the content of each source 1`] = `
 "│  acme   3 docker templates, 1 ansible role  <TMP>/repos/acme
-│  empty  empty  <TMP>/repos/empty"
+│  empty  empty                               <TMP>/repos/empty"
+`;
+
+exports[`local-env sources list shows whether the sources that need a registry login have one 1`] = `
+"│  acme   1 docker template  ✔ logged in     <TMP>/repos/acme
+│  beta   1 docker template  ▲ login needed  <TMP>/repos/beta
+│  plain  1 docker template                  <TMP>/repos/plain"
 `;

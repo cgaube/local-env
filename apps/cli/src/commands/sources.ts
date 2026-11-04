@@ -1,8 +1,16 @@
+import { S_WARN } from '@clack/prompts'
 import { Command } from 'commander'
-import { styleText } from 'node:util'
+import { stripVTControlCharacters, styleText } from 'node:util'
 import { homedir } from 'os'
 import { provisionProviders } from '../providers/index.js'
 import { refreshTemplateSources } from '../providers/docker/index.js'
+import {
+  type DockhandRegistry,
+  findLogin,
+  getRegistries,
+  readSourceRegistries,
+  sourcesNeedingLogin,
+} from '../providers/docker/registries.js'
 import { printStackLinks, syncStacks } from '../providers/docker/stack-sync.js'
 import { forgetLink } from '../providers/docker/template-sync.js'
 import {
@@ -17,6 +25,7 @@ import {
 } from '../sources/sources.js'
 import { logger } from '../utils/index.js'
 import { askSelect } from '../utils/prompt.js'
+import { loginCommand, logoutCommand } from './sources/login.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>
@@ -41,6 +50,22 @@ const addCommand = new Command('add')
     }),
   )
 
+// Whether Dockhand has a login for every registry of the source. Empty when
+// the source lists none; unknown when Dockhand can't be reached.
+const loginStatus = (
+  source: string,
+  registries: DockhandRegistry[] | undefined,
+) => {
+  const hosts = readSourceRegistries(source).map(({ host }) => host)
+  if (hosts.length === 0) return ''
+  if (!registries) return styleText('dim', '? login unknown')
+  return hosts.every((host) => findLogin(registries, host))
+    ? styleText('green', '✔ logged in')
+    : styleText('yellow', `${S_WARN} login needed`)
+}
+
+const visibleWidth = (text: string) => stripVTControlCharacters(text).length
+
 const listCommand = new Command('list').description('List sources').action(
   withErrors(async () => {
     const names = listSources()
@@ -48,15 +73,40 @@ const listCommand = new Command('list').description('List sources').action(
       logger.info('No sources. Add one with: local-env sources add <repo>')
       return
     }
-    const width = Math.max(...names.map((name) => name.length))
+    // Only asks Dockhand when a source needs a login
+    const registries =
+      sourcesNeedingLogin().length > 0
+        ? await getRegistries().catch(() => undefined)
+        : []
     const rows = await Promise.all(
       names.map(async (name) => {
-        const content = summarizeSourceContent(readSourceContent(name))
         const url = await getSourceUrl(name).catch(() => 'no remote')
-        return `${name.padEnd(width)}  ${content}  ${styleText('dim', url.replace(homedir(), '~'))}`
+        return [
+          name,
+          summarizeSourceContent(readSourceContent(name)),
+          loginStatus(name, registries),
+          styleText('dim', url.replace(homedir(), '~')),
+        ]
       }),
     )
-    logger.log(rows.join('\n'))
+    const widths = [0, 1, 2].map((column) =>
+      Math.max(...rows.map((row) => visibleWidth(row[column]!))),
+    )
+    logger.log(
+      rows
+        .map((row) =>
+          row
+            .map((cell, column) =>
+              column < widths.length
+                ? cell + ' '.repeat(widths[column]! - visibleWidth(cell))
+                : cell,
+            )
+            // An empty column takes no room
+            .filter((cell) => cell !== '')
+            .join('  '),
+        )
+        .join('\n'),
+    )
   }),
 )
 
@@ -160,3 +210,5 @@ export const sourcesCommand = new Command('sources')
   .addCommand(removeCommand)
   .addCommand(syncCommand)
   .addCommand(linksCommand)
+  .addCommand(loginCommand)
+  .addCommand(logoutCommand)

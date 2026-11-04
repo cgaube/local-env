@@ -4,6 +4,7 @@ import { logger } from '../../utils/logger.js'
 import type { Provider, UpdateOptions } from '../types.js'
 import { findContainerUpdates, updateContainers } from './container-updates.js'
 import { getLocalEnvironment } from './environments.js'
+import { registryLoginsStep } from './registries.js'
 import { offerStackSync } from './stack-sync.js'
 import { autoUpdateStep } from './steps/auto-update.js'
 import { exposureWarningStep } from './steps/exposure-warning.js'
@@ -21,6 +22,8 @@ const steps: DockhandStep[] = [
   autoUpdateStep,
   removeBuiltinTemplatesStep,
   templateSourcesStep,
+  // Last: it may ask questions, after the steps that need none
+  registryLoginsStep,
 ]
 
 // The services provisioning starts: Dockhand and the server of its templates
@@ -67,6 +70,10 @@ export const refreshTemplateSources = async () => {
   }
   if ((await templateSourcesStep.run()) !== 'unchanged') {
     logger.success('Dockhand lists the new templates')
+  }
+  // A pulled source can need a new registry login
+  if ((await registryLoginsStep.run()) !== 'unchanged') {
+    logger.success('Registry logins saved in Dockhand')
   }
 }
 

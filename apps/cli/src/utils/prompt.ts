@@ -31,6 +31,10 @@ export const askText = async (message: string, initialValue: string) => {
   return String(answer)
 }
 
+// False without a terminal (CI, a pipe): the command must not wait for an
+// answer
+export const canAsk = () => process.stdin.isTTY === true
+
 // Masked as it is typed
 export const askPassword = async (message: string) => {
   const answer = await password({ message })
