@@ -100,30 +100,30 @@ holds what we build:
   revision hash of the files; whether a task uses `become`; the stacks) and
   reads and writes `volumes/tools/`: `playbook.yml`, the picked roles by path
   (`../sources/<source>/ansible/<role>`), written by the dashboard
-  (`PUT /api/tools/picked`); `profile.json`, written by the sidebar's profile
-  switcher (`PUT /api/tools/profile`) and `local-env install <profile>`
-  (`--no-save` skips it); `installed.json` and `stacks.json`, written by
-  `local-env install` (`src/core/tools.ts`), which also forgets the tools no
-  longer wanted (it never uninstalls). `services/dashboard/role-graph.ts` (no
-  imports: the web app loads it too) walks the dependencies, by name in any
-  source: the profile and the picks are the roots. `install` writes its own
-  playbook of the roots, by absolute path, in a folder only the user can read
-  (`src/core/run-folder.ts`), and runs `ansible-playbook` on the Mac, as the
-  user, with `ANSIBLE_ROLES_PATH` set to every source's `ansible/` for
-  dependencies by name. When a wanted role uses `become`, the CLI asks for the
-  password (`askPassword`) and hands it to Ansible in a file of that folder
-  (`ANSIBLE_BECOME_PASSWORD_FILE`). The folder goes when the run ends, on
-  SIGINT, SIGTERM and SIGHUP too; the next run removes the ones of runs that
-  were killed. Ansible prints its events as JSON lines (`ansible.posix.jsonl`),
-  which `src/core/playbook-output.ts` draws with clack: a group per role, a
-  spinner per task, a line per result (`install --verbose` shows Ansible's own
-  output). Tests fake them with `tests/support/factories/ansible.ts`. The stacks
-  the wanted roles need are planned before the playbook (one confirmation,
-  `--yes` to skip it, then registry logins and required variables) and deployed
-  after it with Dockhand's `POST /stacks`, linked to their template, once:
-  `stacks.json` keeps them from coming back
-  (`src/providers/docker/required-stacks.ts`). The dashboard never runs anything
-  on the Mac. `docs/features/tools-and-profiles.md` explains why.
+  (`PUT /api/tools/picked`); `profile.json`, written by the dashboard's Profiles
+  page (`PUT /api/tools/profile`, `features/profiles/`) and
+  `local-env install <profile>` (`--no-save` skips it); `installed.json` and
+  `stacks.json`, written by `local-env install` (`src/core/tools.ts`), which
+  also forgets the tools no longer wanted (it never uninstalls).
+  `services/dashboard/role-graph.ts` (no imports: the web app loads it too)
+  walks the dependencies, by name in any source: the profile and the picks are
+  the roots. `install` writes its own playbook of the roots, by absolute path,
+  in a folder only the user can read (`src/core/run-folder.ts`), and runs
+  `ansible-playbook` on the Mac, as the user, with `ANSIBLE_ROLES_PATH` set to
+  every source's `ansible/` for dependencies by name. When a wanted role uses
+  `become`, the CLI asks for the password (`askPassword`) and hands it to
+  Ansible in a file of that folder (`ANSIBLE_BECOME_PASSWORD_FILE`). The folder
+  goes when the run ends, on SIGINT, SIGTERM and SIGHUP too; the next run
+  removes the ones of runs that were killed. Ansible prints its events as JSON
+  lines (`ansible.posix.jsonl`), which `src/core/playbook-output.ts` draws with
+  clack: a group per role, a spinner per task, a line per result
+  (`install --verbose` shows Ansible's own output). Tests fake them with
+  `tests/support/factories/ansible.ts`. The stacks the wanted roles need are
+  planned before the playbook (one confirmation, `--yes` to skip it, then
+  registry logins and required variables) and deployed after it with Dockhand's
+  `POST /stacks`, linked to their template, once: `stacks.json` keeps them from
+  coming back (`src/providers/docker/required-stacks.ts`). The dashboard never
+  runs anything on the Mac. `docs/features/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources and the tools (`volumes/tools/`).
 

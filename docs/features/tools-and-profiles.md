@@ -1,7 +1,7 @@
 # Tools and profiles
 
-Status: done. Tools, profiles, the profile switcher of the dashboard and the
-stacks that tools need.
+Status: done. Tools, profiles, the Profiles page of the dashboard and the stacks
+that tools need.
 
 ## What it does
 
@@ -22,11 +22,17 @@ profiles on the Mac with `local-env install`.
 - local-env never uninstalls. When a tool is no longer wanted, it stays on the
   Mac. local-env removes it from the list of installed tools and shows a message
   ("No longer wanted, still on this Mac").
-- The profile switcher at the top of the sidebar of the dashboard saves the
-  profile. On the Tools page, the roles of the profile show a locked switch ("In
-  the backend profile"). The profiles are not rows of the Tools page.
-- If the sources have no profile, the top of the sidebar shows the logo and the
-  domain.
+- The Profiles page of the dashboard (`/profiles`) lists every profile, with a
+  search, a source filter and pages for hundreds of them. A card at the top
+  shows the current profile: its tools to install and its stacks to deploy. A
+  side panel shows all that a profile brings before the user picks it. The "Use"
+  button saves the profile.
+- The very bottom of the sidebar shows the current profile, or "No profile",
+  under the version (`features/layout/nav-profile/`), where sidebar-07 puts who
+  you are. It opens the Profiles page. If the sources have no profile, it is not
+  there.
+- On the Tools page, the roles of the profile show a locked switch ("In the
+  backend profile"). The profiles are not rows of the Tools page.
 - A role can need Docker stacks (`local-env.yml`). `local-env install` deploys
   the stacks that are missing, after one confirmation (`--yes` does not ask). It
   deploys each stack one time. If the user removes the stack, it stays removed.
@@ -198,8 +204,8 @@ sequenceDiagram
 - **A tag marks the profile, not a folder.** `galaxy_tags` is a field of
   Ansible. The role stays in `ansible/`, where `ANSIBLE_ROLES_PATH` finds it.
 - **The profile is in `volumes/tools/profile.json`, not in `config.json`.** The
-  dashboard can write only to `volumes/tools/` (`compose.yaml`). The profile
-  switcher must write the profile.
+  dashboard can write only to `volumes/tools/` (`compose.yaml`). The Profiles
+  page must write the profile.
 - **`install` writes its own playbook in a temporary folder.** `playbook.yml` is
   the file of the dashboard: it holds only the picks. With `--no-save`, the
   profile of the run is not the saved profile. A temporary playbook holds both
@@ -221,6 +227,10 @@ sequenceDiagram
 - **`--no-save` keeps the saved profile wanted.** A profile that runs one time
   does not replace the saved profile. Without this rule, the next
   `local-env install` installs the tools of the saved profile again, as new.
+- **Profiles have their own page, not a view of the Tools page.** A profile
+  controls the tools of the Mac and the Docker stacks. It is the setup of the
+  user, not one more tool. A dropdown in the sidebar does not work for hundreds
+  of profiles, and it cannot show what a profile brings.
 - **local-env never uninstalls.** An Ansible role cannot always undo what it
   did. A tool can also hold data of the user. The user removes it.
 - **The dashboard runs nothing on the Mac.** It runs in a container. The install

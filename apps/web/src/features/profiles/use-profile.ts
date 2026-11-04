@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { saveProfile } from '#ui/features/tools/tools.ts'
+import { saveProfile } from '#ui/features/profiles/profiles.ts'
 
 // The profile, switched as soon as it is picked: the event stream sends the
 // saved file back a moment later. The pick holds until then, while the

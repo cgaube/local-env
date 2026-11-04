@@ -76,7 +76,7 @@ const showProfile = (
         ? saved
           ? `Your profile stays ${saved.name}.`
           : 'You have no profile saved.'
-        : "Change it in the dashboard's sidebar, or with `local-env install <profile>`.",
+        : 'Change it on the Profiles page, or with `local-env install <profile>`.',
     ].join('\n'),
     { tinted: false, padded: false },
   )

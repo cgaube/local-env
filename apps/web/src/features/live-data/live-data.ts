@@ -57,6 +57,9 @@ export type Tools = {
   // Id of the profile, picked in the sidebar or by `local-env install
   // <profile>`. One no longer in a source is the CLI's to drop.
   profile: string | null
+  // The stacks `local-env install` deployed for the roles, by template
+  // (<source>/<folder>): once each, even if removed since
+  stacks: Record<string, { stack: string; by: string; deployedAt: string }>
 }
 
 export type LiveData = {

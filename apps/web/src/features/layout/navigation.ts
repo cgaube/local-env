@@ -1,4 +1,9 @@
-import { ContainerIcon, LayoutDashboardIcon, WrenchIcon } from 'lucide-react'
+import {
+  ContainerIcon,
+  LayersIcon,
+  LayoutDashboardIcon,
+  WrenchIcon,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export type NavLink = { title: string; to: string }
@@ -11,6 +16,8 @@ export type NavSection = {
 // The sidebar. Each path is a route in router.tsx.
 export const NAVIGATION: NavSection[] = [
   { title: 'Overview', icon: LayoutDashboardIcon, to: '/' },
+  // A set of tools and the stacks they need: first-class, not a kind of tool
+  { title: 'Profiles', icon: LayersIcon, to: '/profiles' },
   { title: 'Docker', icon: ContainerIcon, to: '/docker' },
   { title: 'Tools', icon: WrenchIcon, to: '/tools' },
 ]

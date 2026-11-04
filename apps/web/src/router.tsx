@@ -7,6 +7,7 @@ import {
 import type { RouteComponent } from '@tanstack/react-router'
 import { AppShell } from '#ui/features/layout/app-shell'
 import { OverviewPage } from '#ui/features/overview/overview-page'
+import { ProfilesPage } from '#ui/features/profiles/profiles-page'
 import { RoutesPage } from '#ui/features/routes/routes-page'
 import { CatalogPage } from '#ui/features/tools/catalog-page'
 
@@ -21,6 +22,7 @@ const page = (path: string, component: RouteComponent) =>
 
 const routeTree = rootRoute.addChildren([
   page('/', OverviewPage),
+  page('/profiles', ProfilesPage),
   page('/docker', RoutesPage),
   page('/tools', CatalogPage),
 ])

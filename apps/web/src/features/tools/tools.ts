@@ -113,16 +113,3 @@ export const savePickedTools = async (roles: string[]) => {
     throw new Error(`Saving the picked tools failed (${response.status})`)
   }
 }
-
-// Writes profile.json, which `local-env install` reads: an id, or null for
-// none
-export const saveProfile = async (profile: string | null) => {
-  const response = await fetch('/api/tools/profile', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile }),
-  })
-  if (!response.ok) {
-    throw new Error(`Saving the profile failed (${response.status})`)
-  }
-}

@@ -304,9 +304,10 @@ dependencies:
   - jetbrains-toolbox
 ```
 
-- People pick their profile at the top of the dashboard's sidebar, or with
-  `local-env install backend`, which saves it. Later, `local-env install`
-  installs it again with the tools they picked.
+- People pick their profile on the dashboard's Profiles page, or with
+  `local-env install backend`, which saves it. The page lists every profile with
+  its tools and stacks, and the sidebar shows the current one. Later,
+  `local-env install` installs it again with the tools they picked.
   `local-env install backend --no-save` installs it once.
 - The roles of the profile are locked on in the catalog. Profiles are not rows
   of the catalog.

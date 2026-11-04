@@ -17,6 +17,7 @@ import { join, normalize } from 'node:path'
 import {
   isProfileChoice,
   listRoles,
+  readDeployedStacks,
   readInstalled,
   readProfile,
   readSelection,
@@ -110,6 +111,8 @@ const readers = {
       picked: readSelection(TOOLS_DIR),
       installed: readInstalled(TOOLS_DIR),
       profile: readProfile(TOOLS_DIR),
+      // The stacks `local-env install` deployed for the roles
+      stacks: readDeployedStacks(TOOLS_DIR),
     }),
 }
 type Topic = keyof typeof readers

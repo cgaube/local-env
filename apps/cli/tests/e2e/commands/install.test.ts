@@ -415,7 +415,7 @@ describe.concurrent('local-env install', () => {
     expect(result.output).toContain('Installed the frontend profile and 1 tool')
     expect(result.output).toContain('Profile: frontend\n')
     expect(result.output).toContain(
-      "Change it in the dashboard's sidebar, or with `local-env install <profile>`.",
+      'Change it on the Profiles page, or with `local-env install <profile>`.',
     )
     expect(rolesRun(cli)).toEqual(['acme/frontend', 'acme/git'])
   })

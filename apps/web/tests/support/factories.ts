@@ -58,5 +58,6 @@ export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   picked: [],
   installed: {},
   profile: null,
+  stacks: {},
   ...overrides,
 })

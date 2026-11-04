@@ -1,4 +1,6 @@
-<h1><img src=".github/logo.svg" width="40" height="40" align="top" alt=""> local-env</h1>
+<h1 align="center"><img src=".github/logo.svg" width="96" height="96" alt=""> <br/>local-env</h1>
+
+---
 
 A local development environment for macOS:
 
@@ -15,6 +17,8 @@ A local development environment for macOS:
   then `local-env install` installs them on your Mac.
 - **Sources**: git repos of Docker templates and Ansible roles. The CLI ships
   none: add your own with `local-env sources add`.
+
+---
 
 ## Install
 

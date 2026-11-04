@@ -7,16 +7,18 @@ import {
 } from '#ui/components/ui/sidebar'
 import { NavApps } from '#ui/features/layout/nav-apps'
 import { NavMain } from '#ui/features/layout/nav-main'
+import { NavProfile } from '#ui/features/layout/nav-profile'
 import { NavVersion } from '#ui/features/layout/nav-version'
-import { ProfileSwitcher } from '#ui/features/tools/profile-switcher'
+import { SidebarBrand } from '#ui/features/layout/sidebar-brand'
 
-// sidebar-07: the profile switcher on top, the pages, the apps, and the
-// version at the bottom. Collapses to its icons (the rail or the trigger).
+// sidebar-07: the logo on top, the pages, the apps, then the version and, at
+// the very bottom like its NavUser, your profile. Collapses to its icons (the
+// rail or the trigger).
 export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <ProfileSwitcher />
+        <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
         <NavMain />
@@ -24,6 +26,7 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <NavVersion />
+        <NavProfile />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
