@@ -1,4 +1,4 @@
-import { ArrowUpCircleIcon, RefreshCwIcon } from 'lucide-react'
+import { ArrowUpCircleIcon, RefreshCwIcon, TagIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '#ui/components/ui/badge'
 import { Button } from '#ui/components/ui/button'
@@ -100,6 +100,8 @@ export function NavVersion({ build = __LOCAL_ENV_BUILD__ }) {
               />
             }
           >
+            {/* All that shows while the sidebar shows only icons */}
+            <TagIcon />
             {dev ? <Badge variant="warning">{dev.label}</Badge> : 'local-env'}
             <span className="truncate">
               v{build.version}

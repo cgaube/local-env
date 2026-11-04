@@ -1,11 +1,11 @@
 import { createColumnHelper } from '@tanstack/react-table'
-import { ArrowUpDownIcon } from 'lucide-react'
+import { ArrowUpDownIcon, ContainerIcon } from 'lucide-react'
 import { use } from 'react'
 import { Badge } from '#ui/components/ui/badge'
 import { Button } from '#ui/components/ui/button'
 import { Switch } from '#ui/components/ui/switch'
 import { ToolStatusBadge } from '#ui/features/tools/tool-status-badge'
-import type { CatalogRow } from '#ui/features/tools/tools.ts'
+import { type CatalogRow, stackName } from '#ui/features/tools/tools.ts'
 import type { CatalogFeatures } from '#ui/features/tools/catalog-table/catalog-features.ts'
 import { PickContext } from '#ui/features/tools/catalog-table/pick-context.ts'
 
@@ -18,14 +18,14 @@ const DATE = new Intl.DateTimeFormat(undefined, {
 
 function PickSwitch({ tool }: { tool: CatalogRow }) {
   const onPick = use(PickContext)
-  const included = tool.includedBy.length > 0
+  const included = tool.includedBy.length > 0 || tool.inProfile !== null
   return (
     // The switch's click area reaches 12px past it: past the cell's padding,
     // it would overflow the table and keep a horizontal scrollbar on
     <div className="flex justify-end px-1.5">
       <Switch
         aria-label={`Install ${tool.name}`}
-        // A picked role includes it: it is installed with that role
+        // A picked role or the profile includes it: it is installed with them
         checked={tool.picked || included}
         disabled={included}
         onCheckedChange={(on) => onPick(tool.id, on)}
@@ -62,9 +62,23 @@ export const catalogColumns = column.columns([
               {tool.description}
             </span>
           ) : null}
-          {tool.includedBy.length > 0 ? (
+          {tool.inProfile ? (
+            <span className="text-muted-foreground text-xs">
+              In the {tool.inProfile} profile
+            </span>
+          ) : tool.includedBy.length > 0 ? (
             <span className="text-muted-foreground text-xs">
               Included in {tool.includedBy.join(', ')}
+            </span>
+          ) : null}
+          {tool.stacks.length > 0 ? (
+            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+              <ContainerIcon className="size-3" />
+              Needs the{' '}
+              {tool.stacks
+                .map((stack) => stackName(stack, tool.source))
+                .join(', ')}{' '}
+              {tool.stacks.length === 1 ? 'stack' : 'stacks'}
             </span>
           ) : null}
           {tool.tags.length > 0 ? (

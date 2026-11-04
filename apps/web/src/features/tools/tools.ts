@@ -1,3 +1,4 @@
+import { includedRoles, wantedRoles } from '#services/dashboard/role-graph.ts'
 import type { Role, Tools } from '#ui/features/live-data/live-data.ts'
 
 // Where a tool stands on this Mac:
@@ -12,37 +13,6 @@ export type ToolStatus =
   | 'installed'
   | 'unpicked'
   | 'removed'
-
-// The roles that picked roles bring with them: their dependencies, by name in
-// any source as Ansible finds them, and those of their dependencies. A role
-// made of others is a profile. By id: the names of the picked roles that
-// include it.
-export const includedRoles = ({ roles, picked }: Tools) => {
-  const byName = Map.groupBy(roles, (role) => role.name)
-  const included = new Map<string, string[]>()
-  for (const root of roles.filter((role) => picked.includes(role.id))) {
-    const seen = new Set([root.id])
-    const queue = [root]
-    for (let role = queue.shift(); role; role = queue.shift()) {
-      for (const dependency of role.dependencies.flatMap(
-        (name) => byName.get(name) ?? [],
-      )) {
-        if (seen.has(dependency.id)) continue
-        seen.add(dependency.id)
-        queue.push(dependency)
-        included.set(dependency.id, [
-          ...(included.get(dependency.id) ?? []),
-          root.name,
-        ])
-      }
-    }
-  }
-  return included
-}
-
-// Picked, or included by a picked role: `local-env install` installs it
-const wantedRoles = (tools: Tools) =>
-  new Set([...tools.picked, ...includedRoles(tools).keys()])
 
 const statusOf = (
   { installed }: Tools,
@@ -72,14 +42,31 @@ export type CatalogRow = Role & {
   picked: boolean
   // The picked roles that include it: its switch stays on
   includedBy: string[]
+  // The name of the profile that includes it: its switch stays on
+  inProfile: string | null
   status: ToolStatus | null
 }
 
-// Every role, and the picks whose role left the sources: listed so they can
-// be unpicked (`local-env install` unpicks them too)
+// A stack of the role's source by its folder, one of another by its id
+export const stackName = (stack: string, source: string) =>
+  stack.startsWith(`${source}/`) ? stack.slice(source.length + 1) : stack
+
+// The profile, while it is in a source
+export const currentProfile = ({ roles, profile }: Tools) =>
+  roles.find((role) => role.id === profile && role.isProfile) ?? null
+
+// Every role, profiles included, and the picks whose role left the sources:
+// listed so they can be unpicked (`local-env install` unpicks them too)
 export const catalogRows = (tools: Tools): CatalogRow[] => {
-  const included = includedRoles(tools)
-  const wanted = wantedRoles(tools)
+  const profile = currentProfile(tools)
+  const roots = [...tools.picked, ...(profile ? [profile.id] : [])]
+  const included = includedRoles(tools.roles, tools.picked)
+  const inProfile = profile
+    ? new Set([profile.id, ...includedRoles(tools.roles, [profile.id]).keys()])
+    : new Set<string>()
+  // Picked, in the profile, or included by those: `local-env install`
+  // installs it
+  const wanted = wantedRoles(tools.roles, roots)
   const known = new Set(tools.roles.map((role) => role.id))
   return [
     ...tools.roles.map((role) => ({
@@ -87,6 +74,7 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
       installedAt: tools.installed[role.id]?.installedAt ?? null,
       picked: tools.picked.includes(role.id),
       includedBy: included.get(role.id) ?? [],
+      inProfile: inProfile.has(role.id) ? (profile?.name ?? null) : null,
       status: statusOf(tools, wanted, role),
     })),
     ...tools.picked
@@ -100,11 +88,14 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
           description: null,
           tags: [],
           dependencies: [],
+          isProfile: false,
+          stacks: [],
           revision: '',
           needsSudo: false,
           installedAt: tools.installed[id]?.installedAt ?? null,
           picked: true,
           includedBy: [],
+          inProfile: null,
           status: 'removed' as const,
         }
       }),
@@ -120,5 +111,18 @@ export const savePickedTools = async (roles: string[]) => {
   })
   if (!response.ok) {
     throw new Error(`Saving the picked tools failed (${response.status})`)
+  }
+}
+
+// Writes profile.json, which `local-env install` reads: an id, or null for
+// none
+export const saveProfile = async (profile: string | null) => {
+  const response = await fetch('/api/tools/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile }),
+  })
+  if (!response.ok) {
+    throw new Error(`Saving the profile failed (${response.status})`)
   }
 }

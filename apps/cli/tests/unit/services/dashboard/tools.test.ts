@@ -2,9 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import {
+  isProfileChoice,
   listRoles,
   readInstalled,
+  readProfile,
   readSelection,
+  writeProfile,
   writeSelection,
 } from '#services/dashboard/tools.js'
 
@@ -45,9 +48,51 @@ describe('listRoles', () => {
         description: 'Node.js and npm, from Homebrew',
         tags: ['javascript', 'runtime'],
         dependencies: ['homebrew', 'git'],
+        isProfile: false,
+        stacks: [],
         revision: expect.stringMatching(/^[0-9a-f]{12}$/),
         needsSudo: false,
       },
+    ])
+  })
+
+  test('is a profile when tagged profile', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/backend/meta/main.yml',
+      'galaxy_info:\n  galaxy_tags: [profile]\ndependencies: [git]\n',
+    )
+    write('acme/ansible/git/tasks/main.yml', '- ping:\n')
+
+    expect(
+      listRoles(sources).map(({ name, isProfile }) => [name, isProfile]),
+    ).toEqual([
+      ['backend', true],
+      ['git', false],
+    ])
+  })
+
+  test('reads the stacks of local-env.yml, in its source or another', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/backend/local-env.yml',
+      [
+        'stacks:',
+        '  - postgres',
+        '  - shared/mailpit',
+        '  - acme/postgres',
+        '  - ../../etc',
+        '  - a/b/c',
+        '  - 42',
+      ].join('\n'),
+    )
+    write('acme/ansible/git/local-env.yml', 'stacks: [unclosed\n')
+
+    expect(
+      listRoles(sources).map(({ name, stacks }) => [name, stacks]),
+    ).toEqual([
+      ['backend', ['acme/postgres', 'shared/mailpit']],
+      ['git', []],
     ])
   })
 
@@ -107,6 +152,44 @@ describe('listRoles', () => {
       ['dns', true],
       ['git', false],
     ])
+  })
+})
+
+describe('the profile', () => {
+  test('is saved by id, or as none', () => {
+    const { tools } = createVolumes()
+
+    writeProfile(tools, 'acme/backend')
+    expect(readProfile(tools)).toBe('acme/backend')
+
+    writeProfile(tools, null)
+    expect(readProfile(tools)).toBeNull()
+  })
+
+  test('can be chosen among the profiles of the catalog, or none', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/backend/meta/main.yml',
+      'galaxy_info:\n  galaxy_tags: [profile]\n',
+    )
+    write('acme/ansible/git/tasks/main.yml', '- ping:\n')
+    const roles = listRoles(sources)
+
+    expect(isProfileChoice(roles, 'acme/backend')).toBe(true)
+    expect(isProfileChoice(roles, null)).toBe(true)
+    // A tool, a profile of no source, not an id
+    expect(isProfileChoice(roles, 'acme/git')).toBe(false)
+    expect(isProfileChoice(roles, 'team/backend')).toBe(false)
+    expect(isProfileChoice(roles, ['acme/backend'])).toBe(false)
+    expect(isProfileChoice(roles, undefined)).toBe(false)
+  })
+
+  test('is none without a file, or with an id that names no role', () => {
+    const { tools } = createVolumes()
+    expect(readProfile(tools)).toBeNull()
+
+    writeFileSync(join(tools, 'profile.json'), '{ "profile": "../etc" }')
+    expect(readProfile(tools)).toBeNull()
   })
 })
 

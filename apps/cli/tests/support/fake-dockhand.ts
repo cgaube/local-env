@@ -143,6 +143,27 @@ const ROUTES: Record<string, Handler> = {
       name,
       containerDetails: [{ created: createdAt }],
     })),
+  // Creates and starts a stack. Like Dockhand, it replaces one of the same
+  // name without a word: the CLI must check first.
+  'POST /stacks': ({ body }, state) => {
+    const {
+      name,
+      compose,
+      envVars = [],
+    } = body as {
+      name: string
+      compose: string
+      envVars?: { key: string }[]
+    }
+    state.stacks = state.stacks.filter((stack) => stack.name !== name)
+    state.stacks.push({
+      name,
+      content: compose,
+      createdAt: Math.floor(Date.now() / 1000),
+      variables: envVars.map(({ key }) => key),
+    })
+    return { success: true, started: true }
+  },
   'GET /stacks/:name/compose': ({ params }, state) => {
     const stack = findStack(state, params.name)
     return stack ? { content: stack.content } : notFound('stack')

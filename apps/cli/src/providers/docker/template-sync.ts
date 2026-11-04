@@ -83,7 +83,7 @@ export const resolveTemplateCompose = (template: string) => {
 
 // A template's compose file as catalog-server serves it, so it compares
 // equal to the stacks deployed from it
-const readTemplateContent = (template: string, path: string) => {
+export const readTemplateContent = (template: string, path: string) => {
   const [source = '', folder = ''] = template.split('/')
   // catalog-server gets HOST_HOME from the CLI's $HOME (compose.yaml)
   return prepareTemplateCompose(readFileSync(path, 'utf8'), {

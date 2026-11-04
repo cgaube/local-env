@@ -468,4 +468,63 @@ describe('Catalog page', () => {
 
     expect(screen.getByText('No tools yet')).toBeInTheDocument()
   })
+
+  test('locks the roles of the profile, at every depth', async () => {
+    const { events } = await renderApp('/tools')
+    const base = buildRole({
+      name: 'base',
+      isProfile: true,
+      dependencies: ['git'],
+    })
+    const backend = buildRole({
+      name: 'backend',
+      isProfile: true,
+      dependencies: ['base', 'node'],
+    })
+
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [git, node, base, backend],
+          profile: 'acme/backend',
+        }),
+      ),
+    )
+
+    for (const name of ['git', 'node']) {
+      const toolSwitch = screen.getByRole('switch', { name: `Install ${name}` })
+      expect(toolSwitch).toBeChecked()
+      expect(toolSwitch).toHaveAttribute('data-disabled')
+      expect(
+        within(screen.getByRole('row', { name: new RegExp(name) })).getByText(
+          'In the backend profile',
+        ),
+      ).toBeInTheDocument()
+    }
+    // Profiles are picked in the sidebar
+    expect(
+      screen.queryByRole('switch', { name: 'Install backend' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('switch', { name: 'Install base' }),
+    ).not.toBeInTheDocument()
+  })
+
+  test('says which stacks a tool needs', async () => {
+    const { events } = await renderApp('/tools')
+
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [buildRole({ stacks: ['acme/postgres', 'shared/mailpit'] })],
+        }),
+      ),
+    )
+
+    expect(
+      screen.getByText('Needs the postgres, shared/mailpit stacks'),
+    ).toBeInTheDocument()
+  })
 })

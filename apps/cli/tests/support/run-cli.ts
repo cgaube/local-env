@@ -17,7 +17,10 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
-import { createFakeBin } from '#cli-tests/support/fake-bin.js'
+import {
+  createFakeBin,
+  type FakedCommand,
+} from '#cli-tests/support/fake-bin.js'
 import {
   type DockhandState,
   startFakeDockhand,
@@ -89,11 +92,14 @@ export const createCli = async ({
       answers = [],
       env = {},
       stdin,
+      signal,
     }: {
       answers?: FakeAnswer[]
       env?: Record<string, string>
       // Piped to the CLI, e.g. a token for --password-stdin
       stdin?: string
+      // Sent to the CLI once this run called this binary: Ctrl-C halfway
+      signal?: { send: NodeJS.Signals; after: FakedCommand }
     } = {},
   ): Promise<CliResult> => {
     if (COMPILED && answers.length > 0) {
@@ -103,6 +109,7 @@ export const createCli = async ({
     rmSync(log, { force: true })
     writeFileSync(join(prompts, 'answers.json'), JSON.stringify(answers))
 
+    const callsBefore = signal ? bin.calls(signal.after).length : 0
     const child = Bun.spawn([...cliCommand(), ...args], {
       cwd: root,
       // Built from scratch: nothing leaks in from the developer's shell
@@ -125,11 +132,22 @@ export const createCli = async ({
       stdout: 'pipe',
       stderr: 'pipe',
     })
-    const [stdout, stderr, exitCode] = await Promise.all([
+    const done = Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
       child.exited,
     ])
+    if (signal) {
+      const deadline = Date.now() + 10_000
+      while (
+        bin.calls(signal.after).length === callsBefore &&
+        Date.now() < deadline
+      ) {
+        await Bun.sleep(20)
+      }
+      child.kill(signal.send)
+    }
+    const [stdout, stderr, exitCode] = await done
     const output = normalize([stdout, stderr].filter(Boolean).join('\n'))
 
     const asked: AskedQuestion[] = existsSync(log)
@@ -159,6 +177,8 @@ export const createCli = async ({
 
   return {
     root,
+    // The CLI's TMPDIR
+    tmp,
     home,
     bin,
     dockhand,

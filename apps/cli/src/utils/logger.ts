@@ -1,4 +1,4 @@
-import { log, note, outro } from '@clack/prompts'
+import { cancel, log, note, outro } from '@clack/prompts'
 import { styleText } from 'node:util'
 import {
   type CalloutLevel,
@@ -22,6 +22,12 @@ let frameClosed = false
 export const closeFrame = (message: string) => {
   // main.ts frames only a terminal's output
   if (process.stdout.isTTY) outro(message)
+  else log.message(message)
+  frameClosed = true
+}
+// Closed in red by a command stopped halfway (Ctrl-C): main.ts adds nothing
+export const cancelFrame = (message: string) => {
+  if (process.stdout.isTTY) cancel(message)
   else log.message(message)
   frameClosed = true
 }

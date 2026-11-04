@@ -10,12 +10,17 @@
 //   /api/config  -> the domain, for the help section
 //   PUT /api/tools/picked -> the tools picked in the catalog, written as the
 //                   playbook `local-env install` runs (tools.ts)
+//   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
+//                   profile.json, which `local-env install` reads
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
+  isProfileChoice,
   listRoles,
   readInstalled,
+  readProfile,
   readSelection,
+  writeProfile,
   writeSelection,
 } from './tools.js'
 
@@ -104,6 +109,7 @@ const readers = {
       roles: listRoles(SOURCES_DIR),
       picked: readSelection(TOOLS_DIR),
       installed: readInstalled(TOOLS_DIR),
+      profile: readProfile(TOOLS_DIR),
     }),
 }
 type Topic = keyof typeof readers
@@ -142,25 +148,40 @@ watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
   publish('tools')
 })
-// The playbook, written below, and installed.json, by `local-env install`
+// The playbook and profile.json, written below and by `local-env install`,
+// and installed.json, by `local-env install`
 watch(TOOLS_DIR, () => publish('tools'))
 
-// Only roles of the catalog, or ones picked before and gone since (to unpick
-// them). JSON only: another site can't send it without a CORS preflight,
-// which this server never allows.
-const pickTools = async (request: Request) => {
+// A PUT of JSON, or the response that refuses it. JSON only: another site
+// can't send it without a CORS preflight, which this server never allows.
+const readPut = async (
+  request: Request,
+): Promise<{ body: Record<string, unknown> } | Response> => {
   if (request.method !== 'PUT') {
     return new Response('Method not allowed', { status: 405 })
   }
   if (request.headers.get('Content-Type') !== 'application/json') {
     return new Response('Expected JSON', { status: 415 })
   }
-  const body = await request.json().catch(() => null)
+  const body: unknown = await request.json().catch(() => null)
+  return {
+    body:
+      typeof body === 'object' && body !== null
+        ? (body as Record<string, unknown>)
+        : {},
+  }
+}
+
+// Only roles of the catalog, or ones picked before and gone since (to unpick
+// them)
+const pickTools = async (request: Request) => {
+  const put = await readPut(request)
+  if (put instanceof Response) return put
   const known = new Set([
     ...listRoles(SOURCES_DIR).map(({ id }) => id),
     ...readSelection(TOOLS_DIR),
   ])
-  const roles: unknown = body?.roles
+  const { roles } = put.body
   if (
     !Array.isArray(roles) ||
     !roles.every((id) => typeof id === 'string' && known.has(id))
@@ -168,6 +189,18 @@ const pickTools = async (request: Request) => {
     return new Response('Unknown roles', { status: 400 })
   }
   writeSelection(TOOLS_DIR, [...new Set(roles as string[])])
+  return new Response(null, { status: 204 })
+}
+
+// A profile of the catalog, or null for none
+const chooseProfile = async (request: Request) => {
+  const put = await readPut(request)
+  if (put instanceof Response) return put
+  const { profile } = put.body
+  if (!isProfileChoice(listRoles(SOURCES_DIR), profile)) {
+    return new Response('Unknown profile', { status: 400 })
+  }
+  writeProfile(TOOLS_DIR, profile)
   return new Response(null, { status: 204 })
 }
 
@@ -214,6 +247,7 @@ Bun.serve({
     if (pathname === '/api/events') return events()
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
     if (pathname === '/api/tools/picked') return pickTools(request)
+    if (pathname === '/api/tools/profile') return chooseProfile(request)
     if (pathname.startsWith('/api/')) {
       return new Response('Not found', { status: 404 })
     }

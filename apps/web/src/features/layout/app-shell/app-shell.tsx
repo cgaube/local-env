@@ -3,23 +3,18 @@ import { SidebarInset, SidebarProvider } from '#ui/components/ui/sidebar'
 import { AppSidebar } from '#ui/features/layout/app-sidebar'
 import { SiteHeader } from '#ui/features/layout/site-header'
 
-// sidebar-16: a sticky header, and below it the sidebar and the page
+// sidebar-07: the sidebar, collapsing to its icons, and beside it the page
+// under its header
 export function AppShell() {
   return (
-    <div className="[--header-height:calc(--spacing(14))]">
-      <SidebarProvider className="flex flex-col">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1">
-          <AppSidebar />
-          {/* White cards on a muted canvas, like the shadcn/create preview.
-              Dark cards already stand out from the background. */}
-          <SidebarInset className="bg-muted dark:bg-background">
-            <div className="flex flex-1 flex-col p-4 md:p-6">
-              <Outlet />
-            </div>
-          </SidebarInset>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <Outlet />
         </div>
-      </SidebarProvider>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

@@ -39,6 +39,10 @@ export type Role = {
   description: string | null
   tags: string[]
   dependencies: string[]
+  // Tagged `profile`: a set of roles, picked as a whole
+  isProfile: boolean
+  // Stack templates it needs, as <source>/<folder>
+  stacks: string[]
   // Hash of its files, recorded by each install
   revision: string
   needsSudo: boolean
@@ -50,6 +54,9 @@ export type Tools = {
   picked: string[]
   // What `local-env install` ran, by id
   installed: Record<string, { revision: string; installedAt: string }>
+  // Id of the profile, picked in the sidebar or by `local-env install
+  // <profile>`. One no longer in a source is the CLI's to drop.
+  profile: string | null
 }
 
 export type LiveData = {
