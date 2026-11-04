@@ -55,7 +55,20 @@ const env = Object.fromEntries(
       entry[1] !== undefined,
   ),
 )
-const call: FakeCall = { command, args, env, matched: Boolean(rule) }
+// The YAML files it was given (a playbook), read now: the CLI may remove
+// them once the call ends
+const inputs = Object.fromEntries(
+  args
+    .filter((arg) => /\.ya?ml$/.test(arg) && existsSync(arg))
+    .map((arg) => [arg, readFileSync(arg, 'utf8')]),
+)
+const call: FakeCall = {
+  command,
+  args,
+  env,
+  inputs,
+  matched: Boolean(rule),
+}
 appendFileSync(join(dir, 'calls.jsonl'), `${JSON.stringify(call)}\n`)
 
 // Unknown calls fail loudly: a test never passes by accident
@@ -70,6 +83,7 @@ for (const [flag, content] of Object.entries(rule.writeArgs ?? {})) {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
 }
+if (rule.runMs) await Bun.sleep(rule.runMs)
 if (rule.stdout) process.stdout.write(rule.stdout)
 if (rule.stderr) process.stderr.write(rule.stderr)
 process.exit(rule.exitCode ?? 0)

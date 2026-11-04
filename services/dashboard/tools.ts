@@ -7,20 +7,22 @@
 //                                          `local-env install`
 //   <tools>/installed.json              -> what the last installs ran,
 //                                          written by the CLI
+//   <tools>/profile.json                -> the profile: written by the
+//                                          dashboard and `local-env install`
+//   <tools>/stacks.json                 -> the stacks `local-env install`
+//                                          deployed for the roles
 // The playbook names each role by its path, ../sources/<source>/ansible/<role>,
 // so two sources can have a role of the same name.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import type { GraphRole } from './role-graph.js'
 
-export type Role = {
-  // <source>/<role>
-  id: string
+export type Role = GraphRole & {
   source: string
-  name: string
   description: string | null
   tags: string[]
-  // Roles it needs (meta/main.yml), by name
-  dependencies: string[]
+  // Tagged `profile` (galaxy_tags): a set of roles, picked as a whole
+  isProfile: boolean
   // Hash of the role's files: a change means installing it again
   revision: string
   // A task runs with sudo: the install asks for your password
@@ -32,7 +34,14 @@ export type Installed = Record<string, InstalledRole>
 
 export const PLAYBOOK_FILE = 'playbook.yml'
 export const INSTALLED_FILE = 'installed.json'
+export const PROFILE_FILE = 'profile.json'
+export const STACKS_FILE = 'stacks.json'
+// Beside meta/: what local-env reads of a role that Ansible doesn't
+export const ROLE_SETTINGS_FILE = 'local-env.yml'
 
+export const PROFILE_TAG = 'profile'
+
+const ROLE_ID = /^[a-z0-9][a-z0-9-]*\/[^/.][^/]*$/
 const ROLE_PATH = /^\.\.\/sources\/([a-z0-9][a-z0-9-]*)\/ansible\/([^/]+)$/
 
 const subfolders = (dir: string) =>
@@ -55,6 +64,33 @@ const listFiles = (dir: string): string[] =>
     })
 
 const BECOME = /^\s*become:\s*(true|yes)\s*$/m
+
+// A stack template: docker/<folder> of the role's source, or <source>/<folder>
+const STACK = /^(?:([a-z0-9][a-z0-9-]*)\/)?([a-z0-9][a-z0-9._-]*)$/i
+
+// The stacks of local-env.yml, as <source>/<folder>. An entry that names no
+// folder (a path, not a string) is left out.
+const readStacks = (dir: string, source: string): string[] => {
+  let settings: unknown
+  try {
+    settings = Bun.YAML.parse(
+      readFileSync(join(dir, ROLE_SETTINGS_FILE), 'utf8'),
+    )
+  } catch {
+    // None, or not valid YAML: the role needs no stack
+    return []
+  }
+  const stacks = (settings as { stacks?: unknown } | null)?.stacks
+  if (!Array.isArray(stacks)) return []
+  return [
+    ...new Set(
+      stacks.flatMap((entry) => {
+        const match = typeof entry === 'string' ? STACK.exec(entry) : null
+        return match ? [`${match[1] ?? source}/${match[2]}`] : []
+      }),
+    ),
+  ]
+}
 
 const readRole = (sourcesDir: string, source: string, name: string): Role => {
   const dir = join(sourcesDir, source, 'ansible', name)
@@ -84,7 +120,9 @@ const readRole = (sourcesDir: string, source: string, name: string): Role => {
     // No meta/main.yml, or not valid YAML: the role still installs
   }
   const info = meta.galaxy_info ?? {}
-  const tags = Array.isArray(info.galaxy_tags) ? info.galaxy_tags : []
+  const tags = (Array.isArray(info.galaxy_tags) ? info.galaxy_tags : []).filter(
+    (tag): tag is string => typeof tag === 'string',
+  )
   const dependencies = Array.isArray(meta.dependencies) ? meta.dependencies : []
 
   return {
@@ -93,12 +131,14 @@ const readRole = (sourcesDir: string, source: string, name: string): Role => {
     name,
     description:
       typeof info.description === 'string' ? info.description.trim() : null,
-    tags: tags.filter((tag): tag is string => typeof tag === 'string'),
+    tags,
+    isProfile: tags.includes(PROFILE_TAG),
     dependencies: dependencies.flatMap((dependency) => {
       const role =
         typeof dependency === 'string' ? dependency : dependency?.role
       return typeof role === 'string' ? [role] : []
     }),
+    stacks: readStacks(dir, source),
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
   }
@@ -143,20 +183,27 @@ export const readSelection = (toolsDir: string): string[] => {
   }
 }
 
-export const writeSelection = (toolsDir: string, ids: string[]) => {
-  const roles = ids.map((id) => `    - role: ${rolePath(id)}\n`).join('')
+// A playbook that runs these roles, named by path, on this Mac
+export const playbookOf = (paths: string[]) => {
+  const roles = paths.map((path) => `    - role: ${path}\n`).join('')
+  return [
+    '- name: local-env tools',
+    '  hosts: localhost',
+    '  connection: local',
+    `  roles:${roles ? `\n${roles}` : ' []\n'}`,
+  ].join('\n')
+}
+
+export const writeSelection = (toolsDir: string, ids: string[]) =>
   writeFileSync(
     join(toolsDir, PLAYBOOK_FILE),
     [
       '# The tools picked in the local-env dashboard (Tools), which',
-      '# rewrites this file. `local-env install` runs it.',
-      '- name: local-env tools',
-      '  hosts: localhost',
-      '  connection: local',
-      `  roles:${roles ? `\n${roles}` : ' []\n'}`,
+      '# rewrites this file. `local-env install` runs them, with your',
+      '# profile (profile.json).',
+      playbookOf(ids.map(rolePath)),
     ].join('\n'),
   )
-}
 
 export const readInstalled = (toolsDir: string): Installed => {
   try {
@@ -173,4 +220,64 @@ export const writeInstalled = (toolsDir: string, installed: Installed) =>
   writeFileSync(
     join(toolsDir, INSTALLED_FILE),
     `${JSON.stringify(installed, null, 2)}\n`,
+  )
+
+// The id of the profile, or null without one. Whether it is still in a
+// source is for the reader to check.
+export const readProfile = (toolsDir: string): string | null => {
+  try {
+    const { profile } = JSON.parse(
+      readFileSync(join(toolsDir, PROFILE_FILE), 'utf8'),
+    )
+    return typeof profile === 'string' && ROLE_ID.test(profile) ? profile : null
+  } catch {
+    return null
+  }
+}
+
+// What the dashboard may save as the profile: a profile of the catalog, or
+// null for none
+export const isProfileChoice = (
+  roles: Role[],
+  value: unknown,
+): value is string | null =>
+  value === null ||
+  (typeof value === 'string' &&
+    roles.some((role) => role.id === value && role.isProfile))
+
+export const writeProfile = (toolsDir: string, profile: string | null) =>
+  writeFileSync(
+    join(toolsDir, PROFILE_FILE),
+    `${JSON.stringify({ profile }, null, 2)}\n`,
+  )
+
+// A stack `local-env install` deployed because a role needs it, by template
+// (<source>/<folder>). Deployed once: one the user removed since stays
+// removed.
+export type DeployedStack = {
+  // The Dockhand stack
+  stack: string
+  // The role that needed it, by id
+  by: string
+  deployedAt: string
+}
+
+export const readDeployedStacks = (
+  toolsDir: string,
+): Record<string, DeployedStack> => {
+  try {
+    const stacks = JSON.parse(readFileSync(join(toolsDir, STACKS_FILE), 'utf8'))
+    return typeof stacks === 'object' && stacks !== null ? stacks : {}
+  } catch {
+    return {}
+  }
+}
+
+export const writeDeployedStacks = (
+  toolsDir: string,
+  stacks: Record<string, DeployedStack>,
+) =>
+  writeFileSync(
+    join(toolsDir, STACKS_FILE),
+    `${JSON.stringify(stacks, null, 2)}\n`,
   )

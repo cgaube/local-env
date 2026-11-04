@@ -87,4 +87,42 @@ describe('Install button', () => {
       screen.getByText('It asks for your password: dns needs sudo.'),
     ).toBeInTheDocument()
   })
+
+  test('lists the tools of the profile under it, not the profile', async () => {
+    const user = userEvent.setup()
+    const { events } = await renderApp('/')
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [
+            git,
+            node,
+            buildRole({
+              name: 'backend',
+              isProfile: true,
+              dependencies: ['git'],
+            }),
+          ],
+          picked: ['acme/node'],
+          profile: 'acme/backend',
+        }),
+      ),
+    )
+
+    // git and node: the profile is a set of tools, not one
+    await user.click(screen.getByRole('button', { name: 'Install 2 tools' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Install 2 tools' })
+    const inProfile = within(dialog).getByRole('region', {
+      name: 'backend profile',
+    })
+    expect(within(inProfile).getByText('git')).toBeInTheDocument()
+    expect(within(inProfile).queryByText('backend')).not.toBeInTheDocument()
+    expect(
+      within(within(dialog).getByRole('region', { name: 'Picked' })).getByText(
+        'node',
+      ),
+    ).toBeInTheDocument()
+  })
 })

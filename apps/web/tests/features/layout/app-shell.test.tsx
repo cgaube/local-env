@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import cli from '#package.json' with { type: 'json' }
 import { buildService } from '#ui-tests/support/factories.ts'
@@ -25,6 +25,24 @@ describe('App shell', () => {
     expect(
       await screen.findByRole('heading', { name: 'Tools', level: 1 }),
     ).toBeInTheDocument()
+  })
+
+  test('collapses the sidebar to its icons', async () => {
+    const user = userEvent.setup()
+    await renderApp('/')
+    const sidebar = () =>
+      document.querySelector('[data-slot="sidebar"][data-state]')
+
+    // The header's trigger: the sidebar's rail toggles it too
+    await user.click(
+      within(screen.getByRole('main')).getByRole('button', {
+        name: 'Toggle Sidebar',
+      }),
+    )
+
+    expect(sidebar()).toHaveAttribute('data-collapsible', 'icon')
+    // The pages stay, as icons
+    expect(screen.getByRole('link', { name: 'Tools' })).toBeInTheDocument()
   })
 
   test('links to the apps of the core stack', async () => {

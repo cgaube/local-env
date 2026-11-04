@@ -1,9 +1,10 @@
-import { mkdtempSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { readShippedFile } from '#cli/core/shipped-files.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'local-env-shipped-'))
+afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 describe('readShippedFile', () => {
   test('keeps text as is', () => {

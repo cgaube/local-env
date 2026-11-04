@@ -1,28 +1,31 @@
 import { execa } from 'execa'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
+import { mkdirSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import {
   type Installed,
   listRoles,
-  PLAYBOOK_FILE,
+  playbookOf,
   readInstalled,
+  readProfile,
   readSelection,
   type Role,
   writeInstalled,
+  writeProfile,
   writeSelection,
 } from '#services/dashboard/tools.js'
+import { playbookRoots, wantedRoles } from '#services/dashboard/role-graph.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/logger.js'
 import { askPassword } from '#cli/utils/prompt.js'
 import { HOME_DIR } from '#cli/core/paths.js'
+import { createRunFolder } from '#cli/core/run-folder.js'
 import {
   type PlaybookSummary,
   renderPlaybook,
 } from '#cli/core/playbook-output.js'
 
-// The tools picked in the dashboard (volumes/tools/playbook.yml) and the
-// installs that ran: services/dashboard/tools.ts
+// The tools picked in the dashboard (volumes/tools/playbook.yml), the profile
+// (profile.json) and the installs that ran: services/dashboard/tools.ts
 export const TOOLS_DIR = resolve(HOME_DIR, 'volumes/tools')
 
 export type PickedTools = {
@@ -31,14 +34,16 @@ export type PickedTools = {
   missing: string[]
 }
 
-export const readPickedTools = (): PickedTools => {
-  const catalog = new Map(listRoles(SOURCES_DIR).map((role) => [role.id, role]))
+export const readPickedTools = (catalog: Role[]): PickedTools => {
+  const byId = new Map(catalog.map((role) => [role.id, role]))
   const picked = readSelection(TOOLS_DIR)
   return {
-    roles: picked.flatMap((id) => catalog.get(id) ?? []),
-    missing: picked.filter((id) => !catalog.has(id)),
+    roles: picked.flatMap((id) => byId.get(id) ?? []),
+    missing: picked.filter((id) => !byId.has(id)),
   }
 }
+
+export const listCatalog = () => listRoles(SOURCES_DIR)
 
 // Drops picks whose role left the sources: Ansible would stop on their path
 export const unpickTools = (ids: string[]) =>
@@ -47,11 +52,61 @@ export const unpickTools = (ids: string[]) =>
     readSelection(TOOLS_DIR).filter((id) => !ids.includes(id)),
   )
 
-// Tools no longer picked, nor included by a pick, stay on the Mac: local-env
-// doesn't uninstall. Forgets them, so the dashboard no longer lists them as
-// installed. Their ids.
-export const forgetUnpicked = (roles: Role[]) => {
-  const wanted = new Set(withDependencies(roles).map(({ id }) => id))
+// The saved profile. One that left the sources is dropped, with the id it
+// had, so the caller can say so.
+export const readSavedProfile = (
+  catalog: Role[],
+): { profile: Role | null; gone: string | null } => {
+  const id = readProfile(TOOLS_DIR)
+  if (!id) return { profile: null, gone: null }
+  const profile = catalog.find((role) => role.id === id && role.isProfile)
+  if (profile) return { profile, gone: null }
+  saveProfile(null)
+  return { profile: null, gone: id }
+}
+
+export const saveProfile = (profile: Role | null) => {
+  mkdirSync(TOOLS_DIR, { recursive: true })
+  writeProfile(TOOLS_DIR, profile?.id ?? null)
+}
+
+export const listProfiles = (catalog: Role[]) =>
+  catalog.filter((role) => role.isProfile)
+
+// A profile by its name, or by <source>/<name> when two sources have one
+export const findProfile = (catalog: Role[], name: string): Role => {
+  const matches = catalog.filter((role) =>
+    name.includes('/') ? role.id === name : role.name === name,
+  )
+  const profiles = matches.filter((role) => role.isProfile)
+  if (profiles.length > 1) {
+    throw new Error(
+      `${name} is a profile in several sources: name one of ${profiles.map(({ id }) => id).join(', ')}.`,
+    )
+  }
+  const [profile] = profiles
+  if (profile) return profile
+  if (matches.length > 0) {
+    throw new Error(
+      `${name} is a tool, not a profile: pick it in the dashboard (Tools).`,
+    )
+  }
+  const known = listProfiles(catalog).map(({ name: other }) => other)
+  throw new Error(
+    known.length > 0
+      ? `No profile named ${name}. Profiles: ${known.join(', ')}.`
+      : `No profile named ${name}: your sources have no profile.`,
+  )
+}
+
+// Tools no longer wanted (picked, in the profile, or included by those) stay
+// on the Mac: local-env doesn't uninstall. Forgets them, so the dashboard no
+// longer lists them as installed. Their ids.
+export const forgetUnwanted = (catalog: Role[], roots: Role[]) => {
+  const wanted = wantedRoles(
+    catalog,
+    roots.map(({ id }) => id),
+  )
   const installed = readInstalled(TOOLS_DIR)
   const forgotten = Object.keys(installed).filter((id) => !wanted.has(id))
   if (forgotten.length > 0) {
@@ -61,35 +116,28 @@ export const forgetUnpicked = (roles: Role[]) => {
   return forgotten
 }
 
-// The roles and those they depend on, by name, in any source
-const withDependencies = (roles: Role[]) => {
-  const all = listRoles(SOURCES_DIR)
-  const found = new Map(roles.map((role) => [role.id, role]))
-  const queue = [...roles]
-  for (let role = queue.shift(); role; role = queue.shift()) {
-    for (const name of role.dependencies) {
-      for (const dependency of all.filter((other) => other.name === name)) {
-        if (found.has(dependency.id)) continue
-        found.set(dependency.id, dependency)
-        queue.push(dependency)
-      }
-    }
-  }
-  return [...found.values()]
+// The roots and the roles they include, in catalog order
+const withDependencies = (catalog: Role[], roots: Role[]) => {
+  const wanted = wantedRoles(
+    catalog,
+    roots.map(({ id }) => id),
+  )
+  return catalog.filter(({ id }) => wanted.has(id))
 }
 
-// Runs the playbook on this Mac, as you, drawn like the rest of the CLI
-// (playbook-output.ts), or with Ansible's own output when verbose. A role
-// that uses sudo makes local-env ask for your password first: Ansible reads
-// it from a file only you can read, removed once the run ends. Records what
-// ran, for the dashboard.
+// Runs the roots (the profile, then the picked roles) on this Mac, as you,
+// drawn like the rest of the CLI (playbook-output.ts), or with Ansible's own
+// output when verbose. Their playbook is written to a folder only you can
+// read, removed once Ansible is done, or stopped (run-folder.ts). A role that
+// uses sudo makes local-env ask for your password first: Ansible reads it
+// from a file there. Records what ran, for the dashboard.
 export const runPlaybook = async (
-  roles: Role[],
+  catalog: Role[],
+  roots: Role[],
   { verbose = false }: { verbose?: boolean } = {},
 ): Promise<PlaybookSummary | null> => {
-  const args = ['--inventory', 'localhost,', join(TOOLS_DIR, PLAYBOOK_FILE)]
-  // What Ansible runs: the picked roles and the ones they include
-  const run = withDependencies(roles)
+  // What Ansible runs: the roots and the ones they include
+  const run = withDependencies(catalog, roots)
   const sudo = run.filter((role) => role.needsSudo)
   const password =
     sudo.length > 0
@@ -98,51 +146,67 @@ export const runPlaybook = async (
         )
       : null
 
-  const secrets = password ? mkdtempSync(join(tmpdir(), 'local-env-')) : null
+  // Its playbook and the password, removed once Ansible is done, on Ctrl-C
+  // too (run-folder.ts)
+  using folder = createRunFolder()
+  const playbook = join(folder.path, 'playbook.yml')
+  const args = ['--inventory', 'localhost,', playbook]
+  writeFileSync(
+    playbook,
+    // Each role once: a pick the profile includes is not named again
+    playbookOf(
+      playbookRoots(
+        catalog,
+        roots.map(({ id }) => id),
+      ).map((id) => {
+        const [source = '', name = ''] = id.split('/')
+        return join(SOURCES_DIR, source, 'ansible', name)
+      }),
+    ),
+    { mode: 0o600 },
+  )
+  const env: Record<string, string> = {
+    // Dependencies are named, not paths: every source's roles
+    ANSIBLE_ROLES_PATH: [
+      ...new Set(
+        catalog.map(({ source }) => join(SOURCES_DIR, source, 'ansible')),
+      ),
+    ].join(':'),
+    // The Python that runs Ansible, without the discovery warning
+    ANSIBLE_PYTHON_INTERPRETER: 'auto_silent',
+    ANSIBLE_LOCALHOST_WARNING: 'false',
+  }
+  if (password) {
+    const file = join(folder.path, 'become')
+    // Not executable: Ansible would run it to get the password
+    writeFileSync(file, `${password}\n`, { mode: 0o600 })
+    env.ANSIBLE_BECOME_PASSWORD_FILE = file
+  }
+
   // null with Ansible's own output, which has its recap
   let summary: PlaybookSummary | null = null
-  try {
-    const env: Record<string, string> = {
-      // Dependencies are named, not paths: every source's roles
-      ANSIBLE_ROLES_PATH: [
-        ...new Set(
-          listRoles(SOURCES_DIR).map(({ source }) =>
-            join(SOURCES_DIR, source, 'ansible'),
-          ),
-        ),
-      ].join(':'),
-      // The Python that runs Ansible, without the discovery warning
-      ANSIBLE_PYTHON_INTERPRETER: 'auto_silent',
-      ANSIBLE_LOCALHOST_WARNING: 'false',
-    }
-    if (secrets && password) {
-      const file = join(secrets, 'become')
-      // Not executable: Ansible would run it to get the password
-      writeFileSync(file, `${password}\n`, { mode: 0o600 })
-      env.ANSIBLE_BECOME_PASSWORD_FILE = file
-    }
-
-    if (verbose) {
-      await execa('ansible-playbook', args, { stdio: 'inherit', env })
-    } else {
-      const child = execa('ansible-playbook', args, {
-        stdin: 'ignore',
-        reject: false,
-        env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
-      })
-      summary = await renderPlaybook(child.iterable({ from: 'stdout' }))
-      const { exitCode, stderr } = await child
-      if (exitCode !== 0) {
-        // Ansible's own errors (a role it can't find, a YAML error) come
-        // before any task: they are only in its stderr
-        if (summary.failed === 0 && stderr) {
-          logger.log(String(stderr).trim().split('\n').slice(-10).join('\n'))
-        }
-        throw new Error(`ansible-playbook exited with ${exitCode}`)
+  if (verbose) {
+    const child = execa('ansible-playbook', args, { stdio: 'inherit', env })
+    // A terminal's Ctrl-C reaches Ansible too, a kill doesn't
+    folder.onSignal((signal) => child.kill(signal))
+    await child
+  } else {
+    const child = execa('ansible-playbook', args, {
+      stdin: 'ignore',
+      reject: false,
+      env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
+    })
+    folder.onSignal((signal) => child.kill(signal))
+    summary = await renderPlaybook(child.iterable({ from: 'stdout' }))
+    const { exitCode, stderr } = await child
+    if (exitCode !== 0) {
+      // Ansible's own errors (a role it can't find, a YAML error) come
+      // before any task: they are only in its stderr
+      if (summary.failed === 0 && stderr) {
+        logger.log(String(stderr).trim().split('\n').slice(-10).join('\n'))
       }
+      throw new Error(`ansible-playbook exited with ${exitCode}`)
     }
-  } finally {
-    if (secrets) rmSync(secrets, { recursive: true, force: true })
   }
 
   const installedAt = new Date().toISOString()

@@ -28,7 +28,12 @@ function Catalog({ tools }: { tools: Tools }) {
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       ) : null}
-      <CatalogTable rows={catalogRows(shown)} onPick={setPicked} />
+      <CatalogTable
+        // Profiles are picked in the sidebar: one picked here before stays,
+        // so it can be unpicked
+        rows={catalogRows(shown).filter((row) => !row.isProfile || row.picked)}
+        onPick={setPicked}
+      />
     </>
   )
 }

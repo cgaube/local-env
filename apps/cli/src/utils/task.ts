@@ -41,3 +41,21 @@ export const runTask = async (
   logger.success(done)
   return result
 }
+
+// A step that only waits on another program (a Dockhand deploy pulling
+// images) behind a spinner with the time spent, so a long wait shows it is
+// still going. The caller says how it ended.
+export const runStep = async <T>(
+  title: string,
+  step: () => Promise<T>,
+): Promise<T> => {
+  const progress = canRedraw()
+    ? spinner({ withGuide: false, indicator: 'timer' })
+    : null
+  progress?.start(title)
+  try {
+    return await step()
+  } finally {
+    progress?.clear()
+  }
+}

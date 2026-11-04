@@ -92,26 +92,49 @@ holds what we build:
   steps run on every `start`). Each provider implements `Provider` from
   `src/providers/types.ts` (`provision`, `update`) and is listed in
   `src/providers/index.ts`.
-- Tools are the Ansible roles of the sources (`ansible/<role>/`).
-  `services/dashboard/tools.ts`, shared by the dashboard and the CLI, lists them
-  (`meta/main.yml`: description, tags, dependencies; a revision hash of the
-  files; whether a task uses `become`) and reads and writes `volumes/tools/`:
-  `playbook.yml`, the picked roles by path
+- Tools are the Ansible roles of the sources (`ansible/<role>/`). A profile is a
+  role tagged `profile` (`galaxy_tags`) whose dependencies are other roles or
+  profiles; `local-env.yml` beside `meta/` lists the stack templates a role
+  needs (`stacks:`). `services/dashboard/tools.ts`, shared by the dashboard and
+  the CLI, lists them (`meta/main.yml`: description, tags, dependencies; a
+  revision hash of the files; whether a task uses `become`; the stacks) and
+  reads and writes `volumes/tools/`: `playbook.yml`, the picked roles by path
   (`../sources/<source>/ansible/<role>`), written by the dashboard
-  (`PUT /api/tools/picked`), and `installed.json`, written by
-  `local-env install` (`src/core/tools.ts`), which also forgets the tools no
-  longer picked (it never uninstalls). `install` runs `ansible-playbook` on the
-  Mac, as the user, with `ANSIBLE_ROLES_PATH` set to every source's `ansible/`
-  for dependencies by name. When a role or a dependency uses `become`, the CLI
-  asks for the password (`askPassword`) and hands it to Ansible in a file only
-  the user can read (`ANSIBLE_BECOME_PASSWORD_FILE`), removed after the run.
-  Ansible prints its events as JSON lines (`ansible.posix.jsonl`), which
-  `src/core/playbook-output.ts` draws with clack: a group per role, a spinner
-  per task, a line per result (`install --verbose` shows Ansible's own output).
-  Tests fake them with `tests/support/factories/ansible.ts`. The dashboard never
-  runs anything on the Mac.
+  (`PUT /api/tools/picked`); `profile.json`, written by the dashboard's Profiles
+  page (`PUT /api/tools/profile`, `features/profiles/`) and
+  `local-env install <profile>` (`--no-save` skips it); `installed.json` and
+  `stacks.json`, written by `local-env install` (`src/core/tools.ts`), which
+  also forgets the tools no longer wanted (it never uninstalls).
+  `services/dashboard/role-graph.ts` (no imports: the web app loads it too)
+  walks the dependencies, by name in any source: the profile and the picks are
+  the roots. `install` writes its own playbook of the roots, by absolute path,
+  in a folder only the user can read (`src/core/run-folder.ts`), and runs
+  `ansible-playbook` on the Mac, as the user, with `ANSIBLE_ROLES_PATH` set to
+  every source's `ansible/` for dependencies by name. When a wanted role uses
+  `become`, the CLI asks for the password (`askPassword`) and hands it to
+  Ansible in a file of that folder (`ANSIBLE_BECOME_PASSWORD_FILE`). The folder
+  goes when the run ends, on SIGINT, SIGTERM and SIGHUP too; the next run
+  removes the ones of runs that were killed. Ansible prints its events as JSON
+  lines (`ansible.posix.jsonl`), which `src/core/playbook-output.ts` draws with
+  clack: a group per role, a spinner per task, a line per result
+  (`install --verbose` shows Ansible's own output). Tests fake them with
+  `tests/support/factories/ansible.ts`. The stacks the wanted roles need are
+  planned before the playbook (one confirmation, `--yes` to skip it, then
+  registry logins and required variables) and deployed after it with Dockhand's
+  `POST /stacks`, linked to their template, once: `stacks.json` keeps them from
+  coming back (`src/providers/docker/required-stacks.ts`). The dashboard never
+  runs anything on the Mac. `docs/features/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources and the tools (`volumes/tools/`).
+
+## Feature docs
+
+- `docs/features/` holds one file for each feature: what it does, how it works
+  (Mermaid diagrams) and why, then its limits. `docs/features/README.md` gives
+  the sections and the rules for the diagrams, and lists the files.
+- A new feature adds its file in the same pull request as its code. A change to
+  how a feature works updates its file, diagrams included. Read the file of a
+  feature before you change it: its "Why" section gives the decisions.
 
 ## Sources
 
@@ -192,9 +215,9 @@ holds what we build:
 - `bun run compile` builds `./local-env`. The binary is what the repo produces
   and it embeds the core stack (`services/`): `build:web` runs first (`apps/web`
   into `services/dashboard/public/`), then everything typechecks and the CLI
-  compiles. `shipped-files.ts` embeds text as is and other files (the fonts) as
-  base64. The root `prepare` runs it on `bun install`. It isn't named `build`:
-  `bun build` is Bun's own bundler.
+  compiles. `shipped-files.ts` embeds text as is and other files (images, fonts)
+  as base64. The root `prepare` runs it on `bun install`. It isn't named
+  `build`: `bun build` is Bun's own bundler.
 - `bun run check` runs typecheck, oxlint and the oxfmt check: the pre-push hook,
   kept fast. The tests run in CI.
 - `bun run fmt` formats with oxfmt.

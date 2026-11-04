@@ -288,6 +288,59 @@ dependencies: []
 To try a role, commit it, run `local-env sources sync`, pick it in the catalog
 and run `local-env install`.
 
+### Profiles
+
+A profile is a whole setup, picked at once: a role tagged `profile`, made of
+other roles. It can include other profiles.
+
+```yaml
+# ansible/backend/meta/main.yml
+galaxy_info:
+  description: Backend developer setup
+  galaxy_tags: [profile]
+dependencies:
+  - base # another profile
+  - tableplus
+  - jetbrains-toolbox
+```
+
+- People pick their profile on the dashboard's Profiles page, or with
+  `local-env install backend`, which saves it. The page lists every profile with
+  its tools and stacks, and the sidebar shows the current one. Later,
+  `local-env install` installs it again with the tools they picked.
+  `local-env install backend --no-save` installs it once.
+- The roles of the profile are locked on in the catalog. Profiles are not rows
+  of the catalog.
+- When two sources have a profile with the same name, people type
+  `local-env install <source>/backend`.
+- A profile can have tasks of its own. Most only have dependencies.
+
+### Stacks a tool needs
+
+A role, or a profile, can need Docker stacks: Mailpit for the apps it installs,
+a database for its client. List them in `local-env.yml`, next to `meta/`.
+Ansible doesn't read this file.
+
+```yaml
+# ansible/backend/local-env.yml
+stacks:
+  - mailpit # docker/mailpit of this source
+  - shared/postgres # docker/postgres of the source named shared
+```
+
+- `local-env install` deploys the stacks of every tool it installs, profiles and
+  their dependencies included, after asking once. `--yes` doesn't ask.
+- Each stack is deployed once, from its stack template (`"type": 3`), and linked
+  to it: it gets template updates like a stack deployed from Dockhand. A stack
+  the user removes stays removed.
+- A stack of the same name that is already deployed is left as it is.
+- A variable without a default (`${NGROK_AUTHTOKEN:?Your ngrok token}`) is asked
+  for first. The text after `?` is shown with the question. A name with `TOKEN`,
+  `SECRET`, `PASSWORD` or `KEY` is typed masked, and Dockhand keeps it as a
+  secret. Without a terminal, the stack isn't deployed.
+- The catalog says which stacks a tool needs. The dashboard doesn't deploy them:
+  `local-env install` does.
+
 ## Other catalogs
 
 Existing Portainer catalogs (Lissy93, portainer/templates, a vendor's list) are

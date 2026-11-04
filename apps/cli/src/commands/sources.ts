@@ -1,6 +1,6 @@
 import { S_WARN } from '@clack/prompts'
 import { Command } from 'commander'
-import { stripVTControlCharacters, styleText } from 'node:util'
+import { styleText } from 'node:util'
 import { homedir } from 'os'
 import { provisionProviders } from '#cli/providers/index.js'
 import { refreshTemplateSources } from '#cli/providers/docker/index.js'
@@ -67,8 +67,6 @@ const loginStatus = (
     : styleText('yellow', `${S_WARN} login needed`)
 }
 
-const visibleWidth = (text: string) => stripVTControlCharacters(text).length
-
 const listCommand = new Command('list').description('List sources').action(
   withErrors(async () => {
     const names = listSources()
@@ -81,35 +79,15 @@ const listCommand = new Command('list').description('List sources').action(
       sourcesNeedingLogin().length > 0
         ? await getRegistries().catch(() => undefined)
         : []
-    const rows = await Promise.all(
-      names.map(async (name) => {
-        const url = await getSourceUrl(name).catch(() => 'no remote')
-        return [
-          name,
-          summarizeSourceContent(readSourceContent(name)),
-          loginStatus(name, registries),
-          styleText('dim', url.replace(homedir(), '~')),
-        ]
-      }),
-    )
-    const widths = [0, 1, 2].map((column) =>
-      Math.max(...rows.map((row) => visibleWidth(row[column]!))),
-    )
-    logger.log(
-      rows
-        .map((row) =>
-          row
-            .map((cell, column) =>
-              column < widths.length
-                ? cell + ' '.repeat(widths[column]! - visibleWidth(cell))
-                : cell,
-            )
-            // An empty column takes no room
-            .filter((cell) => cell !== '')
-            .join('  '),
-        )
-        .join('\n'),
-    )
+    // A group per source, like the other commands' output
+    for (const name of names) {
+      const url = await getSourceUrl(name).catch(() => 'no remote')
+      const login = loginStatus(name, registries)
+      logger.group(name)
+      logger.info(url.replace(homedir(), '~'))
+      logger.log(summarizeSourceContent(readSourceContent(name)))
+      if (login) logger.log(login)
+    }
   }),
 )
 

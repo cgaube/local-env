@@ -45,6 +45,8 @@ export const buildRole = (overrides: Partial<Role> = {}): Role => {
     description: 'Git, from Homebrew',
     tags: ['vcs'],
     dependencies: [],
+    isProfile: false,
+    stacks: [],
     revision: 'a1b2c3d4e5f6',
     needsSudo: false,
     ...overrides,
@@ -55,5 +57,7 @@ export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   roles: [buildRole()],
   picked: [],
   installed: {},
+  profile: null,
+  stacks: {},
   ...overrides,
 })

@@ -22,7 +22,7 @@ import {
 
 // The git tree hashes of a template's build folders in its source clone, or
 // null when it builds nothing
-const readBuildTree = async (template: string) => {
+export const readBuildTree = async (template: string) => {
   const path = resolveTemplateCompose(template)
   const [source = '', folder = ''] = template.split('/')
   if (!path) return null

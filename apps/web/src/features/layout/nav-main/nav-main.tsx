@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -10,8 +11,9 @@ import {
 } from '#ui/components/ui/sidebar'
 import { NAVIGATION } from '#ui/features/layout/navigation.ts'
 
-// Every section open: too few pages to fold any away. A section with pages
-// links to its first one.
+// sidebar-07's main group, without its folding sections: one link a page.
+// A section with pages links to its first one. Collapsed, a tooltip names
+// each icon.
 export function NavMain() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -19,10 +21,12 @@ export function NavMain() {
 
   return (
     <SidebarGroup>
+      <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
       <SidebarMenu>
         {NAVIGATION.map((section) => (
           <SidebarMenuItem key={section.title}>
             <SidebarMenuButton
+              tooltip={section.title}
               isActive={pathname === section.to}
               className="data-active:text-primary"
               render={<Link to={section.to ?? section.items[0]?.to ?? '/'} />}

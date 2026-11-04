@@ -37,6 +37,9 @@ export type FakeReply = {
   // Writes content to the path given after each flag, as the real command
   // would: { '-cert-file': '<pem>' }
   writeArgs?: Record<string, string>
+  // Keeps running this long before it replies: a long Ansible run, to stop
+  // halfway
+  runMs?: number
 }
 
 export type FakeRule = FakeReply & {
@@ -52,6 +55,8 @@ export type FakeCall = {
   // The LOCAL_ENV_* (compose settings), ANSIBLE_* and TRUST_STORES (mkcert)
   // variables the call got
   env: Record<string, string>
+  // The YAML files among its args, by path, as they were during the call
+  inputs: Record<string, string>
   // false when no rule answered: the stub failed
   matched: boolean
 }

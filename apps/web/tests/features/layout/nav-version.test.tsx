@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SidebarProvider } from '#ui/components/ui/sidebar'
+import { Toaster } from '#ui/components/ui/sonner'
+import { ThemeProvider } from '#ui/features/theme/theme-provider'
 import { NavVersion } from '#ui/features/layout/nav-version'
 
 type Build = Parameters<typeof NavVersion>[0]['build']
@@ -15,11 +17,14 @@ const renderVersion = (build: Build, latest: string | null | undefined) => {
     queryClient.setQueryData(['latest-version'], latest)
   }
   render(
-    <QueryClientProvider client={queryClient}>
-      <SidebarProvider>
-        <NavVersion build={build} />
-      </SidebarProvider>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SidebarProvider>
+          <NavVersion build={build} />
+          <Toaster />
+        </SidebarProvider>
+      </QueryClientProvider>
+    </ThemeProvider>,
   )
 }
 
@@ -74,18 +79,61 @@ describe('NavVersion', () => {
       screen.getByRole('menuitem', { name: 'Check for updates' }),
     )
 
-    expect(await screen.findByText('v0.4.0')).toBeInTheDocument()
+    expect(
+      await screen.findByText('local-env 0.4.0 is out'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'How to update' }),
+    ).toBeInTheDocument()
   })
 
-  test('marks a build of a checkout, with its commit, and no update', async () => {
+  test('says in a toast when this is the latest', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('class LocalEnv\n  version "0.2.0"\nend')),
+    )
+    renderVersion(release, '0.2.0')
+
+    await user.click(screen.getByRole('button', { name: /v0\.2\.0/ }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Check for updates' }),
+    )
+
+    expect(await screen.findByText("You're up to date")).toBeInTheDocument()
+  })
+
+  test('says when GitHub can not be reached', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 503 })),
+    )
+    renderVersion(release, '0.2.0')
+
+    await user.click(screen.getByRole('button', { name: /v0\.2\.0/ }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Check for updates' }),
+    )
+
+    expect(await screen.findByText("Couldn't reach GitHub")).toBeInTheDocument()
+  })
+
+  test('marks a build of a checkout, with its commit in the menu, and no update', async () => {
+    const user = userEvent.setup()
     renderVersion(
       { version: '0.1.1', kind: 'checkout', commit: 'abc1234-dirty' },
       '0.3.0',
     )
 
     expect(screen.getByText('Dev build')).toBeInTheDocument()
-    expect(screen.getByText('v0.1.1 · abc1234-dirty')).toBeInTheDocument()
+    // The commit is too long for the sidebar
+    expect(screen.getByText('v0.1.1')).toBeInTheDocument()
+    expect(screen.queryByText(/abc1234/)).not.toBeInTheDocument()
     expect(screen.queryByText('Update')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /v0\.1\.1/ }))
+    expect(await screen.findByText('abc1234-dirty')).toBeInTheDocument()
   })
 
   test('marks the dev server', () => {

@@ -1,46 +1,34 @@
-import { Link } from '@tanstack/react-router'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarRail,
 } from '#ui/components/ui/sidebar'
-import { useDomain } from '#ui/features/config/use-domain.ts'
-import { Logo } from '#ui/features/layout/logo'
 import { NavApps } from '#ui/features/layout/nav-apps'
 import { NavMain } from '#ui/features/layout/nav-main'
+import { NavProfile } from '#ui/features/layout/nav-profile'
 import { NavVersion } from '#ui/features/layout/nav-version'
+import { SidebarBrand } from '#ui/features/layout/sidebar-brand'
 
+// sidebar-07: the logo on top, the pages, the apps, then the version and, at
+// the very bottom like its NavUser, your profile. Collapses to its icons (the
+// rail or the trigger).
 export function AppSidebar() {
-  const domain = useDomain()
-
   return (
-    <Sidebar className="top-(--header-height) h-[calc(100svh-var(--header-height))]!">
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link to="/" />}>
-              <Logo className="size-8 shrink-0" />
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">local-env</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {domain ? `*.${domain}` : ''}
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
         <NavMain />
-        <NavApps className="mt-auto" />
+        <NavApps />
       </SidebarContent>
       <SidebarFooter>
         <NavVersion />
+        <NavProfile />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   )
 }
