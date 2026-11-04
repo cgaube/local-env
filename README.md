@@ -1,7 +1,5 @@
 <h1 align="center"><img src=".github/logo.svg" width="96" height="96" alt=""> <br/>local-env</h1>
 
----
-
 A local development environment for macOS:
 
 - **HTTPS proxy**: every container with `VIRTUAL_HOST=name` is served at
