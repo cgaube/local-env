@@ -302,6 +302,21 @@ describe.concurrent('local-env sources login', () => {
     ])
   })
 
+  test('counts the registries of one host once', async () => {
+    await using cli = await createCliWithSource([
+      { host: 'ghcr.io/team-a' },
+      { ...GHCR, host: 'https://GHCR.io/team-b' },
+    ])
+
+    const result = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Logged in to ghcr.io as octocat')
+    expect(registryWrites(cli)).toEqual([
+      expect.objectContaining({ method: 'POST', path: '/registries' }),
+    ])
+  })
+
   test('refuses a registry the source does not list', async () => {
     await using cli = await createCliWithSource()
 
@@ -438,6 +453,21 @@ describe.concurrent('local-env sources logout', () => {
       expect(cli.dockhand.state.registries).toEqual([])
     },
   )
+
+  test('logs out of a host the source lists twice once', async () => {
+    await using cli = await createCliWithSource(
+      [{ host: 'ghcr.io/team-a' }, { host: 'ghcr.io/team-b' }],
+      { registries: [buildDockhandRegistry()] },
+    )
+
+    const result = await cli.run(['sources', 'logout', 'acme'])
+
+    expect(result.exitCode).toBe(0)
+    expect(registryWrites(cli)).toEqual([
+      expect.objectContaining({ method: 'DELETE' }),
+    ])
+    expect(cli.dockhand.state.registries).toEqual([])
+  })
 
   test('needs a name without a terminal', async () => {
     await using cli = await createCliWithSource([GHCR], {

@@ -80,7 +80,7 @@ const hasPath = (url: string) =>
     .replace(/\/+$/, '')
     .includes('/')
 
-// The registries one source lists, empty when it lists none
+// The registries one source lists, once per host, empty when it lists none
 export const readSourceRegistries = (
   source: string,
 ): Omit<DeclaredRegistry, 'sources'>[] => {
@@ -91,22 +91,23 @@ export const readSourceRegistries = (
     if (!Array.isArray(list)) return []
     const text = (value: unknown) =>
       typeof value === 'string' && value.trim() ? value.trim() : undefined
-    return list.flatMap(
-      (entry: {
-        host?: unknown
-        usernameHelp?: unknown
-        tokenHelp?: unknown
-      }) =>
-        text(entry?.host)
-          ? [
-              {
-                host: registryHost(text(entry.host)!),
-                usernameHelp: text(entry.usernameHelp),
-                tokenHelp: text(entry.tokenHelp),
-              },
-            ]
-          : [],
-    )
+    // ghcr.io/team-a and ghcr.io/team-b are the same login
+    const byHost = new Map<string, Omit<DeclaredRegistry, 'sources'>>()
+    for (const entry of list as {
+      host?: unknown
+      usernameHelp?: unknown
+      tokenHelp?: unknown
+    }[]) {
+      const value = text(entry?.host)
+      if (!value) continue
+      const host = registryHost(value)
+      const declared = byHost.get(host) ?? { host }
+      // The first entry that gives a help wins
+      declared.usernameHelp ??= text(entry.usernameHelp)
+      declared.tokenHelp ??= text(entry.tokenHelp)
+      byHost.set(host, declared)
+    }
+    return [...byHost.values()]
   } catch {
     return []
   }
