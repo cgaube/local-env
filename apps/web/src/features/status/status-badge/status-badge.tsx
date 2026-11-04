@@ -1,5 +1,5 @@
 import { Badge } from '#ui/components/ui/badge'
-import { tone } from '../tone.ts'
+import { tone } from '#ui/features/status/tone.ts'
 
 const VARIANTS = {
   ok: 'success',

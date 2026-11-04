@@ -1,6 +1,6 @@
 import { createLiveDataStore } from '#ui/features/live-data/live-data.ts'
-import { FakeEventSource } from '../../support/fake-event-source.ts'
-import { buildRoute } from '../../support/factories.ts'
+import { FakeEventSource } from '#ui-tests/support/fake-event-source.ts'
+import { buildRoute } from '#ui-tests/support/factories.ts'
 
 const setup = () => {
   const connections: FakeEventSource[] = []

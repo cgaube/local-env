@@ -1,1 +1,1 @@
-export { ColumnsMenu } from './columns-menu.tsx'
+export { ColumnsMenu } from '#ui/features/tools/columns-menu/columns-menu.tsx'

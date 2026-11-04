@@ -1,4 +1,4 @@
-import { CopyButton } from '../copy-button'
+import { CopyButton } from '#ui/features/copy/copy-button'
 
 // Copies the code without its explanatory `# …` comments
 const withoutComments = (code: string) => code.replace(/ +#.*$/gm, '').trimEnd()

@@ -9,7 +9,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '#ui/components/ui/dropdown-menu'
-import { useTheme } from '../theme-provider'
+import { useTheme } from '#ui/features/theme/theme-provider'
 
 const THEMES = [
   { value: 'light', label: 'Light', icon: SunIcon },

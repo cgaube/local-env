@@ -1,1 +1,4 @@
-export { LiveDataProvider, useLiveData } from './live-data-provider.tsx'
+export {
+  LiveDataProvider,
+  useLiveData,
+} from '#ui/features/live-data/live-data-provider/live-data-provider.tsx'

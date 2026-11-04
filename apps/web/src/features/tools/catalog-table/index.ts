@@ -1,1 +1,1 @@
-export { CatalogTable } from './catalog-table.tsx'
+export { CatalogTable } from '#ui/features/tools/catalog-table/catalog-table.tsx'

@@ -6,7 +6,7 @@ import { TooltipProvider } from '#ui/components/ui/tooltip'
 import { LiveDataProvider } from '#ui/features/live-data/live-data-provider'
 import { ThemeProvider } from '#ui/features/theme/theme-provider'
 import { router } from '#ui/router.tsx'
-import './index.css'
+import '#ui/index.css'
 
 const queryClient = new QueryClient()
 

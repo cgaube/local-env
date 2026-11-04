@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'fs'
 import { join, relative } from 'path'
-import { COMPOSE_FILE, HOME_DIR } from './paths.js'
+import { COMPOSE_FILE, HOME_DIR } from '#cli/core/paths.js'
 
 // A core service is recreated when its code changes. Each services/<folder>
 // gets a hash of its files, passed to compose as LOCAL_ENV_REVISION_<FOLDER>

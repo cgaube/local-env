@@ -1,4 +1,4 @@
-import { dockhandApi } from './api.js'
+import { dockhandApi } from '#cli/providers/docker/api.js'
 
 export type Environment = {
   id: number

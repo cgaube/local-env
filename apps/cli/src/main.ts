@@ -3,16 +3,16 @@
 import { intro, outro } from '@clack/prompts'
 import { Command } from 'commander'
 import { styleText } from 'node:util'
-import packageJson from '../../../package.json' with { type: 'json' }
-import { commands } from './commands/index.js'
-import { prepareHome } from './core/home.js'
-import { UPDATE_COMMAND } from './core/homebrew.js'
-import { findOutdatedServices } from './core/outdated.js'
-import { CHECKOUT_DIR } from './core/paths.js'
-import { findNewerVersion } from './core/update-check.js'
-import { brandTitle } from './utils/brand.js'
-import { isFrameClosed, logger, markIntro } from './utils/logger.js'
-import { CANCELLED_EXIT_CODE } from './utils/prompt.js'
+import packageJson from '#package.json' with { type: 'json' }
+import { commands } from '#cli/commands/index.js'
+import { prepareHome } from '#cli/core/home.js'
+import { UPDATE_COMMAND } from '#cli/core/homebrew.js'
+import { findOutdatedServices } from '#cli/core/outdated.js'
+import { CHECKOUT_DIR } from '#cli/core/paths.js'
+import { findNewerVersion } from '#cli/core/update-check.js'
+import { brandTitle } from '#cli/utils/brand.js'
+import { isFrameClosed, logger, markIntro } from '#cli/utils/logger.js'
+import { CANCELLED_EXIT_CODE } from '#cli/utils/prompt.js'
 
 const program = new Command()
   .name('local-env')

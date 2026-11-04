@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { FORMULA_URL, isNewer, versionOfFormula } from './homebrew.js'
-import { HOME_DIR } from './paths.js'
+import { FORMULA_URL, isNewer, versionOfFormula } from '#cli/core/homebrew.js'
+import { HOME_DIR } from '#cli/core/paths.js'
 
 // Whether a newer local-env can be installed. It reads the version of the
 // Homebrew formula, which the release workflow updates last: once it says a

@@ -1,8 +1,15 @@
 import { execa } from 'execa'
-import { join } from 'path'
-import { dockhandApi, dockhandPost, dockhandPut } from '../api.js'
-import { listSources, SOURCES_DIR } from '../../../sources/sources.js'
-import type { DockhandStep, DockhandStepResult } from '../types.js'
+import { resolveInside } from '#cli/core/paths.js'
+import {
+  dockhandApi,
+  dockhandPost,
+  dockhandPut,
+} from '#cli/providers/docker/api.js'
+import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
+import type {
+  DockhandStep,
+  DockhandStepResult,
+} from '#cli/providers/docker/types.js'
 
 // Served by the catalog-server compose service: /<name> is the docker/ folder
 // of the source cloned in volumes/sources/<name>
@@ -56,7 +63,7 @@ const listUrl = async (name: string) => {
   const url = `${CATALOG_URL}/${name}/templates.json`
   const { stdout, exitCode } = await execa(
     'git',
-    ['-C', join(SOURCES_DIR, name), 'rev-parse', 'HEAD:docker'],
+    ['-C', resolveInside(SOURCES_DIR, name), 'rev-parse', 'HEAD:docker'],
     { reject: false },
   )
   return exitCode === 0 ? `${url}?v=${stdout.trim().slice(0, 12)}` : url

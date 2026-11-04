@@ -2,17 +2,20 @@ import { S_WARN } from '@clack/prompts'
 import { Command } from 'commander'
 import { stripVTControlCharacters, styleText } from 'node:util'
 import { homedir } from 'os'
-import { provisionProviders } from '../providers/index.js'
-import { refreshTemplateSources } from '../providers/docker/index.js'
+import { provisionProviders } from '#cli/providers/index.js'
+import { refreshTemplateSources } from '#cli/providers/docker/index.js'
 import {
   type DockhandRegistry,
   findLogin,
   getRegistries,
   readSourceRegistries,
   sourcesNeedingLogin,
-} from '../providers/docker/registries.js'
-import { printStackLinks, syncStacks } from '../providers/docker/stack-sync.js'
-import { forgetLink } from '../providers/docker/template-sync.js'
+} from '#cli/providers/docker/registries.js'
+import {
+  printStackLinks,
+  syncStacks,
+} from '#cli/providers/docker/stack-sync.js'
+import { forgetLink } from '#cli/providers/docker/template-sync.js'
 import {
   addSource,
   getSourceUrl,
@@ -22,10 +25,10 @@ import {
   removeSource,
   sourceNameFromUrl,
   summarizeSourceContent,
-} from '../sources/sources.js'
-import { logger } from '../utils/index.js'
-import { askSelect } from '../utils/prompt.js'
-import { loginCommand, logoutCommand } from './sources/login.js'
+} from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/index.js'
+import { askSelect } from '#cli/utils/prompt.js'
+import { loginCommand, logoutCommand } from '#cli/commands/sources/login.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>

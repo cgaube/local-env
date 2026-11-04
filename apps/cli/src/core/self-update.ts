@@ -1,16 +1,16 @@
 import { execa } from 'execa'
-import packageJson from '../../../../package.json' with { type: 'json' }
-import { isBrewPackageInstalled } from '../utils/brew.js'
-import { closeFrame, logger } from '../utils/logger.js'
-import { runTask } from '../utils/task.js'
+import packageJson from '#package.json' with { type: 'json' }
+import { isBrewPackageInstalled } from '#cli/utils/brew.js'
+import { closeFrame, logger } from '#cli/utils/logger.js'
+import { runTask } from '#cli/utils/task.js'
 import {
   HOMEBREW_FORMULA,
   isNewer,
   RELEASES_PAGE,
   UPGRADE_COMMAND,
-} from './homebrew.js'
-import { CHECKOUT_DIR } from './paths.js'
-import { checkLatestNow } from './update-check.js'
+} from '#cli/core/homebrew.js'
+import { CHECKOUT_DIR } from '#cli/core/paths.js'
+import { checkLatestNow } from '#cli/core/update-check.js'
 
 // Set for the new version that `update` hands over to: the version it came
 // from, so it doesn't check again

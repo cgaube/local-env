@@ -1,7 +1,7 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { buildRole, buildTools } from '../../support/factories.ts'
-import { renderApp } from '../../support/render-app.tsx'
+import { buildRole, buildTools } from '#ui-tests/support/factories.ts'
+import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 const git = buildRole()
 const node = buildRole({

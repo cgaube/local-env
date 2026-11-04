@@ -1,6 +1,6 @@
-import { dockhandPost } from '../api.js'
-import { getEnvironments } from '../environments.js'
-import type { DockhandStep } from '../types.js'
+import { dockhandPost } from '#cli/providers/docker/api.js'
+import { getEnvironments } from '#cli/providers/docker/environments.js'
+import type { DockhandStep } from '#cli/providers/docker/types.js'
 
 export const localEnvironmentStep: DockhandStep = {
   name: 'Local environment (docker socket)',

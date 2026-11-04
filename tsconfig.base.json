@@ -14,7 +14,10 @@
     "paths": {
       "#services/*": ["./services/*"],
       "#cli/*": ["./apps/cli/src/*"],
-      "#ui/*": ["./apps/web/src/*"]
+      "#ui/*": ["./apps/web/src/*"],
+      "#cli-tests/*": ["./apps/cli/tests/*"],
+      "#ui-tests/*": ["./apps/web/tests/*"],
+      "#package.json": ["./package.json"]
     }
   }
 }

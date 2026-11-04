@@ -4,16 +4,16 @@ import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { styleText } from 'node:util'
 import { join } from 'path'
-import { checkCertificate, describeCertificate } from '../core/certificate.js'
-import { CONFIG_PATH, readConfig } from '../core/config.js'
-import { COMPOSE_FILE, HOME_DIR } from '../core/paths.js'
+import { checkCertificate, describeCertificate } from '#cli/core/certificate.js'
+import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
+import { COMPOSE_FILE, HOME_DIR } from '#cli/core/paths.js'
 import {
   getSourceUrl,
   listSources,
   readSourceContent,
   summarizeSourceContent,
-} from '../sources/sources.js'
-import { execCompose, isDockerRunning, logger } from '../utils/index.js'
+} from '#cli/sources/sources.js'
+import { execCompose, isDockerRunning, logger } from '#cli/utils/index.js'
 
 const ROUTES_FILE = join(HOME_DIR, 'volumes/proxy/routes.json')
 // The compose project of the core services

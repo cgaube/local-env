@@ -14,10 +14,13 @@ holds what we build:
   (the Docker images), and the shared tooling: oxlint, oxfmt, lefthook, mise,
   changesets, `bunfig.toml` and `tsconfig.base.json`, which the `tsconfig.json`
   of each folder extends.
-- Imports that leave their folder use the aliases of `tsconfig.base.json`
-  (`paths`), which Bun, its bundler and tsc all read: `#services/*`
-  (`services/`), `#cli/*` (`apps/cli/src`), `#ui/*` (`apps/web/src`). Imports
-  within `apps/cli` or `apps/web` stay relative.
+- Imports use the aliases of `tsconfig.base.json` (`paths`), which Bun, its
+  bundler, Vite and tsc all read, never `./` or `../`: `#services/*`
+  (`services/`), `#cli/*` (`apps/cli/src`), `#ui/*` (`apps/web/src`),
+  `#cli-tests/*` (`apps/cli/tests`), `#ui-tests/*` (`apps/web/tests`) and
+  `#package.json`. Two exceptions stay relative, as they load without the
+  aliases: `services/` (each service runs in a container with only its own
+  folder) and `apps/web/vite.config.ts`, which imports no code of the CLI.
 
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,

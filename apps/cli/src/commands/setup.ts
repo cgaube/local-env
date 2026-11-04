@@ -1,13 +1,13 @@
 import { Command } from 'commander'
 import { existsSync } from 'fs'
-import { installLocalCa } from '../core/certificate.js'
+import { installLocalCa } from '#cli/core/certificate.js'
 import {
   checkConfig,
   CONFIG_PATH,
   writeConfig,
   type Config,
-} from '../core/config.js'
-import { settings } from '../core/settings/index.js'
+} from '#cli/core/config.js'
+import { settings } from '#cli/core/settings/index.js'
 import {
   askConfirm,
   ensureBrewInstalled,
@@ -15,7 +15,7 @@ import {
   installBrewPackages,
   isBrewPackageInstalled,
   logger,
-} from '../utils/index.js'
+} from '#cli/utils/index.js'
 
 const BREW_PACKAGES = [
   { name: 'mkcert', description: 'local certificate authority' },

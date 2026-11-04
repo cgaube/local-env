@@ -1,5 +1,5 @@
 import { Badge } from '#ui/components/ui/badge'
-import { STATUS_LABELS, type ToolStatus } from '../tools.ts'
+import { STATUS_LABELS, type ToolStatus } from '#ui/features/tools/tools.ts'
 
 const VARIANTS = {
   'to-install': 'warning',

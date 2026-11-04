@@ -1,1 +1,1 @@
-export { NavApps } from './nav-apps.tsx'
+export { NavApps } from '#ui/features/layout/nav-apps/nav-apps.tsx'

@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import type { Config } from '#cli/core/config.js'
 import { writeSelection } from '#services/dashboard/tools.js'
-import { buildCertificate } from './factories/certificate.js'
-import { buildConfig } from './factories/config.js'
+import { buildCertificate } from '#cli-tests/support/factories/certificate.js'
+import { buildConfig } from '#cli-tests/support/factories/config.js'
 
 // A LOCAL_ENV_HOME for one test, with helpers to seed and read its state
 export const createHome = (dir: string) => {

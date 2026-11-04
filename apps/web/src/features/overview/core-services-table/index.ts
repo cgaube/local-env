@@ -1,1 +1,1 @@
-export { CoreServicesTable } from './core-services-table.tsx'
+export { CoreServicesTable } from '#ui/features/overview/core-services-table/core-services-table.tsx'

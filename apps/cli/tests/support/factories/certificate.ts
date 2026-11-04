@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { TEST_DOMAIN } from './config.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 
 const FIXTURES = join(import.meta.dir, '../../fixtures/certs')
 

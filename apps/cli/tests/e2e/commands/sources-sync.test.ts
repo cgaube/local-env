@@ -1,11 +1,11 @@
-import { buildDockhandStack } from '../../support/factories/dockhand.js'
-import { COMPILED } from '../../support/run-cli.js'
+import { buildDockhandStack } from '#cli-tests/support/factories/dockhand.js'
+import { COMPILED } from '#cli-tests/support/run-cli.js'
 import {
   createLinkedStack,
   MAIL_V1,
   MAIL_V2,
   withUserEdit,
-} from '../../support/stacks.js'
+} from '#cli-tests/support/stacks.js'
 
 const APPLY = 'Apply template changes to "mail" and redeploy?'
 

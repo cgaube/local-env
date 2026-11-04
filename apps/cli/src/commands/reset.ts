@@ -2,11 +2,16 @@ import { Command } from 'commander'
 import { execa } from 'execa'
 import { existsSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
-import { uninstallLocalCa } from '../core/certificate.js'
-import { CONFIG_PATH, readConfig } from '../core/config.js'
-import { removeWildcardDns } from '../core/dns.js'
-import { HOME_DIR, isCheckout } from '../core/paths.js'
-import { askConfirm, isDockerRunning, logger, runTask } from '../utils/index.js'
+import { uninstallLocalCa } from '#cli/core/certificate.js'
+import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
+import { removeWildcardDns } from '#cli/core/dns.js'
+import { HOME_DIR, isCheckout } from '#cli/core/paths.js'
+import {
+  askConfirm,
+  isDockerRunning,
+  logger,
+  runTask,
+} from '#cli/utils/index.js'
 
 const PROJECT = 'local-env'
 const NETWORK = 'local-env'

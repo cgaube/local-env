@@ -1,9 +1,9 @@
 import { Glob } from 'bun'
 import { readFileSync } from 'fs'
 import { join, resolve } from 'path'
-import packageJson from '../../../../../package.json' with { type: 'json' }
-import { fakeFormula } from '../../support/fake-formula.js'
-import { createCli } from '../../support/run-cli.js'
+import packageJson from '#package.json' with { type: 'json' }
+import { fakeFormula } from '#cli-tests/support/fake-formula.js'
+import { createCli } from '#cli-tests/support/run-cli.js'
 
 // The core stack the CLI ships, at the repo root
 const REPO = resolve(import.meta.dir, '../../../../..')

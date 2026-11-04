@@ -10,7 +10,7 @@ import { createLiveDataStore } from '#ui/features/live-data/live-data.ts'
 import { LiveDataProvider } from '#ui/features/live-data/live-data-provider'
 import { ThemeProvider } from '#ui/features/theme/theme-provider'
 import { router } from '#ui/router.tsx'
-import { FakeEventSource } from './fake-event-source.ts'
+import { FakeEventSource } from '#ui-tests/support/fake-event-source.ts'
 
 // The whole app at a path, with the data of a fake event stream. The domain
 // and the latest version are already loaded: no request leaves the test.

@@ -1,11 +1,11 @@
 import { existsSync, unlinkSync } from 'fs'
-import { execCompose, runCompose } from '../../utils/exec.js'
-import { logger } from '../../utils/logger.js'
-import { askConfirm, askText } from '../../utils/prompt.js'
-import { ensureCertificate, getCertPaths } from '../certificate.js'
-import { DEFAULT_CONFIG, parseDomain as parse } from '../config.js'
-import { ensureWildcardDns, removeResolver } from '../dns.js'
-import type { Setting } from './types.js'
+import { execCompose, runCompose } from '#cli/utils/exec.js'
+import { logger } from '#cli/utils/logger.js'
+import { askConfirm, askText } from '#cli/utils/prompt.js'
+import { ensureCertificate, getCertPaths } from '#cli/core/certificate.js'
+import { DEFAULT_CONFIG, parseDomain as parse } from '#cli/core/config.js'
+import { ensureWildcardDns, removeResolver } from '#cli/core/dns.js'
+import type { Setting } from '#cli/core/settings/types.js'
 
 // The services that read the domain from their environment
 const DOMAIN_SERVICES = ['proxy-connector', 'dashboard']

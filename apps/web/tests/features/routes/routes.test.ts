@@ -1,5 +1,5 @@
 import { filterRoutes, userRoutes } from '#ui/features/routes/routes.ts'
-import { buildRoute } from '../../support/factories.ts'
+import { buildRoute } from '#ui-tests/support/factories.ts'
 
 describe('userRoutes', () => {
   test("leaves out local-env's own services", () => {

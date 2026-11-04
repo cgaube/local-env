@@ -3,10 +3,10 @@
 import {
   buildDockhandStack,
   provisionedDockhand,
-} from './factories/dockhand.js'
-import { buildTemplate } from './factories/template.js'
-import { machineReady } from './machine.js'
-import { createCli } from './run-cli.js'
+} from '#cli-tests/support/factories/dockhand.js'
+import { buildTemplate } from '#cli-tests/support/factories/template.js'
+import { machineReady } from '#cli-tests/support/machine.js'
+import { createCli } from '#cli-tests/support/run-cli.js'
 
 export const MAIL_V1 = [
   'name: mail',

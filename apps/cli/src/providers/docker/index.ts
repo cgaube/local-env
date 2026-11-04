@@ -1,19 +1,22 @@
-import { syncBuildContexts } from '../../sources/sources.js'
-import { execCompose, runCompose } from '../../utils/exec.js'
-import { logger } from '../../utils/logger.js'
-import type { Provider, UpdateOptions } from '../types.js'
-import { findContainerUpdates, updateContainers } from './container-updates.js'
-import { getLocalEnvironment } from './environments.js'
-import { registryLoginsStep } from './registries.js'
-import { offerStackSync } from './stack-sync.js'
-import { autoUpdateStep } from './steps/auto-update.js'
-import { exposureWarningStep } from './steps/exposure-warning.js'
-import { localEnvironmentStep } from './steps/local-environment.js'
+import { syncBuildContexts } from '#cli/sources/sources.js'
+import { execCompose, runCompose } from '#cli/utils/exec.js'
+import { logger } from '#cli/utils/logger.js'
+import type { Provider, UpdateOptions } from '#cli/providers/types.js'
+import {
+  findContainerUpdates,
+  updateContainers,
+} from '#cli/providers/docker/container-updates.js'
+import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
+import { registryLoginsStep } from '#cli/providers/docker/registries.js'
+import { offerStackSync } from '#cli/providers/docker/stack-sync.js'
+import { autoUpdateStep } from '#cli/providers/docker/steps/auto-update.js'
+import { exposureWarningStep } from '#cli/providers/docker/steps/exposure-warning.js'
+import { localEnvironmentStep } from '#cli/providers/docker/steps/local-environment.js'
 import {
   removeBuiltinTemplatesStep,
   templateSourcesStep,
-} from './steps/template-sources.js'
-import type { DockhandStep } from './types.js'
+} from '#cli/providers/docker/steps/template-sources.js'
+import type { DockhandStep } from '#cli/providers/docker/types.js'
 
 // Steps run in order; add new provisioning steps here
 const steps: DockhandStep[] = [

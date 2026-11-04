@@ -1,11 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { HOME_DIR } from '../../core/paths.js'
-import { listSources, SOURCES_DIR } from '../../sources/sources.js'
-import { logger } from '../../utils/logger.js'
-import { askPassword, askSelect, askText, canAsk } from '../../utils/prompt.js'
-import { dockhandApi, dockhandPost, dockhandPut } from './api.js'
-import type { DockhandStep, DockhandStepResult } from './types.js'
+import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
+import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/logger.js'
+import { askPassword, askSelect, askText, canAsk } from '#cli/utils/prompt.js'
+import {
+  dockhandApi,
+  dockhandPost,
+  dockhandPut,
+} from '#cli/providers/docker/api.js'
+import type {
+  DockhandStep,
+  DockhandStepResult,
+} from '#cli/providers/docker/types.js'
 
 // A source lists the registries of its private images in this file:
 // [{ "host": "ghcr.io", "usernameHelp": "your GitHub username",
@@ -86,7 +93,7 @@ export const readSourceRegistries = (
 ): Omit<DeclaredRegistry, 'sources'>[] => {
   try {
     const list = JSON.parse(
-      readFileSync(join(SOURCES_DIR, source, REGISTRIES_FILE), 'utf8'),
+      readFileSync(resolveInside(SOURCES_DIR, source, REGISTRIES_FILE), 'utf8'),
     )
     if (!Array.isArray(list)) return []
     const text = (value: unknown) =>

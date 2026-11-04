@@ -1,10 +1,10 @@
-import type { DockhandState } from '../../support/fake-dockhand.js'
+import type { DockhandState } from '#cli-tests/support/fake-dockhand.js'
 import {
   buildDockhandRegistry,
   provisionedDockhand,
-} from '../../support/factories/dockhand.js'
-import { dockerRunning, machineReady } from '../../support/machine.js'
-import { COMPILED, createCli, type Cli } from '../../support/run-cli.js'
+} from '#cli-tests/support/factories/dockhand.js'
+import { dockerRunning, machineReady } from '#cli-tests/support/machine.js'
+import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 const TOKEN = 'ghp_secret_token_1234'
 const NO_TTY = { FAKE_PROMPTS_NO_TTY: '1' }

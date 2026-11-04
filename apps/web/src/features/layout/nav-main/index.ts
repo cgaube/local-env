@@ -1,1 +1,1 @@
-export { NavMain } from './nav-main.tsx'
+export { NavMain } from '#ui/features/layout/nav-main/nav-main.tsx'

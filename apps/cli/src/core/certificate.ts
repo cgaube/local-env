@@ -2,10 +2,10 @@ import { execa } from 'execa'
 import { X509Certificate } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { execCompose } from '../utils/exec.js'
-import { logger } from '../utils/logger.js'
-import { runTask } from '../utils/task.js'
-import { HOME_DIR } from './paths.js'
+import { execCompose } from '#cli/utils/exec.js'
+import { logger } from '#cli/utils/logger.js'
+import { runTask } from '#cli/utils/task.js'
+import { HOME_DIR } from '#cli/core/paths.js'
 
 export const CERTS_DIR = join(HOME_DIR, 'services/proxy/certs')
 

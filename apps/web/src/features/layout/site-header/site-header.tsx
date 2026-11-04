@@ -4,7 +4,7 @@ import { Separator } from '#ui/components/ui/separator'
 import { useSidebar } from '#ui/components/ui/sidebar'
 import { ThemeSwitcher } from '#ui/features/theme/theme-switcher'
 import { InstallButton } from '#ui/features/tools/install-button'
-import { PageBreadcrumb } from '../page-breadcrumb'
+import { PageBreadcrumb } from '#ui/features/layout/page-breadcrumb'
 
 // sidebar-16: a sticky header across the page, above the sidebar
 export function SiteHeader() {

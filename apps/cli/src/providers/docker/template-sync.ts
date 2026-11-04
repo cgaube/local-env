@@ -10,15 +10,20 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { homedir } from 'os'
 import { prepareTemplateCompose } from '#services/catalog-server/template-compose.js'
-import { readConfig } from '../../core/config.js'
-import { COMPOSE_FILES, SOURCES_DIR } from '../../sources/sources.js'
+import { readConfig } from '#cli/core/config.js'
+import { resolveInside } from '#cli/core/paths.js'
+import { COMPOSE_FILES, SOURCES_DIR } from '#cli/sources/sources.js'
 import {
   listContainerTemplates,
   listSources,
   readSourceContent,
   type ContainerTemplate,
-} from '../../sources/sources.js'
-import { dockhandApi, dockhandPost, dockhandPut } from './api.js'
+} from '#cli/sources/sources.js'
+import {
+  dockhandApi,
+  dockhandPost,
+  dockhandPut,
+} from '#cli/providers/docker/api.js'
 import {
   composeName,
   hashTemplate,
@@ -31,7 +36,7 @@ import {
   writeLinks,
   type StackLink,
   type TemplateLink,
-} from './template-link.js'
+} from '#cli/providers/docker/template-link.js'
 
 export type TemplatedStack = TemplateLink & {
   stack: string
@@ -70,7 +75,7 @@ export const resolveTemplateCompose = (template: string) => {
   }
 
   for (const name of COMPOSE_FILES) {
-    const path = join(SOURCES_DIR, source, 'docker', folder, name)
+    const path = resolveInside(SOURCES_DIR, source, 'docker', folder, name)
     if (existsSync(path)) return path
   }
   return null

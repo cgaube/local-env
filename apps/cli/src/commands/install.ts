@@ -1,13 +1,13 @@
 import { Command } from 'commander'
 import { execa } from 'execa'
-import { readConfig } from '../core/config.js'
+import { readConfig } from '#cli/core/config.js'
 import {
   forgetUnpicked,
   readPickedTools,
   runPlaybook,
   unpickTools,
-} from '../core/tools.js'
-import { hasCommand, logger } from '../utils/index.js'
+} from '#cli/core/tools.js'
+import { hasCommand, logger } from '#cli/utils/index.js'
 
 // Last in the output, where it is seen
 const showForgotten = (forgotten: string[]) => {

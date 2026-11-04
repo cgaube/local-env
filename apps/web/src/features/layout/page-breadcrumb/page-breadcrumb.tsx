@@ -7,7 +7,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '#ui/components/ui/breadcrumb'
-import { findPage } from '../navigation.ts'
+import { findPage } from '#ui/features/layout/navigation.ts'
 
 // Docker › Routes
 export function PageBreadcrumb() {

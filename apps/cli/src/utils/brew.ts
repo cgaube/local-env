@@ -1,5 +1,5 @@
 import { execa } from 'execa'
-import { runTask } from './task.js'
+import { runTask } from '#cli/utils/task.js'
 
 export const hasCommand = async (command: string) => {
   try {

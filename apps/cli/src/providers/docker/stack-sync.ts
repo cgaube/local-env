@@ -2,9 +2,9 @@ import { execa } from 'execa'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { logger } from '../../utils/logger.js'
-import { askConfirm, askSelect } from '../../utils/prompt.js'
-import { getLocalEnvironment } from './environments.js'
+import { logger } from '#cli/utils/logger.js'
+import { askConfirm, askSelect } from '#cli/utils/prompt.js'
+import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
 import {
   applyStackDiff,
   diffStack,
@@ -14,9 +14,12 @@ import {
   type LinkCandidate,
   type LinkDecision,
   type StackDiff,
-} from './template-sync.js'
-import { findChangedBuilds, rebuildChangedStacks } from './stack-builds.js'
-import { hashTemplate } from './template-link.js'
+} from '#cli/providers/docker/template-sync.js'
+import {
+  findChangedBuilds,
+  rebuildChangedStacks,
+} from '#cli/providers/docker/stack-builds.js'
+import { hashTemplate } from '#cli/providers/docker/template-link.js'
 
 // git diff --no-index gives the familiar coloured output; run from a temp dir
 // so the headers read a/current/compose.yaml -> b/template/compose.yaml

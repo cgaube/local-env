@@ -1,6 +1,6 @@
 import { spinner } from '@clack/prompts'
 import { execa } from 'execa'
-import { logger } from './logger.js'
+import { logger } from '#cli/utils/logger.js'
 
 // Lines of output shown when a task fails
 const FAILURE_TAIL = 20

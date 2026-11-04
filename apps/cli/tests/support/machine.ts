@@ -2,9 +2,9 @@
 // Desktop, Homebrew and its packages, mkcert
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { FakeBin } from './fake-bin.js'
-import { buildCertificate } from './factories/certificate.js'
-import type { Cli } from './run-cli.js'
+import type { FakeBin } from '#cli-tests/support/fake-bin.js'
+import { buildCertificate } from '#cli-tests/support/factories/certificate.js'
+import type { Cli } from '#cli-tests/support/run-cli.js'
 
 // Docker Desktop is running and every compose command succeeds
 export const dockerRunning = (bin: FakeBin) => {

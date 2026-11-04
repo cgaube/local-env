@@ -1,1 +1,1 @@
-export { AppCards } from './app-cards.tsx'
+export { AppCards } from '#ui/features/overview/app-cards/app-cards.tsx'

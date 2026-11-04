@@ -1,1 +1,1 @@
-export { CopyButton } from './copy-button.tsx'
+export { CopyButton } from '#ui/features/copy/copy-button/copy-button.tsx'

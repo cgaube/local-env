@@ -10,9 +10,9 @@ import {
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
-import { HOME_DIR } from '../../core/paths.js'
-import { isValidSourceName } from '../../sources/sources.js'
-import { logger } from '../../utils/logger.js'
+import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
+import { isValidSourceName } from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/logger.js'
 
 // Links Dockhand stacks to the template they were deployed from, without
 // adding anything to their compose file.
@@ -86,7 +86,7 @@ export const isValidTemplate = (template: string) => {
 const isValidHash = (hash: string) => /^[0-9a-f]+$/.test(hash)
 
 const snapshotDir = (template: string) =>
-  join(SNAPSHOTS_DIR, ...template.split('/'))
+  resolveInside(SNAPSHOTS_DIR, ...template.split('/'))
 
 // Every version of a template served to Dockhand or applied, newest first
 export const listSnapshots = (template: string): Snapshot[] => {

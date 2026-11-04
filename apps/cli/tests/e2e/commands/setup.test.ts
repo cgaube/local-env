@@ -1,12 +1,12 @@
 import { join } from 'path'
-import { TEST_DOMAIN } from '../../support/factories/config.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 import {
   brewInstalled,
   dockerRunning,
   machineReady,
   mkcertInstalled,
-} from '../../support/machine.js'
-import { COMPILED, createCli } from '../../support/run-cli.js'
+} from '#cli-tests/support/machine.js'
+import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
 
 const IS_MAC = process.platform === 'darwin'
 

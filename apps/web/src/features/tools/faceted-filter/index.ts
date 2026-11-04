@@ -1,1 +1,1 @@
-export { FacetedFilter } from './faceted-filter.tsx'
+export { FacetedFilter } from '#ui/features/tools/faceted-filter/faceted-filter.tsx'

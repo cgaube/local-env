@@ -1,7 +1,7 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { buildRoute } from '../../support/factories.ts'
-import { renderApp } from '../../support/render-app.tsx'
+import { buildRoute } from '#ui-tests/support/factories.ts'
+import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 const mail = buildRoute()
 const api = buildRoute({

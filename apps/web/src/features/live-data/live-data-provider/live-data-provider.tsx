@@ -1,7 +1,7 @@
 import { createContext, use, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { createLiveDataStore } from '../live-data.ts'
-import type { LiveDataStore } from '../live-data.ts'
+import { createLiveDataStore } from '#ui/features/live-data/live-data.ts'
+import type { LiveDataStore } from '#ui/features/live-data/live-data.ts'
 
 const LiveDataContext = createContext<LiveDataStore | null>(null)
 

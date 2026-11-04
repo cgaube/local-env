@@ -17,9 +17,9 @@ import { useDomain } from '#ui/features/config/use-domain.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
 import { plural } from '#ui/lib/plural.ts'
-import { AddRouteHelp } from '../add-route-help'
-import { filterRoutes, userRoutes } from '../routes.ts'
-import { RoutesTable } from '../routes-table'
+import { AddRouteHelp } from '#ui/features/routes/add-route-help'
+import { filterRoutes, userRoutes } from '#ui/features/routes/routes.ts'
+import { RoutesTable } from '#ui/features/routes/routes-table'
 
 export function RoutesPage() {
   const { routes: all, connected, updatedAt } = useLiveData()
