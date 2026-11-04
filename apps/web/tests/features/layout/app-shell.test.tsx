@@ -1,8 +1,8 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import cli from '../../../../../package.json' with { type: 'json' }
-import { buildService } from '../../support/factories.ts'
-import { renderApp } from '../../support/render-app.tsx'
+import cli from '#package.json' with { type: 'json' }
+import { buildService } from '#ui-tests/support/factories.ts'
+import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 describe('App shell', () => {
   test('shows where you are in the breadcrumb', async () => {

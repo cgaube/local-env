@@ -1,4 +1,4 @@
-import { createCli } from '../../support/run-cli.js'
+import { createCli } from '#cli-tests/support/run-cli.js'
 
 describe.concurrent('local-env stop', () => {
   test('stops the core stack with the home compose file', async () => {

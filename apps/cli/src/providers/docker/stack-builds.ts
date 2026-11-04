@@ -1,16 +1,19 @@
 import { execa } from 'execa'
 import { readFileSync } from 'fs'
-import { join } from 'path'
+import { resolveInside } from '#cli/core/paths.js'
 import {
   contextPath,
   findBuildContexts,
 } from '#services/catalog-server/template-compose.js'
-import { SOURCES_DIR } from '../../sources/sources.js'
-import { logger } from '../../utils/logger.js'
-import { askConfirm } from '../../utils/prompt.js'
-import { dockhandPost } from './api.js'
-import { isLinked, readLinks } from './template-link.js'
-import { resolveTemplateCompose, updateLink } from './template-sync.js'
+import { SOURCES_DIR } from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/logger.js'
+import { askConfirm } from '#cli/utils/prompt.js'
+import { dockhandPost } from '#cli/providers/docker/api.js'
+import { isLinked, readLinks } from '#cli/providers/docker/template-link.js'
+import {
+  resolveTemplateCompose,
+  updateLink,
+} from '#cli/providers/docker/template-sync.js'
 
 // Templates with a relative `build:` are built by Dockhand from the source
 // (services/catalog-server/template-compose.ts). A change in a build folder
@@ -33,7 +36,12 @@ const readBuildTree = async (template: string) => {
     paths.map(async (contextDir) => {
       const { stdout, exitCode } = await execa(
         'git',
-        ['-C', join(SOURCES_DIR, source), 'rev-parse', `HEAD:${contextDir}`],
+        [
+          '-C',
+          resolveInside(SOURCES_DIR, source),
+          'rev-parse',
+          `HEAD:${contextDir}`,
+        ],
         { reject: false },
       )
       return exitCode === 0 ? stdout.trim() : 'missing'

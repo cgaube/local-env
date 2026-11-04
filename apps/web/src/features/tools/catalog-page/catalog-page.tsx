@@ -12,9 +12,9 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import type { Tools } from '#ui/features/live-data/live-data.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
-import { CatalogTable } from '../catalog-table'
-import { catalogRows } from '../tools.ts'
-import { usePickedTools } from '../use-picked-tools.ts'
+import { CatalogTable } from '#ui/features/tools/catalog-table'
+import { catalogRows } from '#ui/features/tools/tools.ts'
+import { usePickedTools } from '#ui/features/tools/use-picked-tools.ts'
 
 function Catalog({ tools }: { tools: Tools }) {
   const { picked, setPicked, error } = usePickedTools(tools.picked)

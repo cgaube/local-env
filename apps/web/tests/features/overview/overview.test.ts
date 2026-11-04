@@ -1,5 +1,5 @@
 import { appContent, servicesSummary } from '#ui/features/overview/overview.ts'
-import { buildService, buildSource } from '../../support/factories.ts'
+import { buildService, buildSource } from '#ui-tests/support/factories.ts'
 
 describe('appContent', () => {
   test('counts what the app installs from the sources', () => {

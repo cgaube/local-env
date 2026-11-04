@@ -1,6 +1,6 @@
-import { buildRoute } from '../../support/factories/docker.js'
-import { dockerRunning, dockerStopped } from '../../support/machine.js'
-import { createCli, type Cli } from '../../support/run-cli.js'
+import { buildRoute } from '#cli-tests/support/factories/docker.js'
+import { dockerRunning, dockerStopped } from '#cli-tests/support/machine.js'
+import { createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 const proxyRunning = (cli: Cli) => {
   dockerRunning(cli.bin)

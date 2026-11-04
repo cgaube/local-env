@@ -1,7 +1,7 @@
 import { Outlet } from '@tanstack/react-router'
 import { SidebarInset, SidebarProvider } from '#ui/components/ui/sidebar'
-import { AppSidebar } from '../app-sidebar'
-import { SiteHeader } from '../site-header'
+import { AppSidebar } from '#ui/features/layout/app-sidebar'
+import { SiteHeader } from '#ui/features/layout/site-header'
 
 // sidebar-16: a sticky header, and below it the sidebar and the page
 export function AppShell() {

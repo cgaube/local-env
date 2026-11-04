@@ -1,7 +1,7 @@
-import { TEST_DOMAIN } from '../../support/factories/config.js'
-import { provisionedDockhand } from '../../support/factories/dockhand.js'
-import { machineReady } from '../../support/machine.js'
-import { COMPILED, createCli } from '../../support/run-cli.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
+import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import { machineReady } from '#cli-tests/support/machine.js'
+import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
 
 const composeUp = (args: string[]) =>
   args.includes('up') && args.includes('--remove-orphans')

@@ -4,7 +4,7 @@ import {
   type CalloutLevel,
   type CalloutOptions,
   formatCallout,
-} from './callout.js'
+} from '#cli/utils/callout.js'
 
 const describe = (error: unknown) =>
   error instanceof Error ? error.message : String(error)

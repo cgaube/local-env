@@ -1,16 +1,33 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-// Vite loads this file without the tsconfig aliases (#cli/*)
-import { readConfig } from '../cli/src/core/config.js'
 import cli from '../../package.json' with { type: 'json' }
 
 // `bun run dev` shows the live data of your running local-env, at the domain
 // of its config.json. Read only then: builds and tests don't need it.
+// The home folder as apps/cli/src/core/paths.ts finds it, and the default
+// domain of apps/cli/src/core/config.ts
+const readDomain = () => {
+  const home = process.env.LOCAL_ENV_HOME
+    ? resolve(process.env.LOCAL_ENV_HOME)
+    : join(homedir(), '.local-env')
+  try {
+    const { domain } = JSON.parse(
+      readFileSync(join(home, 'config.json'), 'utf8'),
+    )
+    if (typeof domain === 'string' && domain) return domain
+  } catch {
+    // No config.json yet
+  }
+  return 'dev.test'
+}
+
 const dashboardUrl = () =>
-  process.env.LOCAL_ENV_DASHBOARD_URL ??
-  `https://local-env.${readConfig().domain}`
+  process.env.LOCAL_ENV_DASHBOARD_URL ?? `https://local-env.${readDomain()}`
 
 // The commit the build comes from, with -dirty for uncommitted changes
 const commit = () => {

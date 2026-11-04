@@ -1,6 +1,6 @@
-import { TEST_DOMAIN } from '../../support/factories/config.js'
-import { machineReady } from '../../support/machine.js'
-import { COMPILED, createCli } from '../../support/run-cli.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
+import { machineReady } from '#cli-tests/support/machine.js'
+import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
 
 describe('local-env config get', () => {
   test('lists the defaults before setup', async () => {

@@ -4,10 +4,10 @@ import { use } from 'react'
 import { Badge } from '#ui/components/ui/badge'
 import { Button } from '#ui/components/ui/button'
 import { Switch } from '#ui/components/ui/switch'
-import { ToolStatusBadge } from '../tool-status-badge'
-import type { CatalogRow } from '../tools.ts'
-import type { CatalogFeatures } from './catalog-features.ts'
-import { PickContext } from './pick-context.ts'
+import { ToolStatusBadge } from '#ui/features/tools/tool-status-badge'
+import type { CatalogRow } from '#ui/features/tools/tools.ts'
+import type { CatalogFeatures } from '#ui/features/tools/catalog-table/catalog-features.ts'
+import { PickContext } from '#ui/features/tools/catalog-table/pick-context.ts'
 
 const column = createColumnHelper<CatalogFeatures, CatalogRow>()
 

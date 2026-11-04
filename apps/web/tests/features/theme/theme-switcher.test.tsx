@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderApp } from '../../support/render-app.tsx'
+import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 describe('Theme switcher', () => {
   afterEach(() => {

@@ -1,1 +1,1 @@
-export { OverviewPage } from './overview-page.tsx'
+export { OverviewPage } from '#ui/features/overview/overview-page/overview-page.tsx'

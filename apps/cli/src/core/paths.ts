@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { homedir } from 'os'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, resolve, sep } from 'path'
 import { fileURLToPath } from 'url'
 
 const here = fileURLToPath(import.meta.url)
@@ -43,3 +43,13 @@ export const HOME_DIR = process.env.LOCAL_ENV_HOME
   : join(homedir(), '.local-env')
 
 export const COMPOSE_FILE = resolve(HOME_DIR, 'compose.yaml')
+
+// resolve(base, ...parts), refusing a result that isn't inside base: parts
+// that come from users or sources (`..`, an absolute path) can't leave it
+export const resolveInside = (base: string, ...parts: string[]) => {
+  const path = resolve(base, ...parts)
+  if (!path.startsWith(base + sep)) {
+    throw new Error(`${join(...parts)} is outside ${base}`)
+  }
+  return path
+}

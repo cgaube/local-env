@@ -1,16 +1,16 @@
 import { Command } from 'commander'
-import { providers, provisionProviders } from '../providers/index.js'
-import { ensureCertificate } from '../core/certificate.js'
-import { readConfig } from '../core/config.js'
-import { ensureRuntimeDirs } from '../core/home.js'
-import { updateSelf } from '../core/self-update.js'
-import { pullSources } from '../sources/sources.js'
+import { providers, provisionProviders } from '#cli/providers/index.js'
+import { ensureCertificate } from '#cli/core/certificate.js'
+import { readConfig } from '#cli/core/config.js'
+import { ensureRuntimeDirs } from '#cli/core/home.js'
+import { updateSelf } from '#cli/core/self-update.js'
+import { pullSources } from '#cli/sources/sources.js'
 import {
   runCompose,
   execDocker,
   isDockerRunning,
   logger,
-} from '../utils/index.js'
+} from '#cli/utils/index.js'
 
 // Pulls and rebuilds the core stack, including the base images of the local
 // builds, then recreates whatever changed

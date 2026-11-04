@@ -8,7 +8,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '#ui/components/ui/sidebar'
-import { NAVIGATION } from '../navigation.ts'
+import { NAVIGATION } from '#ui/features/layout/navigation.ts'
 
 // Every section open: too few pages to fold any away. A section with pages
 // links to its first one.

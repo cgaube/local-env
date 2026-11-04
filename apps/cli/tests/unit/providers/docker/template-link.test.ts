@@ -9,7 +9,7 @@ import {
   readLinks,
 } from '#cli/providers/docker/template-link.js'
 import { logger } from '#cli/utils/logger.js'
-import { buildCompose } from '../../../support/factories/template.js'
+import { buildCompose } from '#cli-tests/support/factories/template.js'
 
 describe('composeName', () => {
   test('reads the top-level name', () => {

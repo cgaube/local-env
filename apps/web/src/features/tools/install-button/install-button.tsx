@@ -14,8 +14,8 @@ import {
 import { CodeSnippet } from '#ui/features/copy/code-snippet'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { plural } from '#ui/lib/plural.ts'
-import { ToolStatusBadge } from '../tool-status-badge'
-import { catalogRows } from '../tools.ts'
+import { ToolStatusBadge } from '#ui/features/tools/tool-status-badge'
+import { catalogRows } from '#ui/features/tools/tools.ts'
 
 // In the header while tools wait for `local-env install`. The dashboard can't
 // run anything on the Mac: the dialog gives the command to run.

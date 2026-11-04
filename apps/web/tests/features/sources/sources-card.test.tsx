@@ -1,6 +1,6 @@
 import { act, screen, within } from '@testing-library/react'
-import { buildSource } from '../../support/factories.ts'
-import { renderApp } from '../../support/render-app.tsx'
+import { buildSource } from '#ui-tests/support/factories.ts'
+import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 describe('Sources on the overview', () => {
   test('lists the sources and what each offers', async () => {

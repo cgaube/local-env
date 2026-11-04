@@ -9,7 +9,7 @@ import {
 } from '#ui/components/ui/card'
 import type { Service, Source } from '#ui/features/live-data/live-data.ts'
 import { StatusBadge } from '#ui/features/status/status-badge'
-import { appContent } from '../overview.ts'
+import { appContent } from '#ui/features/overview/overview.ts'
 import { ExternalLink } from '#ui/features/links/external-link'
 
 // One card per core service with a local-env.app label: the apps you use

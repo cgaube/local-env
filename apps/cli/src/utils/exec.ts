@@ -1,12 +1,12 @@
 import { execa } from 'execa'
-import { readConfig } from '../core/config.js'
-import { COMPOSE_FILE } from '../core/paths.js'
+import { readConfig } from '#cli/core/config.js'
+import { COMPOSE_FILE } from '#cli/core/paths.js'
 import {
   listBuiltServices,
   readRevisions,
   revisionVariable,
-} from '../core/revisions.js'
-import { runTask } from './task.js'
+} from '#cli/core/revisions.js'
+import { runTask } from '#cli/utils/task.js'
 
 export const execDocker = async (args: string[], { capture = false } = {}) => {
   return execa('docker', args, {

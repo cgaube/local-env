@@ -2,8 +2,8 @@ import {
   dockerRunning,
   dockerStopped,
   machineReady,
-} from '../../support/machine.js'
-import { COMPILED, createCli, type Cli } from '../../support/run-cli.js'
+} from '#cli-tests/support/machine.js'
+import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 // A stack Dockhand deployed, and a container of another project that
 // proxy-connector attached to the local-env network

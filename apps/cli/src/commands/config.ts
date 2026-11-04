@@ -6,9 +6,9 @@ import {
   CONFIG_PATH,
   readConfig,
   writeConfig,
-} from '../core/config.js'
-import { findSetting, settings } from '../core/settings/index.js'
-import { logger } from '../utils/index.js'
+} from '#cli/core/config.js'
+import { findSetting, settings } from '#cli/core/settings/index.js'
+import { logger } from '#cli/utils/index.js'
 
 const KEYS = settings.map((setting) => setting.key).join(', ')
 

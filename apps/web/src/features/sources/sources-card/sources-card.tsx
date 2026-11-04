@@ -9,7 +9,7 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import { CodeSnippet } from '#ui/features/copy/code-snippet'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { plural } from '#ui/lib/plural.ts'
-import { SourcesTable } from '../sources-table'
+import { SourcesTable } from '#ui/features/sources/sources-table'
 
 // On the overview: the git repos local-env installs from
 export function SourcesCard() {

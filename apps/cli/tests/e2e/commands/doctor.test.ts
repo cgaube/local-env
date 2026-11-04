@@ -1,8 +1,8 @@
-import { TEST_DOMAIN } from '../../support/factories/config.js'
-import { provisionedDockhand } from '../../support/factories/dockhand.js'
-import { buildTemplate } from '../../support/factories/template.js'
-import { machineReady } from '../../support/machine.js'
-import { createCli, type Cli } from '../../support/run-cli.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
+import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import { buildTemplate } from '#cli-tests/support/factories/template.js'
+import { machineReady } from '#cli-tests/support/machine.js'
+import { createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 // dnsmasq answers, the proxy runs and macOS resolves the probe host
 const dnsWorking = (cli: Cli) => {

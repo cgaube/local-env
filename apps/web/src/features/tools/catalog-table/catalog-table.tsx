@@ -22,14 +22,14 @@ import {
   TableRow,
 } from '#ui/components/ui/table'
 import { plural } from '#ui/lib/plural.ts'
-import { ColumnsMenu } from '../columns-menu'
-import { FacetedFilter } from '../faceted-filter'
-import { type FilterChip, FilterChips } from '../filter-chips'
-import { TablePagination } from '../table-pagination'
-import { type CatalogRow, STATUS_LABELS } from '../tools.ts'
-import { catalogColumns } from './catalog-columns.tsx'
-import { catalogFeatures } from './catalog-features.ts'
-import { PickContext } from './pick-context.ts'
+import { ColumnsMenu } from '#ui/features/tools/columns-menu'
+import { FacetedFilter } from '#ui/features/tools/faceted-filter'
+import { type FilterChip, FilterChips } from '#ui/features/tools/filter-chips'
+import { TablePagination } from '#ui/features/tools/table-pagination'
+import { type CatalogRow, STATUS_LABELS } from '#ui/features/tools/tools.ts'
+import { catalogColumns } from '#ui/features/tools/catalog-table/catalog-columns.tsx'
+import { catalogFeatures } from '#ui/features/tools/catalog-table/catalog-features.ts'
+import { PickContext } from '#ui/features/tools/catalog-table/pick-context.ts'
 
 // The switch's column as narrow as it gets. The status one as wide as its
 // longest badge: the columns don't move when a switch changes the status.

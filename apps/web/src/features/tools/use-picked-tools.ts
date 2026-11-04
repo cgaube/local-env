@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { savePickedTools } from './tools.ts'
+import { savePickedTools } from '#ui/features/tools/tools.ts'
 
 // The picked tools, a switch flipping as soon as it is clicked: the event
 // stream sends the saved playbook back a moment later. The flipped list holds

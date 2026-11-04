@@ -1,5 +1,5 @@
 // Rows the Docker CLI prints, for the fake docker's replies
-import { TEST_DOMAIN } from './config.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 
 // One row of `docker compose ps --format json`
 export const buildComposeService = ({

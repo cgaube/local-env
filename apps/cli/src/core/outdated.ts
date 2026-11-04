@@ -1,4 +1,4 @@
-import { execCompose, execDocker } from '../utils/exec.js'
+import { execCompose, execDocker } from '#cli/utils/exec.js'
 
 // Core services whose container runs an older version of local-env than the
 // files in the home folder: their compose file or their code (the

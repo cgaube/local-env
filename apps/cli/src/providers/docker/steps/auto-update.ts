@@ -1,6 +1,6 @@
-import { dockhandApi, dockhandPost } from '../api.js'
-import { getLocalEnvironment } from '../environments.js'
-import type { DockhandStep } from '../types.js'
+import { dockhandApi, dockhandPost } from '#cli/providers/docker/api.js'
+import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
+import type { DockhandStep } from '#cli/providers/docker/types.js'
 
 // Weekdays at 10:00 and 14:00: laptops are usually asleep at Dockhand's 04:00
 const UPDATE_CRON = '0 10,14 * * 1-5'

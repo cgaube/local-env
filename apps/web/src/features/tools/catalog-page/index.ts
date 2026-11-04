@@ -1,1 +1,1 @@
-export { CatalogPage } from './catalog-page.tsx'
+export { CatalogPage } from '#ui/features/tools/catalog-page/catalog-page.tsx'

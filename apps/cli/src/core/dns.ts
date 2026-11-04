@@ -10,16 +10,16 @@ import {
 } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
-import { getBrewPrefix } from '../utils/brew.js'
+import { getBrewPrefix } from '#cli/utils/brew.js'
 import {
   DNSMASQ_CONFIG_NAME,
   DNSMASQ_PORT,
   findConflictingDnsmasqConfigs,
   getDnsmasqPaths,
   testDnsmasqConfig,
-} from '../utils/dnsmasq.js'
-import { logger } from '../utils/logger.js'
-import { askConfirm } from '../utils/prompt.js'
+} from '#cli/utils/dnsmasq.js'
+import { logger } from '#cli/utils/logger.js'
+import { askConfirm } from '#cli/utils/prompt.js'
 
 // macOS sends every *.<domain> lookup to dnsmasq on 127.0.0.1:53535, which
 // answers 127.0.0.1, where nginx listens

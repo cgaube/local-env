@@ -1,4 +1,4 @@
-import type { Config } from '../config.js'
+import type { Config } from '#cli/core/config.js'
 
 export type ApplyOptions = {
   // Accept every default instead of asking

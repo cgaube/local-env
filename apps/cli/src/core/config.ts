@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { HOME_DIR } from './paths.js'
+import { HOME_DIR } from '#cli/core/paths.js'
 
 export const CONFIG_PATH = join(HOME_DIR, 'config.json')
 

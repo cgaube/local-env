@@ -1,1 +1,1 @@
-export { NavVersion } from './nav-version.tsx'
+export { NavVersion } from '#ui/features/layout/nav-version/nav-version.tsx'

@@ -1,4 +1,4 @@
-import { dockhandPost } from './api.js'
+import { dockhandPost } from '#cli/providers/docker/api.js'
 
 type UpdateCheck = {
   results: {

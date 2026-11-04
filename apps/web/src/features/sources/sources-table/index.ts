@@ -1,1 +1,1 @@
-export { SourcesTable } from './sources-table.tsx'
+export { SourcesTable } from '#ui/features/sources/sources-table/sources-table.tsx'

@@ -17,11 +17,20 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
-import { createFakeBin } from './fake-bin.js'
-import { type DockhandState, startFakeDockhand } from './fake-dockhand.js'
-import type { AskedQuestion, FakeAnswer } from './fake-prompts.js'
-import { createSourceRepo, GIT_ENV } from './factories/source.js'
-import { createHome } from './home.js'
+import { createFakeBin } from '#cli-tests/support/fake-bin.js'
+import {
+  type DockhandState,
+  startFakeDockhand,
+} from '#cli-tests/support/fake-dockhand.js'
+import type {
+  AskedQuestion,
+  FakeAnswer,
+} from '#cli-tests/support/fake-prompts.js'
+import {
+  createSourceRepo,
+  GIT_ENV,
+} from '#cli-tests/support/factories/source.js'
+import { createHome } from '#cli-tests/support/home.js'
 
 const ROOT = resolve(import.meta.dir, '../..')
 const FAKE_PROMPTS_PLUGIN = join(import.meta.dir, 'fake-prompts-plugin.ts')

@@ -9,10 +9,10 @@ import {
   SidebarMenuItem,
 } from '#ui/components/ui/sidebar'
 import { useDomain } from '#ui/features/config/use-domain.ts'
-import { Logo } from '../logo'
-import { NavApps } from '../nav-apps'
-import { NavMain } from '../nav-main'
-import { NavVersion } from '../nav-version'
+import { Logo } from '#ui/features/layout/logo'
+import { NavApps } from '#ui/features/layout/nav-apps'
+import { NavMain } from '#ui/features/layout/nav-main'
+import { NavVersion } from '#ui/features/layout/nav-version'
 
 export function AppSidebar() {
   const domain = useDomain()

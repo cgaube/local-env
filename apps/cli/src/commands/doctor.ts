@@ -3,11 +3,11 @@ import { execa } from 'execa'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { checkCertificate, describeCertificate } from '../core/certificate.js'
-import { isValidDomain, normalizeDomain, readConfig } from '../core/config.js'
-import { COMPOSE_FILE } from '../core/paths.js'
-import { checkBuildPort, findFreePort } from '../core/settings/build-port.js'
-import { dockhandApi } from '../providers/docker/api.js'
+import { checkCertificate, describeCertificate } from '#cli/core/certificate.js'
+import { isValidDomain, normalizeDomain, readConfig } from '#cli/core/config.js'
+import { COMPOSE_FILE } from '#cli/core/paths.js'
+import { checkBuildPort, findFreePort } from '#cli/core/settings/build-port.js'
+import { dockhandApi } from '#cli/providers/docker/api.js'
 import {
   findLogin,
   getRegistries,
@@ -15,15 +15,15 @@ import {
   listDeclaredRegistries,
   loginCommandFor,
   testRegistryLogin,
-} from '../providers/docker/registries.js'
-import { resolveTemplateCompose } from '../providers/docker/template-sync.js'
+} from '#cli/providers/docker/registries.js'
+import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
 import {
   BUILD_CONTEXTS_DIR,
   listSources,
   readSourceContent,
   SOURCES_DIR,
   summarizeSourceContent,
-} from '../sources/sources.js'
+} from '#cli/sources/sources.js'
 import {
   DNSMASQ_PORT,
   findConflictingDnsmasqConfigs,
@@ -31,7 +31,7 @@ import {
   getDnsmasqPaths,
   logger,
   testDnsmasqConfig,
-} from '../utils/index.js'
+} from '#cli/utils/index.js'
 
 type CheckLevel = 'pass' | 'warn' | 'fail'
 

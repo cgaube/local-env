@@ -1,9 +1,9 @@
 import { existsSync } from 'fs'
-import { playbookEvents } from '../../support/factories/ansible.js'
-import { TEST_DOMAIN } from '../../support/factories/config.js'
-import { provisionedDockhand } from '../../support/factories/dockhand.js'
-import { machineReady } from '../../support/machine.js'
-import { COMPILED, createCli, type Cli } from '../../support/run-cli.js'
+import { playbookEvents } from '#cli-tests/support/factories/ansible.js'
+import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
+import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import { machineReady } from '#cli-tests/support/machine.js'
+import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 // A source with these roles, cloned like `local-env sources add` does
 const sourceWithRoles = async (

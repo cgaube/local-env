@@ -1,9 +1,13 @@
-import { buildContainerUpdate } from '../../support/factories/dockhand.js'
-import packageJson from '../../../../../package.json' with { type: 'json' }
-import { fakeFormula } from '../../support/fake-formula.js'
-import { dockerStopped } from '../../support/machine.js'
-import { COMPILED, createCli } from '../../support/run-cli.js'
-import { createLinkedStack, MAIL_V1, MAIL_V2 } from '../../support/stacks.js'
+import { buildContainerUpdate } from '#cli-tests/support/factories/dockhand.js'
+import packageJson from '#package.json' with { type: 'json' }
+import { fakeFormula } from '#cli-tests/support/fake-formula.js'
+import { dockerStopped } from '#cli-tests/support/machine.js'
+import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
+import {
+  createLinkedStack,
+  MAIL_V1,
+  MAIL_V2,
+} from '#cli-tests/support/stacks.js'
 
 const compose = (args: string[]) => (call: { args: string[] }) =>
   call.args[0] === 'compose' && args.every((arg) => call.args.includes(arg))

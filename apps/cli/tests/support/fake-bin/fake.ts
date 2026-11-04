@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
-import type { FakeCall, FakeRule } from '../fake-bin.js'
+import type { FakeCall, FakeRule } from '#cli-tests/support/fake-bin.js'
 
 const dir = process.env.FAKE_BIN_STATE
 if (!dir) {

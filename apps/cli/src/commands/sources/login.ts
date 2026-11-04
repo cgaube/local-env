@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import { styleText } from 'node:util'
-import { dockhandApi } from '../../providers/docker/api.js'
+import { dockhandApi } from '#cli/providers/docker/api.js'
 import {
   type DockhandRegistry,
   findHostRegistry,
@@ -14,16 +14,16 @@ import {
   sourcesNeedingLogin,
   tokenQuestion,
   usernameQuestion,
-} from '../../providers/docker/registries.js'
-import { listSources } from '../../sources/sources.js'
-import { logger } from '../../utils/index.js'
+} from '#cli/providers/docker/registries.js'
+import { listSources } from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/index.js'
 import {
   askConfirm,
   askPassword,
   askSelect,
   askText,
   canAsk,
-} from '../../utils/prompt.js'
+} from '#cli/utils/prompt.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>

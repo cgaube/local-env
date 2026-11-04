@@ -1,1 +1,1 @@
-export { PageHeader } from './page-header.tsx'
+export { PageHeader } from '#ui/features/page-header/page-header/page-header.tsx'

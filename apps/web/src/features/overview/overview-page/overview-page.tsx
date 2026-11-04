@@ -9,9 +9,9 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
 import { SourcesCard } from '#ui/features/sources/sources-card'
-import { AppCards } from '../app-cards'
-import { CoreServicesTable } from '../core-services-table'
-import { servicesSummary } from '../overview.ts'
+import { AppCards } from '#ui/features/overview/app-cards'
+import { CoreServicesTable } from '#ui/features/overview/core-services-table'
+import { servicesSummary } from '#ui/features/overview/overview.ts'
 
 export function OverviewPage() {
   const { services, sources } = useLiveData()

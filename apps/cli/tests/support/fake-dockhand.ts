@@ -8,7 +8,7 @@ import {
   type DockhandEnvironment,
   type DockhandStack,
   type DockhandTemplateSource,
-} from './factories/dockhand.js'
+} from '#cli-tests/support/factories/dockhand.js'
 
 export type DockhandState = {
   environments: DockhandEnvironment[]

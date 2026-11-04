@@ -1,1 +1,1 @@
-export { StatusBadge } from './status-badge.tsx'
+export { StatusBadge } from '#ui/features/status/status-badge/status-badge.tsx'

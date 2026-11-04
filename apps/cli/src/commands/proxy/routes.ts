@@ -1,8 +1,8 @@
 import { Command } from 'commander'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { HOME_DIR } from '../../core/paths.js'
-import { execCompose, isDockerRunning, logger } from '../../utils/index.js'
+import { HOME_DIR } from '#cli/core/paths.js'
+import { execCompose, isDockerRunning, logger } from '#cli/utils/index.js'
 
 // Written by services/proxy-connector from the running containers
 const ROUTES_FILE = join(HOME_DIR, 'volumes/proxy/routes.json')

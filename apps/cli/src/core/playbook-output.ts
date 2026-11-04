@@ -1,7 +1,7 @@
 import { spinner } from '@clack/prompts'
 import { basename } from 'path'
 import { styleText } from 'node:util'
-import { logger } from '../utils/logger.js'
+import { logger } from '#cli/utils/logger.js'
 
 // Draws an ansible-playbook run like the rest of the CLI, from the events of
 // Ansible's ansible.posix.jsonl callback (one JSON object a line): a group

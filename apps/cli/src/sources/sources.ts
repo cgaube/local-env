@@ -1,10 +1,10 @@
 import { execa } from 'execa'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { basename, isAbsolute, join, resolve } from 'path'
-import { HOME_DIR } from '../core/paths.js'
+import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
 import { BUILD_CONTEXTS_BRANCH } from '#services/catalog-server/template-compose.js'
-import { logger } from '../utils/logger.js'
-import { runTask } from '../utils/task.js'
+import { logger } from '#cli/utils/logger.js'
+import { runTask } from '#cli/utils/task.js'
 
 // A source is a git repo of installable content, cloned into
 // volumes/sources/<name>. Each provider reads its own folder from it:
@@ -76,7 +76,7 @@ export const listSources = () => {
       (entry) =>
         entry.isDirectory() &&
         isValidSourceName(entry.name) &&
-        existsSync(join(SOURCES_DIR, entry.name, '.git')),
+        existsSync(resolveInside(SOURCES_DIR, entry.name, '.git')),
     )
     .map((entry) => entry.name)
     .sort()
@@ -85,7 +85,7 @@ export const listSources = () => {
 export const getSourceUrl = async (name: string) => {
   const { stdout } = await execa(
     'git',
-    ['-C', join(SOURCES_DIR, name), 'remote', 'get-url', 'origin'],
+    ['-C', resolveInside(SOURCES_DIR, name), 'remote', 'get-url', 'origin'],
     { stdio: 'pipe' },
   )
   // Local sources are cloned through file:// to honour --depth
@@ -101,7 +101,7 @@ export const addSource = async (location: string, name: string) => {
     )
   }
 
-  const dir = join(SOURCES_DIR, name)
+  const dir = resolveInside(SOURCES_DIR, name)
   if (existsSync(dir)) {
     const existing = await getSourceUrl(name).catch(() => null)
     if (existing && sameRepo(existing, location)) {
@@ -139,8 +139,8 @@ export const removeSource = (name: string) => {
   if (!listSources().includes(name)) {
     throw new Error(`Source "${name}" not found in ${SOURCES_DIR}`)
   }
-  rmSync(join(SOURCES_DIR, name), { recursive: true, force: true })
-  rmSync(join(BUILD_CONTEXTS_DIR, `${name}.git`), {
+  rmSync(resolveInside(SOURCES_DIR, name), { recursive: true, force: true })
+  rmSync(resolveInside(BUILD_CONTEXTS_DIR, `${name}.git`), {
     recursive: true,
     force: true,
   })
@@ -153,8 +153,8 @@ const git = async (dir: string, ...args: string[]) =>
 // commit without parents: the clone is shallow, and git's plain HTTP protocol,
 // which the builder uses, needs every parent of the commit it fetches
 export const syncBuildContext = async (name: string) => {
-  const clone = join(SOURCES_DIR, name)
-  const repo = join(BUILD_CONTEXTS_DIR, `${name}.git`)
+  const clone = resolveInside(SOURCES_DIR, name)
+  const repo = resolveInside(BUILD_CONTEXTS_DIR, `${name}.git`)
   const branch = `refs/heads/${BUILD_CONTEXTS_BRANCH}`
   if (!existsSync(repo)) {
     mkdirSync(BUILD_CONTEXTS_DIR, { recursive: true })
@@ -207,7 +207,7 @@ export const syncBuildContexts = async () => {
 export const pullSources = async (names = listSources()) => {
   logger.group('Sources')
   for (const name of names) {
-    const dir = join(SOURCES_DIR, name)
+    const dir = resolveInside(SOURCES_DIR, name)
     try {
       await runTask(
         `Pulling ${name}`,
@@ -287,7 +287,7 @@ export const listContainerTemplates = (name: string): ContainerTemplate[] => {
   let templates: Record<string, unknown>[]
   try {
     const list = JSON.parse(
-      readFileSync(join(SOURCES_DIR, name, TEMPLATES_FILE), 'utf8'),
+      readFileSync(resolveInside(SOURCES_DIR, name, TEMPLATES_FILE), 'utf8'),
     )
     templates = Array.isArray(list?.templates) ? list.templates : []
   } catch {
@@ -310,7 +310,7 @@ export const listContainerTemplates = (name: string): ContainerTemplate[] => {
 // (their folders), its container templates (their slugs) and ansible/<name>
 // roles
 export const readSourceContent = (name: string) => {
-  const dir = join(SOURCES_DIR, name)
+  const dir = resolveInside(SOURCES_DIR, name)
   return {
     docker: listTemplateFolders(dir),
     containers: listContainerTemplates(name).map(({ slug }) => slug),

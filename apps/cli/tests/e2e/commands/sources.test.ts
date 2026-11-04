@@ -1,14 +1,14 @@
-import { dockerRunning } from '../../support/machine.js'
+import { dockerRunning } from '#cli-tests/support/machine.js'
 import {
   buildDockhandEnvironment,
   buildDockhandRegistry,
-} from '../../support/factories/dockhand.js'
+} from '#cli-tests/support/factories/dockhand.js'
 import {
   buildContainerTemplate,
   buildTemplate,
-} from '../../support/factories/template.js'
-import type { DockhandState } from '../../support/fake-dockhand.js'
-import { createCli } from '../../support/run-cli.js'
+} from '#cli-tests/support/factories/template.js'
+import type { DockhandState } from '#cli-tests/support/fake-dockhand.js'
+import { createCli } from '#cli-tests/support/run-cli.js'
 
 // A provisioned Dockhand: adding or removing a source only changes its
 // template sources

@@ -1,11 +1,11 @@
 import { Command } from 'commander'
 import { existsSync } from 'fs'
-import { ensureCertificate } from '../core/certificate.js'
-import { CONFIG_PATH, readConfig } from '../core/config.js'
-import { ensureRuntimeDirs } from '../core/home.js'
-import { provisionProviders } from '../providers/index.js'
-import { askConfirm, logger, runCompose } from '../utils/index.js'
-import { runSetup } from './setup.js'
+import { ensureCertificate } from '#cli/core/certificate.js'
+import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
+import { ensureRuntimeDirs } from '#cli/core/home.js'
+import { provisionProviders } from '#cli/providers/index.js'
+import { askConfirm, logger, runCompose } from '#cli/utils/index.js'
+import { runSetup } from '#cli/commands/setup.js'
 
 // Without a domain, certificate and DNS the proxy can't serve anything
 const ensureSetUp = async () => {

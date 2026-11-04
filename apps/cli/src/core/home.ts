@@ -10,16 +10,16 @@ import {
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
-import { logger } from '../utils/logger.js'
-import { runTask } from '../utils/task.js'
+import { logger } from '#cli/utils/logger.js'
+import { runTask } from '#cli/utils/task.js'
 import {
   CONFIG_PATH,
   isValidDomain,
   normalizeDomain,
   writeConfig,
-} from './config.js'
-import { CHECKOUT_DIR, HOME_DIR, isCheckout } from './paths.js'
-import { readShippedFiles } from './shipped-files.js' with { type: 'macro' }
+} from '#cli/core/config.js'
+import { CHECKOUT_DIR, HOME_DIR, isCheckout } from '#cli/core/paths.js'
+import { readShippedFiles } from '#cli/core/shipped-files.js' with { type: 'macro' }
 
 // Lists the files written by the last sync, so removed ones get cleaned up
 const MANIFEST = '.shipped.json'

@@ -12,11 +12,14 @@ import {
   writeInstalled,
   writeSelection,
 } from '#services/dashboard/tools.js'
-import { SOURCES_DIR } from '../sources/sources.js'
-import { logger } from '../utils/logger.js'
-import { askPassword } from '../utils/prompt.js'
-import { HOME_DIR } from './paths.js'
-import { type PlaybookSummary, renderPlaybook } from './playbook-output.js'
+import { SOURCES_DIR } from '#cli/sources/sources.js'
+import { logger } from '#cli/utils/logger.js'
+import { askPassword } from '#cli/utils/prompt.js'
+import { HOME_DIR } from '#cli/core/paths.js'
+import {
+  type PlaybookSummary,
+  renderPlaybook,
+} from '#cli/core/playbook-output.js'
 
 // The tools picked in the dashboard (volumes/tools/playbook.yml) and the
 // installs that ran: services/dashboard/tools.ts

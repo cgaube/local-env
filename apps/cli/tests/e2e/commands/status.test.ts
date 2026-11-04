@@ -2,9 +2,9 @@ import {
   buildComposeService,
   buildRoute,
   jsonLines,
-} from '../../support/factories/docker.js'
-import { dockerRunning, dockerStopped } from '../../support/machine.js'
-import { createCli, type Cli } from '../../support/run-cli.js'
+} from '#cli-tests/support/factories/docker.js'
+import { dockerRunning, dockerStopped } from '#cli-tests/support/machine.js'
+import { createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 const CORE_SERVICES = [
   buildComposeService({ service: 'dockhand', ports: [17300] }),

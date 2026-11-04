@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { logger, runCompose } from '../utils/index.js'
+import { logger, runCompose } from '#cli/utils/index.js'
 
 // Stacks installed through Dockhand are separate compose projects and keep running
 export const stopCommand = new Command('stop')

@@ -1,1 +1,1 @@
-export { ExternalLink } from './external-link.tsx'
+export { ExternalLink } from '#ui/features/links/external-link/external-link.tsx'

@@ -1,8 +1,8 @@
-import { execCompose, runCompose } from '../../utils/exec.js'
-import { logger } from '../../utils/logger.js'
-import { askText } from '../../utils/prompt.js'
-import { DEFAULT_CONFIG, parseBuildPort as parse } from '../config.js'
-import type { Setting } from './types.js'
+import { execCompose, runCompose } from '#cli/utils/exec.js'
+import { logger } from '#cli/utils/logger.js'
+import { askText } from '#cli/utils/prompt.js'
+import { DEFAULT_CONFIG, parseBuildPort as parse } from '#cli/core/config.js'
+import type { Setting } from '#cli/core/settings/types.js'
 
 // catalog-server serves template build folders to Docker's builder on this
 // port of 127.0.0.1 (services/catalog-server/template-compose.ts). Stacks that

@@ -1,6 +1,9 @@
 import { mkdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { buildTemplate, type TemplateFixture } from './template.js'
+import {
+  buildTemplate,
+  type TemplateFixture,
+} from '#cli-tests/support/factories/template.js'
 
 // Keeps git away from the user's own config and identity
 export const GIT_ENV = {

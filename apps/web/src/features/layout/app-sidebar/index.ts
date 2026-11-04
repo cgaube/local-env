@@ -1,1 +1,1 @@
-export { AppSidebar } from './app-sidebar.tsx'
+export { AppSidebar } from '#ui/features/layout/app-sidebar/app-sidebar.tsx'
