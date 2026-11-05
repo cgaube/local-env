@@ -42,7 +42,7 @@ export function CurrentProfileCard({
     <Card role="region" aria-label="Your profile">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {profile.name}
+          {profile.label}
           <Badge variant="outline">{profile.source}</Badge>
         </CardTitle>
         <CardDescription>

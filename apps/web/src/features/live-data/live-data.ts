@@ -32,10 +32,19 @@ export type Source = {
 
 // An Ansible role of a source
 export type Role = {
-  // <source>/<role>
+  // <source>/<name>
   id: string
   source: string
+  // Its folder in the source's ansible/: <collection>/roles/<role>, or
+  // <role>
+  folder: string
+  // <namespace>.<collection>.<role>, or <role> for a plain role
   name: string
+  // <namespace>.<collection>, or null for a plain role
+  collection: string | null
+  // The name to show: `label` of its local-env.yml, else its folder,
+  // title-cased
+  label: string
   description: string | null
   tags: string[]
   dependencies: string[]
@@ -46,6 +55,9 @@ export type Role = {
   // Hash of its files, recorded by each install
   revision: string
   needsSudo: boolean
+  // The Galaxy collections its collection needs (galaxy.yml), by name: their
+  // version ranges. `local-env install` installs them.
+  galaxy: Record<string, string>
 }
 
 export type Tools = {

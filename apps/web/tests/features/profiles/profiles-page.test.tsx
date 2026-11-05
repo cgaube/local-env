@@ -104,6 +104,31 @@ describe('Profiles page', () => {
     ).not.toBeInTheDocument()
   })
 
+  test('lists the roles of the profile that come from Galaxy, or no source', async () => {
+    const user = userEvent.setup()
+    const { events } = await renderApp('/profiles')
+    const mobile = buildRole({
+      name: 'acme.profiles.mobile',
+      collection: 'acme.profiles',
+      label: 'Mobile',
+      isProfile: true,
+      dependencies: ['git', 'geerlingguy.mac.dock', 'acme.gone.xcode'],
+      galaxy: { 'geerlingguy.mac': '>=5.0.0,<6.0.0' },
+    })
+    act(() => events.emit('tools', buildTools({ roles: [git, mobile] })))
+
+    await user.click(screen.getByRole('button', { name: 'Details of Mobile' }))
+
+    const sheet = await screen.findByRole('dialog', { name: 'Mobile' })
+    const tools = within(sheet).getByRole('region', { name: 'Tools (3)' })
+    const galaxy = within(tools)
+      .getByText('geerlingguy.mac.dock')
+      .closest('li')!
+    expect(within(galaxy).getByText('Galaxy')).toBeVisible()
+    const missing = within(tools).getByText('acme.gone.xcode').closest('li')!
+    expect(within(missing).getByText('Missing')).toBeVisible()
+  })
+
   test('opens what a profile brings, before it is picked', async () => {
     const user = userEvent.setup()
     const fetch = stubFetch()

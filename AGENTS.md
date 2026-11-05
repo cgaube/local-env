@@ -29,9 +29,10 @@ holds what we build:
   Homebrew when a newer version is out, then hands over to the new version
   (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
   and the sources, then lists the stacks whose template changed and offers to
-  run the `sources sync` flow. `sources sync` pulls the sources first
-  (`--no-pull` to skip): it is the everyday command after a template change,
-  `update` refreshes everything.
+  run the `sources sync` flow. Last, it upgrades the Galaxy collections of the
+  wanted tools (`upgradeGalaxyCollections`), without running the playbook.
+  `sources sync` pulls the sources first (`--no-pull` to skip): it is the
+  everyday command after a template change, `update` refreshes everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The
@@ -56,7 +57,10 @@ holds what we build:
   skips sudo when they are already correct.
 - `src/utils/` holds shared helpers: logger, exec, brew, dnsmasq, prompts.
   `logger.callout(level, text)` (`callout.ts`: info, success, warn, error) is
-  for what must not be missed; `logger.box` for summaries.
+  for what must not be missed; `logger.box` for summaries. `local-env ui`,
+  hidden from `--help`, shows every piece of the output, ours and clack's, drawn
+  by the real code (`src/commands/ui.ts`; `--prompts` runs the questions too).
+  Add a new piece there.
 - `compose.yaml` defines the core stack: `nginx-proxy`, `dockhand`,
   `catalog-server`, `proxy-connector`, `dashboard`. The CLI always passes
   `-f <home>/compose.yaml`.
@@ -92,26 +96,37 @@ holds what we build:
   steps run on every `start`). Each provider implements `Provider` from
   `src/providers/types.ts` (`provision`, `update`) and is listed in
   `src/providers/index.ts`.
-- Tools are the Ansible roles of the sources (`ansible/<role>/`). A profile is a
-  role tagged `profile` (`galaxy_tags`) whose dependencies are other roles or
-  profiles; `local-env.yml` beside `meta/` lists the stack templates a role
-  needs (`stacks:`). `services/dashboard/tools.ts`, shared by the dashboard and
-  the CLI, lists them (`meta/main.yml`: description, tags, dependencies; a
-  revision hash of the files; whether a task uses `become`; the stacks) and
-  reads and writes `volumes/tools/`: `playbook.yml`, the picked roles by path
-  (`../sources/<source>/ansible/<role>`), written by the dashboard
-  (`PUT /api/tools/picked`); `profile.json`, written by the dashboard's Profiles
-  page (`PUT /api/tools/profile`, `features/profiles/`) and
+- Tools are the Ansible roles of the sources, grouped in collections:
+  `ansible/<collection>/galaxy.yml` (namespace, name) and
+  `ansible/<collection>/roles/<role>/`, named `<namespace>.<collection>.<role>`
+  (a folder without `galaxy.yml` is a plain role, named by its folder). A
+  profile is a role tagged `profile` (`galaxy_tags`) whose dependencies are
+  other roles or profiles; `local-env.yml` beside `meta/` gives the name to show
+  (`label:`) and lists the stack templates a role needs (`stacks:`).
+  `services/dashboard/tools.ts`, shared by the dashboard and the CLI, lists them
+  (`meta/main.yml`: description, tags, dependencies; a revision hash of the
+  files; whether a task uses `become`; the stacks) and reads and writes
+  `volumes/tools/`: `picked.json`, the ids of the picked roles
+  (`<source>/<full name>`), written by the dashboard (`PUT /api/tools/picked`);
+  `profile.json`, written by the dashboard's Profiles page
+  (`PUT /api/tools/profile`, `features/profiles/`) and
   `local-env install <profile>` (`--no-save` skips it); `installed.json` and
   `stacks.json`, written by `local-env install` (`src/core/tools.ts`), which
   also forgets the tools no longer wanted (it never uninstalls).
   `services/dashboard/role-graph.ts` (no imports: the web app loads it too)
   walks the dependencies, by name in any source: the profile and the picks are
-  the roots. `install` writes its own playbook of the roots, by absolute path,
-  in a folder only the user can read (`src/core/run-folder.ts`), and runs
-  `ansible-playbook` on the Mac, as the user, with `ANSIBLE_ROLES_PATH` set to
-  every source's `ansible/` for dependencies by name. When a wanted role uses
-  `become`, the CLI asks for the password (`askPassword`) and hands it to
+  the roots. `install` writes its own playbook of the roots (by full name, a
+  plain role by absolute path) in a folder only the user can read
+  (`src/core/run-folder.ts`), links every source's collections there as
+  `ansible_collections/<namespace>/<name>`, and runs `ansible-playbook` on the
+  Mac, as the user, with `ANSIBLE_COLLECTIONS_PATH` on those links and
+  `ANSIBLE_ROLES_PATH` on every source's `ansible/`, for dependencies by name.
+  First, it installs the Galaxy collections that the collections of the wanted
+  roles need (`galaxy.yml` `dependencies`, without the sources' own) into
+  `volumes/tools/collections/` with `ansible-galaxy`
+  (`src/core/galaxy-collections.ts`; `update` upgrades them); the dashboard
+  shows their roles in a profile's details (`externalRoles`). When a wanted role
+  uses `become`, the CLI asks for the password (`askPassword`) and hands it to
   Ansible in a file of that folder (`ANSIBLE_BECOME_PASSWORD_FILE`). The folder
   goes when the run ends, on SIGINT, SIGTERM and SIGHUP too; the next run
   removes the ones of runs that were killed. Ansible prints its events as JSON

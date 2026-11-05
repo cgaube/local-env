@@ -3,14 +3,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { basename, isAbsolute, join, resolve } from 'path'
 import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
 import { BUILD_CONTEXTS_BRANCH } from '#services/catalog-server/template-compose.js'
+import { listRoleFolders } from '#services/dashboard/tools.js'
 import { logger } from '#cli/utils/logger.js'
 import { runTask } from '#cli/utils/task.js'
 
 // A source is a git repo of installable content, cloned into
 // volumes/sources/<name>. Each provider reads its own folder from it:
-// docker/ (templates.json and a folder per stack) for Dockhand, ansible/<name>/
-// for roles. The clones are the source of truth, so there is no separate list
-// to keep in sync.
+// docker/ (templates.json and a folder per stack) for Dockhand, ansible/ (a
+// folder per collection) for roles. The clones are the source of truth, so
+// there is no separate list to keep in sync.
 export const SOURCES_DIR = resolve(HOME_DIR, 'volumes/sources')
 // One single-commit repo per source, served to Docker's builder by
 // catalog-server (services/catalog-server/template-compose.ts)
@@ -230,14 +231,6 @@ export const pullSources = async (names = listSources()) => {
   }
 }
 
-const subfolders = (dir: string) =>
-  existsSync(dir)
-    ? readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-        .map((entry) => entry.name)
-        .sort()
-    : []
-
 // The source's Portainer template list. Each stack template points to
 // docker/<folder>/<compose file> in the same repo.
 export const TEMPLATES_FILE = 'docker/templates.json'
@@ -307,14 +300,14 @@ export const listContainerTemplates = (name: string): ContainerTemplate[] => {
 }
 
 // What a source offers: the stack templates listed in docker/templates.json
-// (their folders), its container templates (their slugs) and ansible/<name>
-// roles
+// (their folders), its container templates (their slugs) and its Ansible
+// roles (their names: <namespace>.<collection>.<role> in a collection)
 export const readSourceContent = (name: string) => {
   const dir = resolveInside(SOURCES_DIR, name)
   return {
     docker: listTemplateFolders(dir),
     containers: listContainerTemplates(name).map(({ slug }) => slug),
-    ansible: subfolders(join(dir, 'ansible')),
+    ansible: listRoleFolders(join(dir, 'ansible')).map(({ name }) => name),
   }
 }
 

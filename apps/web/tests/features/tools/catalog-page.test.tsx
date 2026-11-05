@@ -379,10 +379,11 @@ describe('Catalog page', () => {
       ),
     )
 
-    const row = screen.getByRole('row', { name: /^git/ })
+    // Its folder name, title-cased: its label left with it
+    const row = screen.getByRole('row', { name: /^Git/ })
     expect(within(row).getByText('Gone from the sources')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('switch', { name: 'Install git' }))
+    await user.click(screen.getByRole('switch', { name: 'Install Git' }))
 
     expect(sentRoles(fetch)).toEqual([['acme/node']])
   })
@@ -425,40 +426,33 @@ describe('Catalog page', () => {
     ).toBeInTheDocument()
   })
 
-  test('shows when each tool was installed, from the Columns menu', async () => {
+  test("shows each tool's Ansible role, which the Columns menu hides", async () => {
     const user = userEvent.setup()
     const { events } = await renderApp('/tools')
-    act(() =>
-      events.emit(
-        'tools',
-        buildTools({
-          roles: [git],
-          picked: ['acme/git'],
-          installed: {
-            'acme/git': {
-              revision: git.revision,
-              installedAt: '2026-11-01T10:00:00Z',
-            },
-          },
-        }),
-      ),
-    )
+    const extras = buildRole({
+      name: 'cgaube.dev_tools.git_extras',
+      collection: 'cgaube.dev_tools',
+      label: 'Git Extras',
+    })
+    act(() => events.emit('tools', buildTools({ roles: [extras] })))
+
+    const row = screen.getByRole('row', { name: /^Git Extras/ })
+    expect(
+      within(row).getByText('cgaube.dev_tools.git_extras'),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('columnheader', { name: 'Installed' }),
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Columns' }))
     await user.click(
-      await screen.findByRole('menuitemcheckbox', { name: 'installed' }),
+      await screen.findByRole('menuitemcheckbox', { name: 'role' }),
     )
     await user.keyboard('{Escape}')
 
     expect(
-      screen.getByRole('columnheader', { name: 'Installed' }),
-    ).toBeInTheDocument()
-    expect(
-      within(screen.getByRole('row', { name: /^git/ })).getByText(/2026/),
-    ).toBeInTheDocument()
+      screen.queryByRole('columnheader', { name: 'Role' }),
+    ).not.toBeInTheDocument()
   })
 
   test('says when the sources have no tools', async () => {

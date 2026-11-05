@@ -47,8 +47,7 @@ export function CatalogTable({
   ])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] =
-    // The installed date is there to sort by: shown from the Columns menu
-    useState<ColumnVisibilityState>({ tags: false, installed: false })
+    useState<ColumnVisibilityState>({ tags: false })
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,

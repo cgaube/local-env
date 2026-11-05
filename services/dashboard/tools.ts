@@ -1,9 +1,12 @@
 // The tools catalog: the Ansible roles of every source, the ones picked in the
 // dashboard and the ones `local-env install` installed. Shared by the
 // dashboard (server.ts) and the CLI, which see the same folders:
-//   <sources>/<source>/ansible/<role>/  -> the roles
-//   <tools>/playbook.yml                -> the picked roles, a plain playbook:
-//                                          written by the dashboard, run by
+//   <sources>/<source>/ansible/<collection>/roles/<role>/
+//                                       -> the roles of a collection, named
+//                                          <namespace>.<collection>.<role>
+//   <sources>/<source>/ansible/<role>/  -> a plain role, named <role>
+//   <tools>/picked.json                 -> the picked roles, by id:
+//                                          written by the dashboard, read by
 //                                          `local-env install`
 //   <tools>/installed.json              -> what the last installs ran,
 //                                          written by the CLI
@@ -11,14 +14,20 @@
 //                                          dashboard and `local-env install`
 //   <tools>/stacks.json                 -> the stacks `local-env install`
 //                                          deployed for the roles
-// The playbook names each role by its path, ../sources/<source>/ansible/<role>,
-// so two sources can have a role of the same name.
+// A role's id is <source>/<name>, so two sources can have a role of the same
+// name.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
-import type { GraphRole } from './role-graph.js'
+import { basename, join, relative } from 'node:path'
+import { type GraphRole, titleize } from './role-graph.js'
 
 export type Role = GraphRole & {
   source: string
+  // Its folder in the source's ansible/: <collection>/roles/<role>, or
+  // <role>
+  folder: string
+  // The name to show: `label` of local-env.yml, else the role's folder,
+  // title-cased
+  label: string
   description: string | null
   tags: string[]
   // Tagged `profile` (galaxy_tags): a set of roles, picked as a whole
@@ -27,12 +36,16 @@ export type Role = GraphRole & {
   revision: string
   // A task runs with sudo: the install asks for your password
   needsSudo: boolean
+  // The collections its collection needs that no source has (galaxy.yml
+  // `dependencies`), by name or URL: their version ranges, `*` for any.
+  // `local-env install` installs them from Galaxy.
+  galaxy: Record<string, string>
 }
 
 export type InstalledRole = { revision: string; installedAt: string }
 export type Installed = Record<string, InstalledRole>
 
-export const PLAYBOOK_FILE = 'playbook.yml'
+export const PICKED_FILE = 'picked.json'
 export const INSTALLED_FILE = 'installed.json'
 export const PROFILE_FILE = 'profile.json'
 export const STACKS_FILE = 'stacks.json'
@@ -41,8 +54,10 @@ export const ROLE_SETTINGS_FILE = 'local-env.yml'
 
 export const PROFILE_TAG = 'profile'
 
+// <source>/<name>
 const ROLE_ID = /^[a-z0-9][a-z0-9-]*\/[^/.][^/]*$/
-const ROLE_PATH = /^\.\.\/sources\/([a-z0-9][a-z0-9-]*)\/ansible\/([^/]+)$/
+// A collection's namespace and name (galaxy.yml): Ansible allows only these
+const COLLECTION_PART = /^[a-z0-9_]+$/
 
 const subfolders = (dir: string) =>
   existsSync(dir)
@@ -68,32 +83,170 @@ const BECOME = /^\s*become:\s*(true|yes)\s*$/m
 // A stack template: docker/<folder> of the role's source, or <source>/<folder>
 const STACK = /^(?:([a-z0-9][a-z0-9-]*)\/)?([a-z0-9][a-z0-9._-]*)$/i
 
-// The stacks of local-env.yml, as <source>/<folder>. An entry that names no
-// folder (a path, not a string) is left out.
-const readStacks = (dir: string, source: string): string[] => {
-  let settings: unknown
+const readYaml = (path: string): unknown => {
   try {
-    settings = Bun.YAML.parse(
-      readFileSync(join(dir, ROLE_SETTINGS_FILE), 'utf8'),
-    )
+    return Bun.YAML.parse(readFileSync(path, 'utf8'))
   } catch {
-    // None, or not valid YAML: the role needs no stack
-    return []
+    // None, or not valid YAML
+    return null
   }
-  const stacks = (settings as { stacks?: unknown } | null)?.stacks
-  if (!Array.isArray(stacks)) return []
-  return [
-    ...new Set(
-      stacks.flatMap((entry) => {
-        const match = typeof entry === 'string' ? STACK.exec(entry) : null
-        return match ? [`${match[1] ?? source}/${match[2]}`] : []
-      }),
-    ),
-  ]
 }
 
-const readRole = (sourcesDir: string, source: string, name: string): Role => {
-  const dir = join(sourcesDir, source, 'ansible', name)
+// What local-env.yml says: its label, and its stacks as <source>/<folder>. A
+// stack that names no folder (a path, not a string) is left out.
+const readSettings = (dir: string, source: string) => {
+  const settings = readYaml(join(dir, ROLE_SETTINGS_FILE)) as {
+    label?: unknown
+    stacks?: unknown
+  } | null
+  const label =
+    typeof settings?.label === 'string' && settings.label.trim()
+      ? settings.label.trim()
+      : null
+  const stacks = Array.isArray(settings?.stacks) ? settings.stacks : []
+  return {
+    label,
+    stacks: [
+      ...new Set(
+        stacks.flatMap((entry) => {
+          const match = typeof entry === 'string' ? STACK.exec(entry) : null
+          return match ? [`${match[1] ?? source}/${match[2]}`] : []
+        }),
+      ),
+    ],
+  }
+}
+
+// A collection of the source: its folder in ansible/, its full name,
+// <namespace>.<name>, and the collections it needs, from galaxy.yml
+export type Collection = {
+  folder: string
+  name: string
+  // By name, or a git URL or a path, as Ansible allows: a version range
+  dependencies: Record<string, string>
+}
+
+// galaxy.yml `dependencies`: a map of collections to version ranges. An entry
+// that isn't one is left out.
+const readGalaxyDependencies = (value: unknown): Record<string, string> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).flatMap(([name, version]) =>
+          typeof version === 'string' || typeof version === 'number'
+            ? [[name, String(version)]]
+            : version === null
+              ? [[name, '*']]
+              : [],
+        ),
+      )
+    : {}
+
+// The folder holds a galaxy.yml: a collection, with its roles in roles/.
+// One without a valid namespace and name is left out, as Ansible can't load
+// it.
+const readCollection = (ansibleDir: string, folder: string) => {
+  const path = join(ansibleDir, folder, 'galaxy.yml')
+  if (!existsSync(path)) return undefined
+  const galaxy = readYaml(path) as {
+    namespace?: unknown
+    name?: unknown
+    dependencies?: unknown
+  } | null
+  const { namespace, name } = galaxy ?? {}
+  return typeof namespace === 'string' &&
+    typeof name === 'string' &&
+    COLLECTION_PART.test(namespace) &&
+    COLLECTION_PART.test(name)
+    ? {
+        folder,
+        name: `${namespace}.${name}`,
+        dependencies: readGalaxyDependencies(galaxy?.dependencies),
+      }
+    : null
+}
+
+// The collections of a source's ansible/ folder
+export const listCollections = (ansibleDir: string): Collection[] =>
+  subfolders(ansibleDir).flatMap(
+    (folder) => readCollection(ansibleDir, folder) ?? [],
+  )
+
+// The roles of a source's ansible/ folder: those of each collection
+// (<collection>/roles/<role>), named <namespace>.<collection>.<role>, and the
+// plain roles (<role>), named by their folder
+export type RoleFolder = {
+  folder: string
+  name: string
+  collection: string | null
+  // galaxy.yml `dependencies` of its collection
+  collectionDependencies: Record<string, string>
+}
+
+export const listRoleFolders = (ansibleDir: string): RoleFolder[] =>
+  subfolders(ansibleDir).flatMap((folder): RoleFolder[] => {
+    const collection = readCollection(ansibleDir, folder)
+    if (collection === undefined) {
+      return [
+        { folder, name: folder, collection: null, collectionDependencies: {} },
+      ]
+    }
+    if (collection === null) return []
+    return subfolders(join(ansibleDir, folder, 'roles')).map((role) => ({
+      folder: `${folder}/roles/${role}`,
+      name: `${collection.name}.${role}`,
+      collection: collection.name,
+      collectionDependencies: collection.dependencies,
+    }))
+  })
+
+// What local-env reads of a role's folder that Ansible would run: whether a
+// task uses sudo, and the roles it depends on (meta/main.yml). For the
+// roles of Galaxy collections too, installed by `local-env install`.
+export const readRoleDir = (dir: string) => {
+  const meta = readMeta(dir)
+  return {
+    needsSudo: listFiles(dir).some(
+      (file) =>
+        /\.ya?ml$/.test(file) && BECOME.test(readFileSync(file, 'utf8')),
+    ),
+    dependencies: readDependencies(meta),
+  }
+}
+
+type Meta = {
+  galaxy_info?: { description?: unknown; galaxy_tags?: unknown }
+  dependencies?: unknown
+}
+
+// Galaxy's own fields, so roles stay plain Ansible roles
+const readMeta = (dir: string): Meta => {
+  const parsed = readYaml(join(dir, 'meta/main.yml'))
+  // No meta/main.yml, or not valid YAML: the role still installs
+  return typeof parsed === 'object' && parsed !== null ? parsed : {}
+}
+
+const readDependencies = (meta: Meta) =>
+  (Array.isArray(meta.dependencies) ? meta.dependencies : []).flatMap(
+    (dependency) => {
+      const role =
+        typeof dependency === 'string'
+          ? dependency
+          : (dependency?.role ?? dependency?.name)
+      return typeof role === 'string' ? [role] : []
+    },
+  )
+
+// A JSON of the map, by key: the same map gives the same text
+const sortedJson = (map: Record<string, string>) =>
+  JSON.stringify(Object.entries(map).sort(([a], [b]) => a.localeCompare(b)))
+
+const readRole = (
+  sourcesDir: string,
+  source: string,
+  { folder, name, collection, collectionDependencies }: RoleFolder,
+  provided: Set<string>,
+): Role => {
+  const dir = join(sourcesDir, source, 'ansible', folder)
   const files = listFiles(dir)
   const hasher = new Bun.CryptoHasher('sha256')
   let needsSudo = false
@@ -105,85 +258,80 @@ const readRole = (sourcesDir: string, source: string, name: string): Role => {
       needsSudo = true
     }
   }
+  // A new range of a collection it needs installs it again
+  hasher.update(sortedJson(collectionDependencies))
 
-  // Galaxy's own fields, so roles stay plain Ansible roles
-  let meta: {
-    galaxy_info?: { description?: unknown; galaxy_tags?: unknown }
-    dependencies?: unknown
-  } = {}
-  try {
-    const parsed = Bun.YAML.parse(
-      readFileSync(join(dir, 'meta/main.yml'), 'utf8'),
-    )
-    if (typeof parsed === 'object' && parsed !== null) meta = parsed
-  } catch {
-    // No meta/main.yml, or not valid YAML: the role still installs
-  }
+  const meta = readMeta(dir)
   const info = meta.galaxy_info ?? {}
   const tags = (Array.isArray(info.galaxy_tags) ? info.galaxy_tags : []).filter(
     (tag): tag is string => typeof tag === 'string',
   )
-  const dependencies = Array.isArray(meta.dependencies) ? meta.dependencies : []
+  const settings = readSettings(dir, source)
 
   return {
     id: `${source}/${name}`,
     source,
+    folder,
     name,
+    collection,
+    label: settings.label ?? titleize(basename(folder)),
     description:
       typeof info.description === 'string' ? info.description.trim() : null,
     tags,
     isProfile: tags.includes(PROFILE_TAG),
-    dependencies: dependencies.flatMap((dependency) => {
-      const role =
-        typeof dependency === 'string' ? dependency : dependency?.role
-      return typeof role === 'string' ? [role] : []
-    }),
-    stacks: readStacks(dir, source),
+    dependencies: readDependencies(meta),
+    stacks: settings.stacks,
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
+    // A collection of a source is linked, not installed: ansible-galaxy
+    // would look for it on Galaxy and fail
+    galaxy: Object.fromEntries(
+      Object.entries(collectionDependencies).filter(
+        ([dependency]) => !provided.has(dependency),
+      ),
+    ),
   }
 }
 
-// The roles of every source, by source then name
-export const listRoles = (sourcesDir: string): Role[] =>
-  subfolders(sourcesDir).flatMap((source) =>
-    subfolders(join(sourcesDir, source, 'ansible')).map((name) =>
-      readRole(sourcesDir, source, name),
+// The roles of every source, by source then folder
+export const listRoles = (sourcesDir: string): Role[] => {
+  const sources = subfolders(sourcesDir)
+  const provided = new Set(
+    sources.flatMap((source) =>
+      listCollections(join(sourcesDir, source, 'ansible')).map(
+        ({ name }) => name,
+      ),
     ),
   )
-
-// The playbook's path to a role, from the tools folder
-export const rolePath = (id: string) => {
-  const [source, name] = id.split('/')
-  return `../sources/${source}/ansible/${name}`
+  return sources.flatMap((source) =>
+    listRoleFolders(join(sourcesDir, source, 'ansible')).map((role) =>
+      readRole(sourcesDir, source, role, provided),
+    ),
+  )
 }
 
-// The ids of the roles in the playbook. One that isn't ours (edited by hand)
-// is left out.
+// The ids of the picked roles. One gone from the sources stays, so it can be
+// unpicked; one that is no id (edited by hand) is left out.
 export const readSelection = (toolsDir: string): string[] => {
   try {
-    const plays = Bun.YAML.parse(
-      readFileSync(join(toolsDir, PLAYBOOK_FILE), 'utf8'),
+    const { picked } = JSON.parse(
+      readFileSync(join(toolsDir, PICKED_FILE), 'utf8'),
     )
-    if (!Array.isArray(plays)) return []
-    return plays.flatMap((play) =>
-      Array.isArray(play?.roles)
-        ? play.roles.flatMap((entry: unknown) => {
-            const path =
-              typeof entry === 'string'
-                ? entry
-                : (entry as { role?: unknown } | null)?.role
-            const match = typeof path === 'string' ? ROLE_PATH.exec(path) : null
-            return match ? [`${match[1]}/${match[2]}`] : []
-          })
-        : [],
-    )
+    return Array.isArray(picked)
+      ? [
+          ...new Set(
+            picked.filter(
+              (id): id is string => typeof id === 'string' && ROLE_ID.test(id),
+            ),
+          ),
+        ]
+      : []
   } catch {
     return []
   }
 }
 
-// A playbook that runs these roles, named by path, on this Mac
+// A playbook that runs these roles, by name or path, on this Mac
 export const playbookOf = (paths: string[]) => {
   const roles = paths.map((path) => `    - role: ${path}\n`).join('')
   return [
@@ -196,13 +344,8 @@ export const playbookOf = (paths: string[]) => {
 
 export const writeSelection = (toolsDir: string, ids: string[]) =>
   writeFileSync(
-    join(toolsDir, PLAYBOOK_FILE),
-    [
-      '# The tools picked in the local-env dashboard (Tools), which',
-      '# rewrites this file. `local-env install` runs them, with your',
-      '# profile (profile.json).',
-      playbookOf(ids.map(rolePath)),
-    ].join('\n'),
+    join(toolsDir, PICKED_FILE),
+    `${JSON.stringify({ picked: [...new Set(ids)] }, null, 2)}\n`,
   )
 
 export const readInstalled = (toolsDir: string): Installed => {

@@ -61,8 +61,11 @@ const parse = (line: string): PlaybookEvent | null => {
 const canRedraw = () =>
   process.stdout.isTTY === true && (process.stdout.columns ?? 0) > 0
 
+// labels: the name to show of each role, by its Ansible name (the catalog's
+// labels). A role without one (from Galaxy) shows its Ansible name.
 export const renderPlaybook = async (
   lines: AsyncIterable<string>,
+  labels: ReadonlyMap<string, string> = new Map(),
 ): Promise<PlaybookSummary> => {
   const summary: PlaybookSummary = { ok: 0, changed: 0, skipped: 0, failed: 0 }
   let group: string | null = null
@@ -94,7 +97,7 @@ export const renderPlaybook = async (
       if (!task) continue
       if (role && role !== group) {
         group = role
-        logger.group(role)
+        logger.group(labels.get(role) ?? role)
       }
       if (canRedraw()) {
         progress = spinner({ withGuide: false })

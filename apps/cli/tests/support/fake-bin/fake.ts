@@ -4,8 +4,11 @@
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
@@ -62,11 +65,33 @@ const inputs = Object.fromEntries(
     .filter((arg) => /\.ya?ml$/.test(arg) && existsSync(arg))
     .map((arg) => [arg, readFileSync(arg, 'utf8')]),
 )
+// The collections in the first folder of ANSIBLE_COLLECTIONS_PATH, by
+// <namespace>.<name>: the folders they link to (or are), read now too
+const collectionsDir = join(
+  env.ANSIBLE_COLLECTIONS_PATH?.split(':')[0] ?? '',
+  'ansible_collections',
+)
+const collections = env.ANSIBLE_COLLECTIONS_PATH
+  ? Object.fromEntries(
+      (existsSync(collectionsDir) ? readdirSync(collectionsDir) : []).flatMap(
+        (namespace) =>
+          readdirSync(join(collectionsDir, namespace)).map((name) => {
+            const path = join(collectionsDir, namespace, name)
+            // A link to a source's collection, or one installed there
+            return [
+              `${namespace}.${name}`,
+              lstatSync(path).isSymbolicLink() ? readlinkSync(path) : path,
+            ]
+          }),
+      ),
+    )
+  : {}
 const call: FakeCall = {
   command,
   args,
   env,
   inputs,
+  collections,
   matched: Boolean(rule),
 }
 appendFileSync(join(dir, 'calls.jsonl'), `${JSON.stringify(call)}\n`)

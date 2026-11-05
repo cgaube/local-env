@@ -13,6 +13,7 @@ import { dirname, join } from 'path'
 // the real Docker, Homebrew or sudo.
 export const FAKED_COMMANDS = [
   'ansible-playbook',
+  'ansible-galaxy',
   'brew',
   'curl',
   'dig',
@@ -57,6 +58,8 @@ export type FakeCall = {
   env: Record<string, string>
   // The YAML files among its args, by path, as they were during the call
   inputs: Record<string, string>
+  // Ansible's collections, by name: where each one links
+  collections: Record<string, string>
   // false when no rule answered: the stub failed
   matched: boolean
 }

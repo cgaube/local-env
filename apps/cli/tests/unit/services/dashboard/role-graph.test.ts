@@ -1,4 +1,5 @@
 import {
+  externalRoles,
   type GraphRole,
   includedRoles,
   playbookRoots,
@@ -8,15 +9,60 @@ import {
 
 const role = (
   id: string,
-  { dependencies = [], stacks = [] }: Partial<GraphRole> = {},
-): GraphRole => ({
-  id,
-  name: id.split('/')[1] ?? id,
-  dependencies,
-  stacks,
-})
+  { dependencies = [], stacks = [], galaxy = {} }: Partial<GraphRole> = {},
+): GraphRole => {
+  // <source>/<role>, or <source>/<namespace>.<collection>.<role>
+  const name = id.split('/')[1] ?? id
+  const parts = name.split('.')
+  return {
+    id,
+    name,
+    collection: parts.length === 3 ? parts.slice(0, 2).join('.') : null,
+    label: parts.at(-1) ?? name,
+    dependencies,
+    stacks,
+    galaxy,
+  }
+}
 
 describe('includedRoles', () => {
+  test('finds the roles of collections by their full name, in any source', () => {
+    const roles = [
+      role('acme/acme.profiles.backend', {
+        dependencies: ['acme.tools.git', 'shared.db.postgres'],
+      }),
+      role('acme/acme.tools.git'),
+      role('team/shared.db.postgres'),
+    ]
+
+    expect(
+      Object.fromEntries(includedRoles(roles, ['acme/acme.profiles.backend'])),
+    ).toEqual({
+      'acme/acme.tools.git': ['backend'],
+      'team/shared.db.postgres': ['backend'],
+    })
+  })
+
+  test('finds a role of the same collection by its short name first', () => {
+    const roles = [
+      role('acme/acme.tools.node', { dependencies: ['git'] }),
+      role('acme/acme.tools.git'),
+      role('acme/git'),
+      role('acme/acme.tools.jq', { dependencies: ['curl'] }),
+      role('acme/curl'),
+    ]
+
+    expect([...wantedRoles(roles, ['acme/acme.tools.node'])]).toEqual([
+      'acme/acme.tools.node',
+      'acme/acme.tools.git',
+    ])
+    // Not in its collection: a plain role of that name
+    expect([...wantedRoles(roles, ['acme/acme.tools.jq'])]).toEqual([
+      'acme/acme.tools.jq',
+      'acme/curl',
+    ])
+  })
+
   test('follows a profile that depends on another profile', () => {
     const roles = [
       role('acme/backend', { dependencies: ['base', 'node'] }),
@@ -126,5 +172,53 @@ describe('playbookRoots', () => {
     ]
 
     expect(playbookRoots(roles, ['acme/a', 'acme/b'])).toEqual(['acme/b'])
+  })
+})
+
+describe('externalRoles', () => {
+  test('names the roles no source has: from Galaxy, or missing', () => {
+    const roles = [
+      role('acme/acme.profiles.backend', {
+        dependencies: [
+          'acme.tools.git',
+          'geerlingguy.mac.dock',
+          'geerlingguy.mac.dock',
+          'acme.gone.jq',
+        ],
+        galaxy: { 'geerlingguy.mac': '>=5.0.0' },
+      }),
+      role('acme/acme.tools.git', {
+        // Its collection doesn't ask for geerlingguy.mac
+        dependencies: ['geerlingguy.mac.mas', 'curl'],
+      }),
+    ]
+
+    expect(externalRoles(roles, ['acme/acme.profiles.backend'])).toEqual([
+      {
+        name: 'geerlingguy.mac.dock',
+        collection: 'geerlingguy.mac',
+        kind: 'galaxy',
+        by: 'acme/acme.profiles.backend',
+      },
+      {
+        name: 'acme.gone.jq',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.profiles.backend',
+      },
+      {
+        name: 'geerlingguy.mac.mas',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.tools.git',
+      },
+      // A short name is a role of its own collection
+      {
+        name: 'acme.tools.curl',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.tools.git',
+      },
+    ])
   })
 })

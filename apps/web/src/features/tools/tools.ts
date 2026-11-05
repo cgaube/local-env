@@ -1,4 +1,8 @@
-import { includedRoles, wantedRoles } from '#services/dashboard/role-graph.ts'
+import {
+  includedRoles,
+  titleize,
+  wantedRoles,
+} from '#services/dashboard/role-graph.ts'
 import type { Role, Tools } from '#ui/features/live-data/live-data.ts'
 
 // Where a tool stands on this Mac:
@@ -37,8 +41,6 @@ export const STATUS_LABELS: Record<ToolStatus | 'available', string> = {
 }
 
 export type CatalogRow = Role & {
-  // When `local-env install` last ran it, as an ISO date
-  installedAt: string | null
   picked: boolean
   // The picked roles that include it: its switch stays on
   includedBy: string[]
@@ -71,20 +73,24 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
   return [
     ...tools.roles.map((role) => ({
       ...role,
-      installedAt: tools.installed[role.id]?.installedAt ?? null,
       picked: tools.picked.includes(role.id),
       includedBy: included.get(role.id) ?? [],
-      inProfile: inProfile.has(role.id) ? (profile?.name ?? null) : null,
+      inProfile: inProfile.has(role.id) ? (profile?.label ?? null) : null,
       status: statusOf(tools, wanted, role),
     })),
     ...tools.picked
       .filter((id) => !known.has(id))
       .map((id) => {
+        // Its id: <source>/<name>
         const [source = '', name = id] = id.split('/')
         return {
           id,
           source,
+          folder: name,
           name,
+          collection: null,
+          // The role, without its collection
+          label: titleize(name.split('.').at(-1) ?? name),
           description: null,
           tags: [],
           dependencies: [],
@@ -92,7 +98,7 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
           stacks: [],
           revision: '',
           needsSudo: false,
-          installedAt: tools.installed[id]?.installedAt ?? null,
+          galaxy: {},
           picked: true,
           includedBy: [],
           inProfile: null,
@@ -102,7 +108,15 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
   ]
 }
 
-// Writes the playbook `local-env install` runs (services/dashboard/server.ts)
+// What waits for `local-env install`: wanted and not installed, or changed
+// since. Profiles too: their own tasks run.
+export const waitingTools = (tools: Tools) =>
+  catalogRows(tools).filter(
+    ({ status }) => status === 'to-install' || status === 'update',
+  )
+
+// Saves the picks to picked.json, which `local-env install` reads
+// (services/dashboard/server.ts)
 export const savePickedTools = async (roles: string[]) => {
   const response = await fetch('/api/tools/picked', {
     method: 'PUT',

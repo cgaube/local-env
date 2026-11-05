@@ -25,6 +25,23 @@ const createOutdated = async () => {
   return linked
 }
 
+// A profile whose collection needs geerlingguy.mac from Galaxy
+const GALAXY_FILES = {
+  'ansible/profiles/galaxy.yml': [
+    'namespace: acme',
+    'name: profiles',
+    'dependencies:',
+    '  geerlingguy.mac: ">=5.0.0,<6.0.0"',
+    '',
+  ].join('\n'),
+  'ansible/profiles/roles/backend/meta/main.yml': [
+    'galaxy_info:',
+    '  galaxy_tags: [profile]',
+    'dependencies: [geerlingguy.mac.dock]',
+    '',
+  ].join('\n'),
+}
+
 describe.concurrent('local-env update', () => {
   test('--dry-run lists the changes and touches nothing', async () => {
     const { cli, stack } = await createOutdated()
@@ -94,6 +111,65 @@ describe.concurrent('local-env update', () => {
     expect(stack().content).toBe(MAIL_V1)
     // The images are updated anyway
     expect(cli.dockhand.state.updatedContainers).toEqual(['redis-1'])
+  })
+
+  test('upgrades the Galaxy collections of your tools, without installing them', async () => {
+    const { cli } = await createLinkedStack({ files: GALAXY_FILES })
+    await using _ = cli
+    cli.home.writeJson('volumes/tools/profile.json', {
+      profile: 'acme/acme.profiles.backend',
+    })
+    cli.bin.on('which', ['ansible-galaxy'])
+    cli.bin.on('ansible-galaxy', ['collection', 'install'], {
+      stdout: 'geerlingguy.mac:5.1.0 was installed successfully\n',
+    })
+
+    const result = await cli.run(['update'])
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.bin.calls('ansible-galaxy')[0]?.args).toContain('--upgrade')
+    expect(result.output).toContain('✓ geerlingguy.mac 5.1.0  installed')
+    // In the summary
+    expect(result.output).toContain(
+      'Galaxy collections upgraded: geerlingguy.mac 5.1.0',
+    )
+    expect(result.output.match(/Collections from Galaxy/g)).toHaveLength(1)
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('skips the Galaxy collections with --dry-run', async () => {
+    const { cli } = await createLinkedStack({ files: GALAXY_FILES })
+    await using _ = cli
+    cli.home.writeJson('volumes/tools/profile.json', {
+      profile: 'acme/acme.profiles.backend',
+    })
+
+    const result = await cli.run(['update', '--dry-run'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Collections from Galaxy')
+    expect(cli.bin.calls('ansible-galaxy')).toEqual([])
+  })
+
+  test('goes on when Galaxy is out of reach', async () => {
+    const { cli } = await createLinkedStack({ files: GALAXY_FILES })
+    await using _ = cli
+    cli.home.writeJson('volumes/tools/profile.json', {
+      profile: 'acme/acme.profiles.backend',
+    })
+    cli.bin.on('which', ['ansible-galaxy'])
+    cli.bin.on('ansible-galaxy', ['collection', 'install'], {
+      stderr: 'ERROR! Unknown error when attempting to call Galaxy',
+      exitCode: 1,
+    })
+
+    const result = await cli.run(['update'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain(
+      'Could not install the collections your tools need from Galaxy',
+    )
+    expect(result.output).toContain('Update complete')
   })
 
   test('says when everything is up to date', async () => {

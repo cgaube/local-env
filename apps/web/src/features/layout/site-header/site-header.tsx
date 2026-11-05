@@ -1,7 +1,6 @@
 import { Separator } from '#ui/components/ui/separator'
 import { SidebarTrigger } from '#ui/components/ui/sidebar'
 import { ThemeSwitcher } from '#ui/features/theme/theme-switcher'
-import { InstallButton } from '#ui/features/tools/install-button'
 import { PageBreadcrumb } from '#ui/features/layout/page-breadcrumb'
 
 // sidebar-07: the page's header, lower while the sidebar shows only icons
@@ -16,7 +15,6 @@ export function SiteHeader() {
         />
         <PageBreadcrumb />
         <div className="ml-auto flex items-center gap-2">
-          <InstallButton />
           <ThemeSwitcher />
         </div>
       </div>

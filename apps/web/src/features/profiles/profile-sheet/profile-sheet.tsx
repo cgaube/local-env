@@ -48,7 +48,7 @@ export function ProfileSheet({
           <>
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
-                {profile.name}
+                {profile.label}
                 {profile.current ? <Badge>Your profile</Badge> : null}
               </SheetTitle>
               <SheetDescription>
@@ -67,8 +67,10 @@ export function ProfileSheet({
                   </div>
                 </Section>
               ) : null}
-              <Section title={`Tools (${profile.tools.length})`}>
-                {profile.tools.length > 0 ? (
+              <Section
+                title={`Tools (${profile.tools.length + profile.external.length})`}
+              >
+                {profile.tools.length + profile.external.length > 0 ? (
                   <ul className="flex flex-col gap-2">
                     {profile.tools.map((tool) => {
                       const install = installed[tool.id]
@@ -77,7 +79,7 @@ export function ProfileSheet({
                           key={tool.id}
                           className="flex items-center gap-2 text-sm"
                         >
-                          <span className="font-medium">{tool.name}</span>
+                          <span className="font-medium">{tool.label}</span>
                           {/* Only a tool from another source says which */}
                           {tool.source !== profile.source ? (
                             <span className="text-muted-foreground truncate">
@@ -98,6 +100,23 @@ export function ProfileSheet({
                         </li>
                       )
                     })}
+                    {profile.external.map((role) => (
+                      <li
+                        key={role.name}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <code className="truncate font-mono text-xs">
+                          {role.name}
+                        </code>
+                        <span className="ml-auto shrink-0">
+                          {role.kind === 'galaxy' ? (
+                            <Badge variant="outline">Galaxy</Badge>
+                          ) : (
+                            <Badge variant="warning">Missing</Badge>
+                          )}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 ) : (
                   <p className="text-muted-foreground text-sm">No tools.</p>

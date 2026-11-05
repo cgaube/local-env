@@ -28,6 +28,30 @@ describe('Sidebar profile', () => {
     ).not.toBeInTheDocument()
   })
 
+  test('names a profile of a collection by its label', async () => {
+    const { events } = await renderApp('/')
+    const profile = buildRole({
+      name: 'cgaube.profiles.backend',
+      collection: 'cgaube.profiles',
+      label: 'Backend',
+      isProfile: true,
+    })
+
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [profile],
+          profile: 'acme/cgaube.profiles.backend',
+        }),
+      ),
+    )
+
+    const item = screen.getByRole('link', { name: 'Profile: Backend' })
+    expect(item).toHaveTextContent('Backend')
+    expect(item).not.toHaveTextContent('cgaube.profiles.backend')
+  })
+
   test('shows the profile at the bottom, linked to the Profiles page', async () => {
     const { events } = await renderApp('/')
 

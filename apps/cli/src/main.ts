@@ -4,7 +4,7 @@ import { intro, outro } from '@clack/prompts'
 import { Command } from 'commander'
 import { styleText } from 'node:util'
 import packageJson from '#package.json' with { type: 'json' }
-import { commands } from '#cli/commands/index.js'
+import { commands, hiddenCommands } from '#cli/commands/index.js'
 import { prepareHome } from '#cli/core/home.js'
 import { UPDATE_COMMAND } from '#cli/core/homebrew.js'
 import { findOutdatedServices } from '#cli/core/outdated.js'
@@ -21,12 +21,13 @@ const program = new Command()
   .version(packageJson.version)
 
 for (const command of commands) {
-  program.addCommand(command)
+  program.addCommand(command, { hidden: hiddenCommands.has(command) })
 }
 
 // Titles shown at the top of each command, by command path
 const TITLES: Record<string, string> = {
   setup: 'Set up DNS and HTTPS',
+  ui: 'Every piece of the output',
   start: 'Start local-env',
   stop: 'Stop local-env',
   status: 'Status',

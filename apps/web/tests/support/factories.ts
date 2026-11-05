@@ -41,7 +41,10 @@ export const buildRole = (overrides: Partial<Role> = {}): Role => {
   return {
     id: `${source}/${name}`,
     source,
+    folder: name,
     name,
+    collection: null,
+    label: name,
     description: 'Git, from Homebrew',
     tags: ['vcs'],
     dependencies: [],
@@ -49,6 +52,7 @@ export const buildRole = (overrides: Partial<Role> = {}): Role => {
     stacks: [],
     revision: 'a1b2c3d4e5f6',
     needsSudo: false,
+    galaxy: {},
     ...overrides,
   }
 }

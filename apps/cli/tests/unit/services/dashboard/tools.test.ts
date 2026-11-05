@@ -44,7 +44,10 @@ describe('listRoles', () => {
       {
         id: 'acme/node',
         source: 'acme',
+        folder: 'node',
         name: 'node',
+        collection: null,
+        label: 'Node',
         description: 'Node.js and npm, from Homebrew',
         tags: ['javascript', 'runtime'],
         dependencies: ['homebrew', 'git'],
@@ -52,8 +55,140 @@ describe('listRoles', () => {
         stacks: [],
         revision: expect.stringMatching(/^[0-9a-f]{12}$/),
         needsSudo: false,
+        galaxy: {},
       },
     ])
+  })
+
+  test('reads the roles of a collection, named by its galaxy.yml', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/dev_tools/galaxy.yml',
+      'namespace: acme\nname: dev_tools\nversion: 1.0.0\n',
+    )
+    write(
+      'acme/ansible/dev_tools/meta/runtime.yml',
+      "requires_ansible: '>=2.16'\n",
+    )
+    write('acme/ansible/dev_tools/roles/git_extras/tasks/main.yml', '- ping:\n')
+    write(
+      'acme/ansible/profiles/galaxy.yml',
+      'namespace: acme\nname: profiles\n',
+    )
+    write(
+      'acme/ansible/profiles/roles/backend/meta/main.yml',
+      [
+        'galaxy_info:',
+        '  galaxy_tags: [profile]',
+        'dependencies:',
+        '  - acme.dev_tools.git_extras',
+        '  - name: acme.dev_tools.jq',
+      ].join('\n'),
+    )
+    write(
+      'acme/ansible/profiles/roles/backend/local-env.yml',
+      'label: Backend\nstacks: [mailpit]\n',
+    )
+    // A plain role beside the collections
+    write('acme/ansible/node/tasks/main.yml', '- ping:\n')
+
+    expect(
+      listRoles(sources).map(
+        ({ id, folder, name, collection, label, dependencies, stacks }) => ({
+          id,
+          folder,
+          name,
+          collection,
+          label,
+          dependencies,
+          stacks,
+        }),
+      ),
+    ).toEqual([
+      {
+        id: 'acme/acme.dev_tools.git_extras',
+        folder: 'dev_tools/roles/git_extras',
+        name: 'acme.dev_tools.git_extras',
+        collection: 'acme.dev_tools',
+        label: 'Git Extras',
+        dependencies: [],
+        stacks: [],
+      },
+      {
+        id: 'acme/node',
+        folder: 'node',
+        name: 'node',
+        collection: null,
+        label: 'Node',
+        dependencies: [],
+        stacks: [],
+      },
+      {
+        id: 'acme/acme.profiles.backend',
+        folder: 'profiles/roles/backend',
+        name: 'acme.profiles.backend',
+        collection: 'acme.profiles',
+        label: 'Backend',
+        dependencies: ['acme.dev_tools.git_extras', 'acme.dev_tools.jq'],
+        stacks: ['acme/mailpit'],
+      },
+    ])
+  })
+
+  test('keeps the Galaxy collections a collection needs, not those of a source', () => {
+    const { sources, write } = createVolumes()
+    write('team/ansible/tools/galaxy.yml', 'namespace: team\nname: tools\n')
+    write('team/ansible/tools/roles/git/tasks/main.yml', '- ping:\n')
+    write(
+      'acme/ansible/profiles/galaxy.yml',
+      [
+        'namespace: acme',
+        'name: profiles',
+        'dependencies:',
+        '  team.tools: "*"',
+        '  geerlingguy.mac: ">=5.0.0,<6.0.0"',
+        '  community.general: 8',
+        '  bad: [1, 2]',
+      ].join('\n'),
+    )
+    write('acme/ansible/profiles/roles/backend/tasks/main.yml', '- ping:\n')
+
+    expect(
+      listRoles(sources).map(({ name, galaxy }) => [name, galaxy]),
+    ).toEqual([
+      [
+        'acme.profiles.backend',
+        { 'geerlingguy.mac': '>=5.0.0,<6.0.0', 'community.general': '8' },
+      ],
+      ['team.tools.git', {}],
+    ])
+  })
+
+  test('changes the revision when a range of galaxy.yml changes', () => {
+    const { sources, write } = createVolumes()
+    const galaxy = (range: string) =>
+      write(
+        'acme/ansible/tools/galaxy.yml',
+        `namespace: acme\nname: tools\ndependencies:\n  geerlingguy.mac: "${range}"\n`,
+      )
+    write('acme/ansible/tools/roles/git/tasks/main.yml', '- ping:\n')
+    galaxy('>=5.0.0')
+    const [before] = listRoles(sources)
+
+    galaxy('>=6.0.0')
+    const [after] = listRoles(sources)
+
+    expect(after?.revision).not.toBe(before?.revision)
+  })
+
+  test('leaves out a collection whose galaxy.yml has no valid name', () => {
+    const { sources, write } = createVolumes()
+    write('acme/ansible/tools/galaxy.yml', 'namespace: acme\nname: dev-tools\n')
+    write('acme/ansible/tools/roles/git/tasks/main.yml', '- ping:\n')
+    write('acme/ansible/broken/galaxy.yml', 'namespace: [unclosed\n')
+    write('acme/ansible/broken/roles/git/tasks/main.yml', '- ping:\n')
+
+    expect(listRoles(sources)).toEqual([])
   })
 
   test('is a profile when tagged profile', () => {
@@ -194,56 +329,31 @@ describe('the profile', () => {
 })
 
 describe('the selection', () => {
-  test('is a playbook of the picked roles, read back by id', () => {
+  test('is saved in picked.json, by id', () => {
     const { tools } = createVolumes()
 
-    writeSelection(tools, ['acme/git', 'team/node'])
-
-    expect(readFileSync(join(tools, 'playbook.yml'), 'utf8')).toContain(
-      [
-        '  roles:',
-        '    - role: ../sources/acme/ansible/git',
-        '    - role: ../sources/team/ansible/node',
-      ].join('\n'),
-    )
-    expect(readSelection(tools)).toEqual(['acme/git', 'team/node'])
-  })
-
-  test('is a valid playbook with nothing picked', () => {
-    const { tools } = createVolumes()
-
-    writeSelection(tools, [])
+    writeSelection(tools, ['acme/git', 'team/team.tools.node', 'acme/git'])
 
     expect(
-      Bun.YAML.parse(readFileSync(join(tools, 'playbook.yml'), 'utf8')),
-    ).toEqual([
-      {
-        name: 'local-env tools',
-        hosts: 'localhost',
-        connection: 'local',
-        roles: [],
-      },
-    ])
-    expect(readSelection(tools)).toEqual([])
+      JSON.parse(readFileSync(join(tools, 'picked.json'), 'utf8')),
+    ).toEqual({ picked: ['acme/git', 'team/team.tools.node'] })
+    // A pick gone from the sources stays, to unpick it
+    expect(readSelection(tools)).toEqual(['acme/git', 'team/team.tools.node'])
   })
 
-  test('leaves out roles that are not in a source', () => {
+  test('leaves out what is no id', () => {
     const { tools } = createVolumes()
     writeFileSync(
-      join(tools, 'playbook.yml'),
-      [
-        '- hosts: localhost',
-        '  roles:',
-        '    - ../sources/acme/ansible/git',
-        '    - geerlingguy.docker',
-        '    - role: /etc/roles/evil',
-      ].join('\n'),
+      join(tools, 'picked.json'),
+      JSON.stringify({
+        picked: ['acme/git', '../etc', 'git', 42, null],
+      }),
     )
 
     expect(readSelection(tools)).toEqual(['acme/git'])
   })
 
-  test('is empty without a playbook', () => {
+  test('is empty without a file', () => {
     const { tools } = createVolumes()
 
     expect(readSelection(tools)).toEqual([])

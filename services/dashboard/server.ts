@@ -8,14 +8,15 @@
 //                   and sources on connect, then each of them again when it
 //                   changes (watched files, no polling)
 //   /api/config  -> the domain, for the help section
-//   PUT /api/tools/picked -> the tools picked in the catalog, written as the
-//                   playbook `local-env install` runs (tools.ts)
+//   PUT /api/tools/picked -> the tools picked in the catalog: written to
+//                   picked.json, which `local-env install` reads (tools.ts)
 //   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
 //                   profile.json, which `local-env install` reads
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
   isProfileChoice,
+  listRoleFolders,
   listRoles,
   readDeployedStacks,
   readInstalled,
@@ -87,7 +88,7 @@ const listSources = () =>
         name,
         origin: readOrigin(dir),
         docker: countTemplates(dir),
-        ansible: subfolders(join(dir, 'ansible')).length,
+        ansible: listRoleFolders(join(dir, 'ansible')).length,
       }
     })
 
@@ -105,15 +106,17 @@ const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
   sources: async () => JSON.stringify(listSources()),
-  tools: async () =>
-    JSON.stringify({
-      roles: listRoles(SOURCES_DIR),
+  tools: async () => {
+    const roles = listRoles(SOURCES_DIR)
+    return JSON.stringify({
+      roles,
       picked: readSelection(TOOLS_DIR),
       installed: readInstalled(TOOLS_DIR),
       profile: readProfile(TOOLS_DIR),
       // The stacks `local-env install` deployed for the roles
       stacks: readDeployedStacks(TOOLS_DIR),
-    }),
+    })
+  },
 }
 type Topic = keyof typeof readers
 
@@ -151,7 +154,7 @@ watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
   publish('tools')
 })
-// The playbook and profile.json, written below and by `local-env install`,
+// picked.json and profile.json, written below and by `local-env install`,
 // and installed.json, by `local-env install`
 watch(TOOLS_DIR, () => publish('tools'))
 
@@ -180,8 +183,9 @@ const readPut = async (
 const pickTools = async (request: Request) => {
   const put = await readPut(request)
   if (put instanceof Response) return put
+  const catalog = listRoles(SOURCES_DIR)
   const known = new Set([
-    ...listRoles(SOURCES_DIR).map(({ id }) => id),
+    ...catalog.map(({ id }) => id),
     ...readSelection(TOOLS_DIR),
   ])
   const { roles } = put.body
@@ -191,7 +195,7 @@ const pickTools = async (request: Request) => {
   ) {
     return new Response('Unknown roles', { status: 400 })
   }
-  writeSelection(TOOLS_DIR, [...new Set(roles as string[])])
+  writeSelection(TOOLS_DIR, roles as string[])
   return new Response(null, { status: 204 })
 }
 

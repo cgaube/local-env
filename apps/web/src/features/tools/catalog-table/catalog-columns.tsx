@@ -11,11 +11,6 @@ import { PickContext } from '#ui/features/tools/catalog-table/pick-context.ts'
 
 const column = createColumnHelper<CatalogFeatures, CatalogRow>()
 
-const DATE = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
-
 function PickSwitch({ tool }: { tool: CatalogRow }) {
   const onPick = use(PickContext)
   const included = tool.includedBy.length > 0 || tool.inProfile !== null
@@ -24,7 +19,7 @@ function PickSwitch({ tool }: { tool: CatalogRow }) {
     // it would overflow the table and keep a horizontal scrollbar on
     <div className="flex justify-end px-1.5">
       <Switch
-        aria-label={`Install ${tool.name}`}
+        aria-label={`Install ${tool.label}`}
         // A picked role or the profile includes it: it is installed with them
         checked={tool.picked || included}
         disabled={included}
@@ -37,7 +32,7 @@ function PickSwitch({ tool }: { tool: CatalogRow }) {
 export const catalogColumns = column.columns([
   // Searched by its name, description and tags
   column.accessor(
-    (tool) => [tool.name, tool.description, ...tool.tags].join(' '),
+    (tool) => [tool.label, tool.name, tool.description, ...tool.tags].join(' '),
     {
       id: 'tool',
       enableHiding: false,
@@ -56,7 +51,7 @@ export const catalogColumns = column.columns([
       ),
       cell: ({ row: { original: tool } }) => (
         <div className="flex flex-col gap-1 whitespace-normal">
-          <span className="font-medium">{tool.name}</span>
+          <span className="font-medium">{tool.label}</span>
           {tool.description ? (
             <span className="text-muted-foreground text-xs">
               {tool.description}
@@ -94,6 +89,28 @@ export const catalogColumns = column.columns([
       ),
     },
   ),
+  // The role's Ansible name, as dependencies name it:
+  // <namespace>.<collection>.<role>
+  column.accessor('name', {
+    id: 'role',
+    sortFn: 'text',
+    header: ({ column: header }) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
+        onClick={() => header.toggleSorting()}
+      >
+        Role
+        <ArrowUpDownIcon data-icon="inline-end" />
+      </Button>
+    ),
+    cell: ({ getValue }) => (
+      <code className="text-muted-foreground font-mono text-xs break-all whitespace-normal">
+        {getValue()}
+      </code>
+    ),
+  }),
   column.accessor('source', {
     filterFn: 'oneOf',
     sortFn: 'text',
@@ -119,27 +136,6 @@ export const catalogColumns = column.columns([
     filterFn: 'oneOf',
     cell: ({ row: { original: tool } }) =>
       tool.status ? <ToolStatusBadge status={tool.status} /> : null,
-  }),
-  column.accessor((tool) => tool.installedAt ?? '', {
-    id: 'installed',
-    sortFn: 'text',
-    header: ({ column: header }) => (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2"
-        onClick={() => header.toggleSorting()}
-      >
-        Installed
-        <ArrowUpDownIcon data-icon="inline-end" />
-      </Button>
-    ),
-    cell: ({ row: { original: tool } }) =>
-      tool.installedAt ? (
-        <time dateTime={tool.installedAt} className="text-muted-foreground">
-          {DATE.format(new Date(tool.installedAt))}
-        </time>
-      ) : null,
   }),
   column.display({
     id: 'pick',
