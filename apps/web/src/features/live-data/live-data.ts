@@ -55,6 +55,9 @@ export type Role = {
   // Hash of its files, recorded by each install
   revision: string
   needsSudo: boolean
+  // The Galaxy collections its collection needs (galaxy.yml), by name: their
+  // version ranges. `local-env install` installs them.
+  galaxy: Record<string, string>
 }
 
 export type Tools = {

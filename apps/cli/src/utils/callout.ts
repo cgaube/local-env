@@ -17,6 +17,9 @@ export type CalloutOptions = {
   tinted?: boolean
   // A bar line under the title and after the text. Off: a compact callout.
   padded?: boolean
+  // The last callout of the output: it ends with the bar's corner, in its
+  // color, which closes the frame
+  closing?: boolean
   columns?: number
 }
 
@@ -29,6 +32,8 @@ const LEVELS = {
 } as const
 
 const BAR = '┃'
+// The bar's corner, as thick: closes the frame like clack's └
+const CORNER = '┗'
 // The symbol or bar, then two spaces, as clack's lines
 const INDENT = 3
 
@@ -59,6 +64,7 @@ export const formatCallout = (
   {
     tinted = false,
     padded = true,
+    closing = false,
     columns = process.stdout.columns || 80,
   }: CalloutOptions = {},
 ) => {
@@ -84,5 +90,7 @@ export const formatCallout = (
         ]
       : []),
     ...(padded ? [styleText(color, BAR)] : []),
+    // After the padding: the corner closes the frame
+    ...(closing ? [styleText(color, CORNER)] : []),
   ]
 }

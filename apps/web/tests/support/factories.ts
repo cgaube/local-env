@@ -52,6 +52,7 @@ export const buildRole = (overrides: Partial<Role> = {}): Role => {
     stacks: [],
     revision: 'a1b2c3d4e5f6',
     needsSudo: false,
+    galaxy: {},
     ...overrides,
   }
 }

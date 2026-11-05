@@ -11,11 +11,6 @@ import { PickContext } from '#ui/features/tools/catalog-table/pick-context.ts'
 
 const column = createColumnHelper<CatalogFeatures, CatalogRow>()
 
-const DATE = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
-
 function PickSwitch({ tool }: { tool: CatalogRow }) {
   const onPick = use(PickContext)
   const included = tool.includedBy.length > 0 || tool.inProfile !== null
@@ -94,6 +89,28 @@ export const catalogColumns = column.columns([
       ),
     },
   ),
+  // The role's Ansible name, as dependencies name it:
+  // <namespace>.<collection>.<role>
+  column.accessor('name', {
+    id: 'role',
+    sortFn: 'text',
+    header: ({ column: header }) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
+        onClick={() => header.toggleSorting()}
+      >
+        Role
+        <ArrowUpDownIcon data-icon="inline-end" />
+      </Button>
+    ),
+    cell: ({ getValue }) => (
+      <code className="text-muted-foreground font-mono text-xs break-all whitespace-normal">
+        {getValue()}
+      </code>
+    ),
+  }),
   column.accessor('source', {
     filterFn: 'oneOf',
     sortFn: 'text',
@@ -119,27 +136,6 @@ export const catalogColumns = column.columns([
     filterFn: 'oneOf',
     cell: ({ row: { original: tool } }) =>
       tool.status ? <ToolStatusBadge status={tool.status} /> : null,
-  }),
-  column.accessor((tool) => tool.installedAt ?? '', {
-    id: 'installed',
-    sortFn: 'text',
-    header: ({ column: header }) => (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2"
-        onClick={() => header.toggleSorting()}
-      >
-        Installed
-        <ArrowUpDownIcon data-icon="inline-end" />
-      </Button>
-    ),
-    cell: ({ row: { original: tool } }) =>
-      tool.installedAt ? (
-        <time dateTime={tool.installedAt} className="text-muted-foreground">
-          {DATE.format(new Date(tool.installedAt))}
-        </time>
-      ) : null,
   }),
   column.display({
     id: 'pick',

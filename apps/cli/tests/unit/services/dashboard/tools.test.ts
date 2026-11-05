@@ -55,6 +55,7 @@ describe('listRoles', () => {
         stacks: [],
         revision: expect.stringMatching(/^[0-9a-f]{12}$/),
         needsSudo: false,
+        galaxy: {},
       },
     ])
   })
@@ -132,6 +133,52 @@ describe('listRoles', () => {
         stacks: ['acme/mailpit'],
       },
     ])
+  })
+
+  test('keeps the Galaxy collections a collection needs, not those of a source', () => {
+    const { sources, write } = createVolumes()
+    write('team/ansible/tools/galaxy.yml', 'namespace: team\nname: tools\n')
+    write('team/ansible/tools/roles/git/tasks/main.yml', '- ping:\n')
+    write(
+      'acme/ansible/profiles/galaxy.yml',
+      [
+        'namespace: acme',
+        'name: profiles',
+        'dependencies:',
+        '  team.tools: "*"',
+        '  geerlingguy.mac: ">=5.0.0,<6.0.0"',
+        '  community.general: 8',
+        '  bad: [1, 2]',
+      ].join('\n'),
+    )
+    write('acme/ansible/profiles/roles/backend/tasks/main.yml', '- ping:\n')
+
+    expect(
+      listRoles(sources).map(({ name, galaxy }) => [name, galaxy]),
+    ).toEqual([
+      [
+        'acme.profiles.backend',
+        { 'geerlingguy.mac': '>=5.0.0,<6.0.0', 'community.general': '8' },
+      ],
+      ['team.tools.git', {}],
+    ])
+  })
+
+  test('changes the revision when a range of galaxy.yml changes', () => {
+    const { sources, write } = createVolumes()
+    const galaxy = (range: string) =>
+      write(
+        'acme/ansible/tools/galaxy.yml',
+        `namespace: acme\nname: tools\ndependencies:\n  geerlingguy.mac: "${range}"\n`,
+      )
+    write('acme/ansible/tools/roles/git/tasks/main.yml', '- ping:\n')
+    galaxy('>=5.0.0')
+    const [before] = listRoles(sources)
+
+    galaxy('>=6.0.0')
+    const [after] = listRoles(sources)
+
+    expect(after?.revision).not.toBe(before?.revision)
   })
 
   test('leaves out a collection whose galaxy.yml has no valid name', () => {
@@ -282,84 +329,34 @@ describe('the profile', () => {
 })
 
 describe('the selection', () => {
-  test('is a playbook of the picked roles, read back by id', () => {
-    const { sources, tools, write } = createVolumes()
-    write('acme/ansible/git/tasks/main.yml', '- ping:\n')
-    write('team/ansible/tools/galaxy.yml', 'namespace: team\nname: tools\n')
-    write('team/ansible/tools/roles/node/tasks/main.yml', '- ping:\n')
-    const roles = listRoles(sources)
-
-    writeSelection(tools, roles, ['acme/git', 'team/team.tools.node'])
-
-    expect(readFileSync(join(tools, 'playbook.yml'), 'utf8')).toContain(
-      [
-        '  roles:',
-        '    - role: ../sources/acme/ansible/git',
-        '    - role: ../sources/team/ansible/tools/roles/node',
-      ].join('\n'),
-    )
-    expect(readSelection(tools, roles)).toEqual([
-      'acme/git',
-      'team/team.tools.node',
-    ])
-  })
-
-  test('keeps a pick gone from the sources by its path', () => {
-    const { tools } = createVolumes()
-    writeFileSync(
-      join(tools, 'playbook.yml'),
-      [
-        '- hosts: localhost',
-        '  roles:',
-        '    - ../sources/acme/ansible/tools/roles/git',
-        '    - ../sources/acme/ansible/tools/roles/../../../etc',
-      ].join('\n'),
-    )
-
-    expect(readSelection(tools, [])).toEqual(['acme/tools/roles/git'])
-
-    writeSelection(tools, [], readSelection(tools, []))
-    expect(readSelection(tools, [])).toEqual(['acme/tools/roles/git'])
-  })
-
-  test('is a valid playbook with nothing picked', () => {
+  test('is saved in picked.json, by id', () => {
     const { tools } = createVolumes()
 
-    writeSelection(tools, [], [])
+    writeSelection(tools, ['acme/git', 'team/team.tools.node', 'acme/git'])
 
     expect(
-      Bun.YAML.parse(readFileSync(join(tools, 'playbook.yml'), 'utf8')),
-    ).toEqual([
-      {
-        name: 'local-env tools',
-        hosts: 'localhost',
-        connection: 'local',
-        roles: [],
-      },
-    ])
-    expect(readSelection(tools, [])).toEqual([])
+      JSON.parse(readFileSync(join(tools, 'picked.json'), 'utf8')),
+    ).toEqual({ picked: ['acme/git', 'team/team.tools.node'] })
+    // A pick gone from the sources stays, to unpick it
+    expect(readSelection(tools)).toEqual(['acme/git', 'team/team.tools.node'])
   })
 
-  test('leaves out roles that are not in a source', () => {
+  test('leaves out what is no id', () => {
     const { tools } = createVolumes()
     writeFileSync(
-      join(tools, 'playbook.yml'),
-      [
-        '- hosts: localhost',
-        '  roles:',
-        '    - ../sources/acme/ansible/git',
-        '    - geerlingguy.docker',
-        '    - role: /etc/roles/evil',
-      ].join('\n'),
+      join(tools, 'picked.json'),
+      JSON.stringify({
+        picked: ['acme/git', '../etc', 'git', 42, null],
+      }),
     )
 
-    expect(readSelection(tools, [])).toEqual(['acme/git'])
+    expect(readSelection(tools)).toEqual(['acme/git'])
   })
 
-  test('is empty without a playbook', () => {
+  test('is empty without a file', () => {
     const { tools } = createVolumes()
 
-    expect(readSelection(tools, [])).toEqual([])
+    expect(readSelection(tools)).toEqual([])
     expect(readInstalled(tools)).toEqual({})
   })
 })

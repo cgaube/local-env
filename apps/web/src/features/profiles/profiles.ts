@@ -1,4 +1,9 @@
-import { wantedRoles, wantedStacks } from '#services/dashboard/role-graph.ts'
+import {
+  type ExternalRole,
+  externalRoles,
+  wantedRoles,
+  wantedStacks,
+} from '#services/dashboard/role-graph.ts'
 import type { Role, Tools } from '#ui/features/live-data/live-data.ts'
 
 // A profile and what it brings: the tools of its whole tree (the profiles it
@@ -7,6 +12,9 @@ export type ProfileRow = Role & {
   current: boolean
   // Its tools, at every depth, without the profiles among them
   tools: Role[]
+  // The roles of its tree that no source has: from Galaxy, installed with
+  // it, or missing
+  external: ExternalRole[]
   // The profiles it includes, by name
   includes: string[]
   // Not installed on this Mac yet, or changed since
@@ -29,6 +37,7 @@ export const profileRows = (tools: Tools): ProfileRow[] =>
         ...profile,
         current: tools.profile === profile.id,
         tools: own,
+        external: externalRoles(tools.roles, [profile.id]),
         includes: inTree
           .filter((role) => role.isProfile)
           .map(({ label }) => label),

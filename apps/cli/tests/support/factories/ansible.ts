@@ -2,7 +2,8 @@
 // one event a line, as src/core/playbook-output.ts reads them
 
 export type TaskFixture = {
-  // The role's folder, as the playbook names it by path
+  // The role's folder, as the playbook names a plain role by path, or a
+  // collection's role by its full name
   role: string
   task: string
   result: 'ok' | 'changed' | 'skipped' | 'failed'

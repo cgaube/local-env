@@ -25,20 +25,28 @@ export type GraphRole = {
   dependencies: string[]
   // Stack templates it needs, as <source>/<folder>
   stacks: string[]
+  // The Galaxy collections its collection needs (galaxy.yml), by name: a
+  // dependency in one of them is a Galaxy role, installed by local-env
+  galaxy?: Record<string, string>
+}
+
+// Finds a role's dependency, as Ansible looks: the role's own collection
+// first, then the name as is
+const resolver = (roles: GraphRole[]) => {
+  const byName = Map.groupBy(roles, (role) => role.name)
+  return (role: GraphRole, name: string) =>
+    (role.collection && !name.includes('.')
+      ? byName.get(`${role.collection}.${name}`)
+      : undefined) ??
+    byName.get(name) ??
+    []
 }
 
 // The roles the roots bring with them: their dependencies, and those of their
 // dependencies. By id: the labels of the roots that include it. A root is
 // never included by itself, even through a cycle.
 export const includedRoles = (roles: GraphRole[], roots: string[]) => {
-  const byName = Map.groupBy(roles, (role) => role.name)
-  // As Ansible looks: the role's own collection first, then the name as is
-  const resolve = (role: GraphRole, name: string) =>
-    (role.collection && !name.includes('.')
-      ? byName.get(`${role.collection}.${name}`)
-      : undefined) ??
-    byName.get(name) ??
-    []
+  const resolve = resolver(roles)
   const included = new Map<string, string[]>()
   for (const root of roles.filter((role) => roots.includes(role.id))) {
     const seen = new Set([root.id])
@@ -67,6 +75,49 @@ export const wantedRoles = (roles: GraphRole[], roots: string[]) => {
     ...roots.filter((id) => known.has(id)),
     ...includedRoles(roles, roots).keys(),
   ])
+}
+
+// A dependency of a wanted role that no source has: a role of a Galaxy
+// collection that its collection needs (galaxy.yml), or missing, which
+// Ansible stops on unless it is on the Mac already
+export type ExternalRole = {
+  // <namespace>.<collection>.<role>, or the name as written
+  name: string
+  // <namespace>.<collection>, for a Galaxy role
+  collection: string | null
+  kind: 'galaxy' | 'missing'
+  // The first wanted role that needs it, by id
+  by: string
+}
+
+export const externalRoles = (
+  roles: GraphRole[],
+  roots: string[],
+): ExternalRole[] => {
+  const resolve = resolver(roles)
+  const wanted = wantedRoles(roles, roots)
+  const external = new Map<string, ExternalRole>()
+  for (const role of roles.filter(({ id }) => wanted.has(id))) {
+    for (const dependency of role.dependencies) {
+      if (resolve(role, dependency).length > 0) continue
+      // A short name is a role of its own collection
+      const name =
+        role.collection && !dependency.includes('.')
+          ? `${role.collection}.${dependency}`
+          : dependency
+      if (external.has(name)) continue
+      const parts = name.split('.')
+      const collection = parts.length === 3 ? parts.slice(0, 2).join('.') : null
+      const galaxy = collection !== null && collection in (role.galaxy ?? {})
+      external.set(name, {
+        name,
+        collection: galaxy ? collection : null,
+        kind: galaxy ? 'galaxy' : 'missing',
+        by: role.id,
+      })
+    }
+  }
+  return [...external.values()]
 }
 
 export type WantedStack = {

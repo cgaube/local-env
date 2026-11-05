@@ -18,7 +18,7 @@ export function NavProfile() {
   const { tools } = useLiveData()
   if (!tools?.roles.some((role) => role.isProfile)) return null
   const profile = currentProfile(tools)
-  const label = `Profile: ${profile?.name ?? 'none'}`
+  const label = `Profile: ${profile?.label ?? 'none'}`
 
   return (
     <SidebarMenu>
@@ -36,7 +36,7 @@ export function NavProfile() {
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
             <span className="truncate font-medium">
-              {profile?.name ?? 'No profile'}
+              {profile?.label ?? 'No profile'}
             </span>
             <span className="text-muted-foreground truncate text-xs">
               Profile

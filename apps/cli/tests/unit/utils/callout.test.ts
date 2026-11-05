@@ -25,6 +25,31 @@ describe('formatCallout', () => {
     ).toEqual(['│', '▲  Outdated', '┃  Run `local-env start`.'])
   })
 
+  test('ends with the corner that closes the frame, in its color', () => {
+    const closing = (padded: boolean) =>
+      formatCallout('success', 'Installed 4 tools\n4 unchanged', {
+        closing: true,
+        padded,
+        columns: 80,
+      })
+
+    expect(plain(closing(true))).toEqual([
+      '│',
+      '◆  Installed 4 tools',
+      '┃',
+      '┃  4 unchanged',
+      '┃',
+      '┗',
+    ])
+    expect(plain(closing(false))).toEqual([
+      '│',
+      '◆  Installed 4 tools',
+      '┃  4 unchanged',
+      '┗',
+    ])
+    expect(closing(true).at(-1)).toBe(styleText('green', '┗'))
+  })
+
   test('a title alone has no empty line under it', () => {
     expect(plain(formatCallout('success', 'All set', { columns: 80 }))).toEqual(
       ['│', '◆  All set', '┃'],

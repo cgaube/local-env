@@ -8,8 +8,8 @@
 //                   and sources on connect, then each of them again when it
 //                   changes (watched files, no polling)
 //   /api/config  -> the domain, for the help section
-//   PUT /api/tools/picked -> the tools picked in the catalog, written as the
-//                   playbook `local-env install` runs (tools.ts)
+//   PUT /api/tools/picked -> the tools picked in the catalog: written to
+//                   picked.json, which `local-env install` reads (tools.ts)
 //   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
 //                   profile.json, which `local-env install` reads
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
@@ -110,7 +110,7 @@ const readers = {
     const roles = listRoles(SOURCES_DIR)
     return JSON.stringify({
       roles,
-      picked: readSelection(TOOLS_DIR, roles),
+      picked: readSelection(TOOLS_DIR),
       installed: readInstalled(TOOLS_DIR),
       profile: readProfile(TOOLS_DIR),
       // The stacks `local-env install` deployed for the roles
@@ -154,7 +154,7 @@ watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
   publish('tools')
 })
-// The playbook and profile.json, written below and by `local-env install`,
+// picked.json and profile.json, written below and by `local-env install`,
 // and installed.json, by `local-env install`
 watch(TOOLS_DIR, () => publish('tools'))
 
@@ -186,7 +186,7 @@ const pickTools = async (request: Request) => {
   const catalog = listRoles(SOURCES_DIR)
   const known = new Set([
     ...catalog.map(({ id }) => id),
-    ...readSelection(TOOLS_DIR, catalog),
+    ...readSelection(TOOLS_DIR),
   ])
   const { roles } = put.body
   if (
@@ -195,7 +195,7 @@ const pickTools = async (request: Request) => {
   ) {
     return new Response('Unknown roles', { status: 400 })
   }
-  writeSelection(TOOLS_DIR, catalog, [...new Set(roles as string[])])
+  writeSelection(TOOLS_DIR, roles as string[])
   return new Response(null, { status: 204 })
 }
 

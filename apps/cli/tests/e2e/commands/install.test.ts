@@ -50,6 +50,42 @@ const sourceWithProfiles = (cli: Cli) =>
       'galaxy_info:\n  galaxy_tags: [profile]\ndependencies: [node]\n',
   })
 
+// The backend profile of a collection that needs geerlingguy.mac from
+// Galaxy, and acme.tools, which the source has
+const sourceWithGalaxy = async (cli: Cli) => {
+  const acme = cli.createSource('acme')
+  acme.commit({
+    'ansible/tools/galaxy.yml': 'namespace: acme\nname: tools\n',
+    'ansible/tools/roles/git/tasks/main.yml': '- ping:\n',
+    'ansible/profiles/galaxy.yml': [
+      'namespace: acme',
+      'name: profiles',
+      'dependencies:',
+      '  acme.tools: "*"',
+      '  geerlingguy.mac: ">=5.0.0,<6.0.0"',
+      '  community.general: ">=8.0.0"',
+      '',
+    ].join('\n'),
+    'ansible/profiles/roles/backend/meta/main.yml': [
+      'galaxy_info:',
+      '  galaxy_tags: [profile]',
+      'dependencies:',
+      '  - acme.tools.git',
+      '  - geerlingguy.mac.dock',
+      '',
+    ].join('\n'),
+  })
+  await cli.run(['sources', 'add', acme.dir])
+  return acme
+}
+
+// The requirements file of the last ansible-galaxy call
+const requirementsSent = (cli: Cli) => {
+  const call = cli.bin.calls('ansible-galaxy').at(-1)
+  const file = call?.args[call.args.indexOf('-r') + 1] ?? ''
+  return Bun.YAML.parse(call?.inputs[file] ?? 'null')
+}
+
 const MAIL = [
   'name: mail',
   'services:',
@@ -125,7 +161,137 @@ describe.concurrent('local-env install', () => {
     )
     // Its events, drawn by local-env
     expect(run?.env.ANSIBLE_STDOUT_CALLBACK).toBe('ansible.posix.jsonl')
+    // Nothing to install from Galaxy
+    expect(cli.bin.calls('ansible-galaxy')).toEqual([])
   })
+
+  test('installs the Galaxy collections a profile needs, then runs it', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithGalaxy(cli)
+    cli.bin.on('ansible-galaxy', ['collection', 'install'], {
+      stdout: [
+        'geerlingguy.mac:5.0.0 was installed successfully',
+        "'community.general:13.2.0' is already installed, skipping.",
+        '',
+      ].join('\n'),
+    })
+
+    // The user's own collections stay out
+    const result = await cli.run(['install', 'backend'], {
+      env: { ANSIBLE_COLLECTIONS_PATH: '/Users/someone/.ansible/collections' },
+    })
+
+    expect(result.exitCode).toBe(0)
+    // A group, then a line per collection, like the playbook's tasks
+    expect(result.output).toContain('Collections from Galaxy')
+    expect(result.output).toContain('✓ geerlingguy.mac 5.0.0  installed')
+    expect(result.output).toContain(
+      '✓ community.general 13.2.0  already installed',
+    )
+    const [galaxy] = cli.bin.calls('ansible-galaxy')
+    expect(galaxy?.args.slice(0, 2)).toEqual(['collection', 'install'])
+    expect(galaxy?.args).not.toContain('--upgrade')
+    // One file for all: acme.tools is linked from the source, not installed
+    expect(requirementsSent(cli)).toEqual({
+      collections: [
+        { name: 'geerlingguy.mac', version: '>=5.0.0,<6.0.0' },
+        { name: 'community.general', version: '>=8.0.0' },
+      ],
+    })
+    // Into a lasting folder, local-env's only one: never the user's own
+    const collections = cli.home.path('volumes/tools/collections')
+    expect(galaxy?.env.ANSIBLE_COLLECTIONS_PATH).toBe(collections)
+    const run = cli.bin.calls('ansible-playbook').at(-1)
+    const [links, ...rest] = run?.env.ANSIBLE_COLLECTIONS_PATH?.split(':') ?? []
+    expect(links).toMatch(/local-env-install-[^/]+\/collections$/)
+    expect(rest).toEqual([collections])
+    expect(rolesRun(cli)).toEqual(['acme.profiles.backend'])
+  })
+
+  test('titles each role by its label, a Galaxy role by its name', async () => {
+    await using cli = await createInstallCli()
+    const acme = await sourceWithGalaxy(cli)
+    acme.commit({
+      'ansible/tools/roles/git/local-env.yml': 'label: Git and friends\n',
+    })
+    await cli.run(['sources', 'sync', '--yes'])
+    cli.bin.on('ansible-galaxy', ['collection', 'install'])
+    cli.bin.on('ansible-playbook', [], {
+      stdout: playbookEvents([
+        { role: 'acme.tools.git', task: 'Install git', result: 'ok' },
+        {
+          role: 'geerlingguy.mac.dock',
+          task: 'Install dockutil.',
+          result: 'ok',
+        },
+      ]),
+    })
+
+    const result = await cli.run(['install', 'backend'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('◇  Git and friends')
+    expect(result.output).not.toContain('◇  acme.tools.git')
+    expect(result.output).toContain('◇  geerlingguy.mac.dock')
+  })
+
+  test('stops before the playbook when Galaxy fails, and says what asked', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithGalaxy(cli)
+    cli.bin.on('ansible-galaxy', ['collection', 'install'], {
+      stderr: 'ERROR! Unknown error when attempting to call Galaxy',
+      exitCode: 1,
+    })
+
+    const result = await cli.run(['install', 'backend'])
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Could not install the collections your tools need from Galaxy',
+    )
+    expect(result.output).toContain(
+      'geerlingguy.mac >=5.0.0,<6.0.0 (acme/ansible/profiles/galaxy.yml)',
+    )
+    // ansible-galaxy's own words
+    expect(result.output).toContain('Unknown error when attempting to call')
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test.skipIf(COMPILED)(
+    'asks for the sudo password when an installed Galaxy role needs it',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithGalaxy(cli)
+      cli.bin.on('ansible-galaxy', ['collection', 'install'])
+      // Installed by an earlier run: dock depends on homebrew, which uses
+      // sudo
+      const mac =
+        'volumes/tools/collections/ansible_collections/geerlingguy/mac'
+      cli.home.write(
+        `${mac}/roles/dock/meta/main.yml`,
+        'dependencies: [homebrew]\n',
+      )
+      cli.home.write(`${mac}/roles/dock/tasks/main.yml`, '- ping:\n')
+      cli.home.write(
+        `${mac}/roles/homebrew/tasks/main.yml`,
+        '- name: Prepare\n  become: true\n  ping:\n',
+      )
+
+      const result = await cli.run(['install', 'backend'], {
+        answers: [
+          {
+            ask: 'Your password, for sudo (geerlingguy.mac.homebrew)',
+            answer: 'secret',
+          },
+        ],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(
+        cli.bin.calls('ansible-playbook')[0]?.env.ANSIBLE_BECOME_PASSWORD_FILE,
+      ).toBeDefined()
+    },
+  )
 
   test("shows Ansible's own output with --verbose", async () => {
     await using cli = await createInstallCli()
@@ -312,11 +478,12 @@ describe.concurrent('local-env install', () => {
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    // Last, where it is seen
+    // At the end, where it is seen, just before the summary
     expect(
       result.output.indexOf('No longer wanted, still on this Mac'),
-    ).toBeGreaterThan(result.output.indexOf('Installed 1 tool'))
-    expect(result.output).toContain('┃  node')
+    ).toBeLessThan(result.output.indexOf('Installed 1 tool'))
+    expect(result.output).not.toContain('Done')
+    expect(result.output).toContain('┃  Node')
     expect(
       Object.keys(cli.home.readJson('volumes/tools/installed.json') as object),
     ).toEqual(['acme/git'])
@@ -324,7 +491,6 @@ describe.concurrent('local-env install', () => {
 
   test('forgets them when nothing is picked any more', async () => {
     await using cli = await createInstallCli()
-    cli.bin.on('open', [])
     await sourceWithRoles(cli, ['hello'])
     cli.home.seedPickedTools([])
     cli.home.writeJson('volumes/tools/installed.json', {
@@ -336,23 +502,58 @@ describe.concurrent('local-env install', () => {
 
     const result = await cli.run(['install'])
 
-    expect(result.output).toContain('┃  hello')
+    expect(result.output).toContain('┃  Hello')
     expect(cli.home.readJson('volumes/tools/installed.json')).toEqual({})
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 
-  test('opens the catalog when nothing is picked', async () => {
+  test('says where to pick tools when nothing is picked', async () => {
     await using cli = await createInstallCli()
-    cli.bin.on('open', [])
 
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    const catalog = `https://local-env.${TEST_DOMAIN}/tools`
-    expect(result.output).toContain(`No tools picked yet`)
-    expect(cli.bin.calls('open')[0]?.args).toEqual([catalog])
+    expect(result.output).toContain(
+      `Nothing to install. Pick tools in the dashboard, then run \`local-env install\`: https://local-env.${TEST_DOMAIN}/tools`,
+    )
+    // The browser stays closed: a call to open would fail here
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
+
+  test.skipIf(COMPILED)(
+    'asks for a profile when nothing is picked, then saves and installs it',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithProfiles(cli)
+
+      const result = await cli.run(['install'], {
+        answers: [{ ask: 'Pick your profile', answer: 'acme/backend' }],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('Saved Backend as your profile')
+      expect(rolesRun(cli)).toEqual(['acme/backend'])
+      expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+        profile: 'acme/backend',
+      })
+    },
+  )
+
+  test.skipIf(COMPILED)(
+    'installs nothing when no profile is picked in the select',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithProfiles(cli)
+
+      const result = await cli.run(['install'], {
+        answers: [{ ask: 'Pick your profile', answer: '' }],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('Nothing to install.')
+      expect(cli.bin.calls('ansible-playbook')).toEqual([])
+    },
+  )
 
   test('unpicks the tools that left their source, and installs the rest', async () => {
     await using cli = await createInstallCli()
@@ -365,20 +566,21 @@ describe.concurrent('local-env install', () => {
     expect(result.output).toContain(
       'acme/node is no longer in your sources: unpicked.',
     )
-    expect(cli.home.read('volumes/tools/playbook.yml')).not.toContain('node')
+    expect(cli.home.readJson('volumes/tools/picked.json')).toEqual({
+      picked: ['acme/git'],
+    })
     expect(cli.bin.calls('ansible-playbook')).toHaveLength(1)
     expect(result.output).toContain('Installed 1 tool')
   })
 
   test('only unpicks when every picked tool left', async () => {
     await using cli = await createInstallCli()
-    cli.bin.on('open', [])
     cli.home.seedPickedTools(['acme/node'])
 
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('No tools picked yet')
+    expect(result.output).toContain('Nothing to install.')
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 
@@ -390,7 +592,7 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('Installed the Backend profile')
-    expect(result.output).toContain('Profile: Backend, now yours')
+    expect(result.output).toContain('Saved Backend as your profile')
     // Not its tools: a profile can have hundreds
     expect(result.output).not.toContain('tools: git')
     expect(rolesRun(cli)).toEqual(['acme/backend'])
@@ -417,12 +619,18 @@ describe.concurrent('local-env install', () => {
     })
     await cli.run(['sources', 'add', acme.dir])
 
-    // By its label, its short name or its full name
-    for (const name of ['Backend', 'backend', 'acme.profiles.backend']) {
+    // By its short name or its full name
+    for (const name of ['backend', 'acme.profiles.backend']) {
       const result = await cli.run(['install', name])
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Profile: Backend')
     }
+    // Not by its label, which is for reading
+    const byLabel = await cli.run(['install', 'Backend'])
+    expect(byLabel.exitCode).toBe(1)
+    expect(byLabel.output).toContain(
+      'No profile named Backend. Profiles: backend.',
+    )
 
     const run = cli.bin.calls('ansible-playbook').at(-1)
     expect(rolesRun(cli)).toEqual(['acme.profiles.backend'])
@@ -498,8 +706,10 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(rolesRun(cli)).toEqual(['acme/base'])
-    expect(result.output).toContain('Profile: Base, this time only')
-    expect(result.output).toContain('Your profile stays Frontend.')
+    expect(result.output).toContain('Profile: Base')
+    expect(result.output).toContain(
+      'This run only: your profile stays Frontend.',
+    )
     expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
       profile: 'acme/frontend',
     })
@@ -508,6 +718,77 @@ describe.concurrent('local-env install', () => {
     expect(
       Object.keys(cli.home.readJson('volumes/tools/installed.json') as object),
     ).toEqual(['acme/frontend', 'acme/node', 'acme/base', 'acme/git'])
+  })
+
+  test.skipIf(COMPILED)('asks before it switches your profile', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithProfiles(cli)
+    cli.home.writeJson('volumes/tools/profile.json', {
+      profile: 'acme/backend',
+    })
+
+    const result = await cli.run(['install', 'frontend'], {
+      answers: [
+        { ask: 'Switch your profile from Backend to Frontend?', answer: true },
+      ],
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Saved Frontend as your profile')
+    expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+      profile: 'acme/frontend',
+    })
+    expect(rolesRun(cli)).toEqual(['acme/frontend'])
+  })
+
+  test.skipIf(COMPILED)(
+    'changes and installs nothing when you keep your profile',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithProfiles(cli)
+      cli.home.writeJson('volumes/tools/profile.json', {
+        profile: 'acme/backend',
+      })
+
+      const result = await cli.run(['install', 'frontend'], {
+        answers: [
+          {
+            ask: 'Switch your profile from Backend to Frontend?',
+            answer: false,
+          },
+        ],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain(
+        'Your profile stays Backend. To install Frontend once, add --no-save.',
+      )
+      expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+        profile: 'acme/backend',
+      })
+      expect(cli.bin.calls('ansible-playbook')).toEqual([])
+    },
+  )
+
+  test('does not switch your profile without a terminal, unless --yes', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithProfiles(cli)
+    cli.home.writeJson('volumes/tools/profile.json', {
+      profile: 'acme/backend',
+    })
+
+    const result = await cli.run(['install', 'frontend'], {
+      env: { FAKE_PROMPTS_NO_TTY: '1' },
+    })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Switching your profile from Backend to Frontend needs a confirmation: run this in a terminal, or add --yes.',
+    )
+    expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+      profile: 'acme/backend',
+    })
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 
   test('forgets the roles of the profile it replaces', async () => {
@@ -524,10 +805,14 @@ describe.concurrent('local-env install', () => {
       'acme/node': { revision: 'old', installedAt },
     })
 
-    const result = await cli.run(['install', 'frontend'])
+    const result = await cli.run(['install', 'frontend', '--yes'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('┃  backend, base, git')
+    // Its tools, not the profiles: switching is no news
+    expect(result.output).toContain('┃  Git\n')
+    expect(result.output).not.toMatch(
+      /┃ {2}.*Backend.*\n┃ {2}local-env doesn't uninstall/,
+    )
     expect(
       Object.keys(cli.home.readJson('volumes/tools/installed.json') as object),
     ).toEqual(['acme/node', 'acme/frontend'])
@@ -551,7 +836,30 @@ describe.concurrent('local-env install', () => {
     expect(cli.home.exists('volumes/tools/profile.json')).toBe(false)
   })
 
-  test('asks for the source of a profile two sources have', async () => {
+  test('asks for the full name of a profile two collections have', async () => {
+    await using cli = await createInstallCli()
+    const acme = cli.createSource('acme')
+    const profile = 'galaxy_info:\n  galaxy_tags: [profile]\n'
+    acme.commit({
+      'ansible/profiles/galaxy.yml': 'namespace: acme\nname: profiles\n',
+      'ansible/profiles/roles/backend/meta/main.yml': profile,
+      'ansible/team/galaxy.yml': 'namespace: team\nname: profiles\n',
+      'ansible/team/roles/backend/meta/main.yml': profile,
+    })
+    await cli.run(['sources', 'add', acme.dir])
+
+    const ambiguous = await cli.run(['install', 'backend'])
+    expect(ambiguous.exitCode).toBe(1)
+    expect(ambiguous.output).toContain(
+      'Several profiles are named backend: name one of acme.profiles.backend, team.profiles.backend.',
+    )
+
+    const named = await cli.run(['install', 'team.profiles.backend'])
+    expect(named.exitCode).toBe(0)
+    expect(rolesRun(cli)).toEqual(['team.profiles.backend'])
+  })
+
+  test('asks for the source of a plain profile two sources have', async () => {
     await using cli = await createInstallCli()
     await sourceWithProfiles(cli)
     const team = cli.createSource('team', { roles: ['backend'] })
@@ -570,32 +878,45 @@ describe.concurrent('local-env install', () => {
     expect(rolesRun(cli)).toEqual(['team/backend'])
   })
 
-  test('drops a saved profile that left the sources', async () => {
+  test.skipIf(COMPILED)(
+    'drops a saved profile that left the sources, and asks for another',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithProfiles(cli)
+      cli.home.writeJson('volumes/tools/profile.json', {
+        profile: 'acme/mobile',
+      })
+
+      const result = await cli.run(['install'], {
+        answers: [{ ask: 'Pick your profile', answer: 'acme/frontend' }],
+      })
+
+      expect(result.output).toContain(
+        'Your profile, acme/mobile, is no longer in your sources',
+      )
+      expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+        profile: 'acme/frontend',
+      })
+      expect(rolesRun(cli)).toEqual(['acme/frontend'])
+    },
+  )
+
+  test('names the profiles when nothing is picked, without a terminal', async () => {
     await using cli = await createInstallCli()
-    cli.bin.on('open', [])
-    await sourceWithProfiles(cli)
-    cli.home.writeJson('volumes/tools/profile.json', { profile: 'acme/mobile' })
-
-    const result = await cli.run(['install'])
-
-    expect(result.output).toContain(
-      'Your profile, acme/mobile, is no longer in your sources',
-    )
-    expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
-      profile: null,
+    const acme = await sourceWithProfiles(cli)
+    acme.commit({
+      'ansible/frontend/local-env.yml': 'label: Frontend with AWS tools\n',
     })
-  })
+    await cli.run(['sources', 'sync', '--yes'])
 
-  test('names the profiles when nothing is picked', async () => {
-    await using cli = await createInstallCli()
-    cli.bin.on('open', [])
-    await sourceWithProfiles(cli)
-
-    const result = await cli.run(['install'])
+    const result = await cli.run(['install'], {
+      env: { FAKE_PROMPTS_NO_TTY: '1' },
+    })
 
     expect(result.exitCode).toBe(0)
+    // The name to type, and the label when it says more
     expect(result.output).toContain(
-      'Install a profile with `local-env install <profile>` (backend, base, frontend)',
+      'Install a profile with `local-env install <profile>` (backend, base, frontend (Frontend with AWS tools))',
     )
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })

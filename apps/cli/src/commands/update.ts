@@ -5,6 +5,8 @@ import { readConfig } from '#cli/core/config.js'
 import { ensureRuntimeDirs } from '#cli/core/home.js'
 import { updateSelf } from '#cli/core/self-update.js'
 import { pullSources } from '#cli/sources/sources.js'
+import { closeFrameWithCallout } from '#cli/utils/logger.js'
+import { upgradeGalaxyCollections } from '#cli/core/tools.js'
 import {
   runCompose,
   execDocker,
@@ -80,12 +82,17 @@ export const updateCommand = new Command('update')
         const reclaimed = /Total reclaimed space: (.+)/.exec(stdout ?? '')?.[1]
         logger.success(`Pruned old images (${reclaimed ?? '0B'} reclaimed)`)
       }
+      // After the pull: the ranges of galaxy.yml are the sources' latest
+      summary.push(...(await upgradeGalaxyCollections(options)))
 
-      logger.box(
+      // Last, in place of "Done": green, its lines dimmed; blue for a dry run
+      closeFrameWithCallout(
+        options.dryRun ? 'info' : 'success',
         [
           options.dryRun ? 'Dry run: nothing was changed' : 'Update complete',
           ...summary,
         ].join('\n'),
+        { tinted: true },
       )
     } catch (error) {
       logger.error('Update failed:', error)

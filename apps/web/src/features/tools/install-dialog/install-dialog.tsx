@@ -1,5 +1,3 @@
-import { DownloadIcon } from 'lucide-react'
-import { Badge } from '#ui/components/ui/badge'
 import { Button } from '#ui/components/ui/button'
 import {
   Dialog,
@@ -9,17 +7,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '#ui/components/ui/dialog'
 import { CodeSnippet } from '#ui/features/copy/code-snippet'
-import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { plural } from '#ui/lib/plural.ts'
 import { ToolStatusBadge } from '#ui/features/tools/tool-status-badge'
-import {
-  type CatalogRow,
-  catalogRows,
-  currentProfile,
-} from '#ui/features/tools/tools.ts'
+import type { CatalogRow } from '#ui/features/tools/tools.ts'
 
 function ToolList({ title, tools }: { title: string; tools: CatalogRow[] }) {
   if (tools.length === 0) return null
@@ -41,38 +33,29 @@ function ToolList({ title, tools }: { title: string; tools: CatalogRow[] }) {
   )
 }
 
-// In the header while tools wait for `local-env install`. The dashboard can't
-// run anything on the Mac: the dialog gives the command to run. A profile is
-// a set of tools, not one: its tools are listed under its name.
-export function InstallButton() {
-  const { tools } = useLiveData()
-  const waiting = tools
-    ? catalogRows(tools).filter(
-        ({ status }) => status === 'to-install' || status === 'update',
-      )
-    : []
-  const pending = waiting.filter((tool) => !tool.isProfile)
-  if (pending.length === 0) return null
-  // Everything that runs, the profile's own tasks included
-  const sudo = waiting.filter((tool) => tool.needsSudo)
-  const profile = tools ? currentProfile(tools) : null
+// What waits for `local-env install`, opened from the install toast. The
+// dashboard can't run anything on the Mac: it gives the command to run. A
+// profile is a set of tools, not one: its tools are listed under its name.
+export function InstallDialog({
+  open,
+  onOpenChange,
+  pending,
+  sudo,
+  profile,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  // The tools, without the profiles
+  pending: CatalogRow[]
+  // The labels of what runs with sudo, the profile's own tasks included
+  sudo: string[]
+  // Only its name is shown
+  profile: { label: string } | null
+}) {
   const inProfile = pending.filter((tool) => tool.inProfile !== null)
   const picked = pending.filter((tool) => tool.inProfile === null)
-
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button
-            size="sm"
-            aria-label={`Install ${plural(pending.length, 'tool')}`}
-          />
-        }
-      >
-        <DownloadIcon data-icon="inline-start" />
-        Install
-        <Badge variant="secondary">{pending.length}</Badge>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Install {plural(pending.length, 'tool')}</DialogTitle>
@@ -90,8 +73,7 @@ export function InstallButton() {
         <CodeSnippet code="local-env install" />
         {sudo.length > 0 ? (
           <p className="text-muted-foreground text-sm">
-            It asks for your password:{' '}
-            {sudo.map(({ label }) => label).join(', ')}{' '}
+            It asks for your password: {sudo.join(', ')}{' '}
             {sudo.length === 1 ? 'needs' : 'need'} sudo.
           </p>
         ) : null}

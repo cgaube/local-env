@@ -309,10 +309,28 @@ dependencies: []
   (`acme.dev_tools.git`). A role of the same collection can also be named by its
   short name (`git`). A role made of other roles can stand for a whole setup (a
   backend engineer's tools).
+- A role can also depend on a role of a Galaxy collection
+  (`geerlingguy.mac.dock`). Its collection then lists that collection in the
+  `dependencies` of its `galaxy.yml`, with a version range:
+
+  ```yaml
+  # ansible/profiles/galaxy.yml
+  namespace: acme
+  name: profiles
+  dependencies:
+    geerlingguy.mac: '>=5.0.0,<6.0.0'
+  ```
+
+  `local-env install` installs the Galaxy collections of the roles it runs
+  before the playbook, into `volumes/tools/collections/` in the home folder. It
+  downloads each collection once: `local-env update` gets the latest version
+  that the ranges allow, which the next `local-env install` applies. The
+  dashboard lists a Galaxy role in the profile's details with a **Galaxy**
+  badge, and a role that no source and no `galaxy.yml` has as **Missing**.
+
 - Don't list the collections of your sources in the `dependencies` of
-  `galaxy.yml`: `ansible-galaxy` looks for them on Galaxy and fails. local-env
-  doesn't install the collections of `galaxy.yml` either: the ones of the
-  `ansible` package (`community.general`) are there already.
+  `galaxy.yml`. local-env leaves them out, but `ansible-galaxy` outside
+  local-env looks for them on Galaxy and fails. Role dependencies are enough.
 - When a role's files change, the dashboard shows its tool as **Update
   available** until the next `local-env install`.
 - Unpicking a tool doesn't uninstall it: local-env only adds. The next
@@ -340,15 +358,16 @@ dependencies:
 
 - People pick their profile on the dashboard's Profiles page, or with
   `local-env install backend`, which saves it. The command takes the role's
-  short name (`backend`), its full name (`acme.profiles.backend`) or its label
-  (`Backend`). The page lists every profile with its tools and stacks, and the
-  sidebar shows the current one. Later, `local-env install` installs it again
-  with the tools they picked. `local-env install backend --no-save` installs it
-  once.
+  short name (`backend`) or its full name (`acme.profiles.backend`), not its
+  label: a label is for reading, and can be a sentence. The page lists every
+  profile with its tools and stacks, and the sidebar shows the current one.
+  Later, `local-env install` installs it again with the tools they picked.
+  `local-env install backend --no-save` installs it once.
 - The roles of the profile are locked on in the catalog. Profiles are not rows
   of the catalog.
-- When two sources have a profile with the same name, people type
-  `local-env install <source>/backend`.
+- When two collections have a profile with the same short name, people type its
+  full name: `local-env install acme.profiles.backend`. For plain roles of the
+  same name in two sources, they type `local-env install <source>/backend`.
 - A profile can have tasks of its own. Most only have dependencies.
 
 ### The name to show, and the stacks a tool needs

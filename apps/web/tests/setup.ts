@@ -29,3 +29,7 @@ globalThis.ResizeObserver = class {
   disconnect() {}
 }
 Element.prototype.scrollIntoView = () => {}
+
+// A toast starts its swipe on a click: it captures the pointer
+Element.prototype.setPointerCapture = () => {}
+Element.prototype.releasePointerCapture = () => {}

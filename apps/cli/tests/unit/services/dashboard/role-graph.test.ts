@@ -1,4 +1,5 @@
 import {
+  externalRoles,
   type GraphRole,
   includedRoles,
   playbookRoots,
@@ -8,7 +9,7 @@ import {
 
 const role = (
   id: string,
-  { dependencies = [], stacks = [] }: Partial<GraphRole> = {},
+  { dependencies = [], stacks = [], galaxy = {} }: Partial<GraphRole> = {},
 ): GraphRole => {
   // <source>/<role>, or <source>/<namespace>.<collection>.<role>
   const name = id.split('/')[1] ?? id
@@ -20,6 +21,7 @@ const role = (
     label: parts.at(-1) ?? name,
     dependencies,
     stacks,
+    galaxy,
   }
 }
 
@@ -170,5 +172,53 @@ describe('playbookRoots', () => {
     ]
 
     expect(playbookRoots(roles, ['acme/a', 'acme/b'])).toEqual(['acme/b'])
+  })
+})
+
+describe('externalRoles', () => {
+  test('names the roles no source has: from Galaxy, or missing', () => {
+    const roles = [
+      role('acme/acme.profiles.backend', {
+        dependencies: [
+          'acme.tools.git',
+          'geerlingguy.mac.dock',
+          'geerlingguy.mac.dock',
+          'acme.gone.jq',
+        ],
+        galaxy: { 'geerlingguy.mac': '>=5.0.0' },
+      }),
+      role('acme/acme.tools.git', {
+        // Its collection doesn't ask for geerlingguy.mac
+        dependencies: ['geerlingguy.mac.mas', 'curl'],
+      }),
+    ]
+
+    expect(externalRoles(roles, ['acme/acme.profiles.backend'])).toEqual([
+      {
+        name: 'geerlingguy.mac.dock',
+        collection: 'geerlingguy.mac',
+        kind: 'galaxy',
+        by: 'acme/acme.profiles.backend',
+      },
+      {
+        name: 'acme.gone.jq',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.profiles.backend',
+      },
+      {
+        name: 'geerlingguy.mac.mas',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.tools.git',
+      },
+      // A short name is a role of its own collection
+      {
+        name: 'acme.tools.curl',
+        collection: null,
+        kind: 'missing',
+        by: 'acme/acme.tools.git',
+      },
+    ])
   })
 })

@@ -8,6 +8,7 @@ import { startCommand } from '#cli/commands/start.js'
 import { statusCommand } from '#cli/commands/status.js'
 import { stopCommand } from '#cli/commands/stop.js'
 import { sourcesCommand } from '#cli/commands/sources.js'
+import { uiCommand } from '#cli/commands/ui.js'
 import { updateCommand } from '#cli/commands/update.js'
 
 export const commands = [
@@ -22,4 +23,8 @@ export const commands = [
   proxyCommand,
   doctorCommand,
   resetCommand,
+  uiCommand,
 ]
+
+// For working on local-env, not in --help
+export const hiddenCommands = new Set([uiCommand])

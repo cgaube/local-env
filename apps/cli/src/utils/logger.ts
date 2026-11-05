@@ -32,6 +32,20 @@ export const cancelFrame = (message: string) => {
   frameClosed = true
 }
 export const isFrameClosed = () => frameClosed
+// Ends the output with a callout that says how the command went: the frame
+// closes under it, without main.ts's "Done"
+export const closeFrameWithCallout = (
+  level: CalloutLevel,
+  text: string,
+  options?: Pick<CalloutOptions, 'tinted' | 'padded'>,
+) => {
+  // Its own corner closes the frame: main.ts frames only a terminal's output
+  const closing = process.stdout.isTTY === true
+  process.stdout.write(
+    `${formatCallout(level, text, { ...options, closing }).join('\n')}\n${closing ? '\n' : ''}`,
+  )
+  frameClosed = true
+}
 
 // A line under the current group, on clack's guide line without an icon
 const line = (text: string) => {
@@ -47,6 +61,12 @@ export const logger = {
     gapBefore = false
   },
   info: (message: string) => line(styleText('dim', message)),
+  // A step of its own that went well, with a green ✓ in place of clack's
+  // symbol, like the tasks' lines: one line, not a group
+  step: (message: string) => {
+    log.message(message, { symbol: styleText('green', '✓') })
+    gapBefore = false
+  },
   success: (message: string) => line(message),
   warn: (message: string) => line(styleText('yellow', `▲ ${message}`)),
   // A callout that must not be missed (utils/callout.ts): the first line is
