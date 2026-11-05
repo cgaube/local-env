@@ -1,5 +1,69 @@
 # local-env
 
+## 0.4.0
+
+### Minor Changes
+
+- c08dbb4: Tools can come from Ansible collections:
+  `ansible/<collection>/galaxy.yml` and its `roles/`. Roles are named
+  `<namespace>.<collection>.<role>` and depend on each other by that name.
+  `local-env install` gives Ansible every collection of your sources. The
+  dashboard and the CLI show the `label` of a role's `local-env.yml`, or else
+  its folder name, title-cased. `local-env install` takes a profile's short name
+  or full name, and shows it beside the label. Plain roles in `ansible/<role>/`
+  still work.
+
+  `local-env install` with no profile and no picked tools now asks for your
+  profile in the terminal, and no longer opens the dashboard.
+
+  The Tools page of the dashboard shows the Ansible role of each tool, in place
+  of the date it was installed.
+
+  Roles can now use roles from Galaxy collections. Add the collection and a
+  version range to the `dependencies` of your collection's `galaxy.yml`.
+  `local-env install` downloads it once, before it runs your tools, and
+  `local-env update` upgrades it to the newest version that the range allows.
+  local-env keeps these collections in its own folder and ignores
+  `~/.ansible/collections`, so every Mac runs the same versions. In the
+  dashboard, the details of a profile list its Galaxy roles, and mark a role
+  that no source or collection has as Missing.
+
+  The dashboard shows a toast at the top center while tools wait for
+  `local-env install`, with the command. Its Details button opens the list of
+  tools and the command to copy. It replaces the Install button of the header.
+
+  `local-env install <profile>` asks before it replaces your saved profile.
+  `--yes` switches without asking.
+
+- 9a812c2: Profiles: a source can group its tools into a profile, an Ansible
+  role tagged `profile`. Install one with `local-env install <profile>`, which
+  saves it: later, `local-env install` installs it again with the tools you
+  picked (`--no-save` installs it once). The dashboard has a Profiles page to
+  compare profiles and pick yours, with their tools and stacks; the sidebar
+  shows your profile, and its tools are locked on in the Tools page.
+
+  A tool can also need Docker stacks (`local-env.yml`). `local-env install`
+  deploys the missing ones once, linked to their template, after one question
+  (`--yes` doesn't ask), and asks for the variables they can't start without.
+  `local-env install` also removes your sudo password when you stop it with
+  Ctrl-C.
+
+  The dashboard uses the sidebar-07 layout: the sidebar collapses to its icons,
+  and each page has its own header.
+
+- a7a8daa: Sources can list the registries of their private images in
+  `docker/registries.json`. local-env asks for a login for each registry that
+  has none, and Dockhand uses it to pull the images. New commands:
+  `local-env sources login` and `local-env sources logout`. Without a name,
+  `sources login` lists the sources that need a login, and their login.
+  `local-env sources list` shows whether each source is logged in.
+  `local-env doctor` tests each login.
+
+### Patch Changes
+
+- 689552d: Refuse source and template names that point outside the local-env
+  folder, such as `../` or an absolute path.
+
 ## 0.3.2
 
 ### Patch Changes
