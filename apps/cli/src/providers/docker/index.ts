@@ -1,6 +1,7 @@
 import { syncBuildContexts } from '#cli/sources/sources.js'
 import { execCompose, runCompose } from '#cli/utils/exec.js'
 import { logger } from '#cli/utils/logger.js'
+import { runStep } from '#cli/utils/task.js'
 import type { Provider, UpdateOptions } from '#cli/providers/types.js'
 import {
   findContainerUpdates,
@@ -83,7 +84,9 @@ export const refreshTemplateSources = async () => {
 // Deployed stacks only: `update` refreshes the core stack through compose
 const updateStackImages = async (dryRun: boolean) => {
   const environment = await getLocalEnvironment()
-  const updates = await findContainerUpdates(environment.id)
+  const updates = await runStep('Checking for image updates', () =>
+    findContainerUpdates(environment.id),
+  )
   if (updates.length === 0) {
     logger.success('All containers up to date')
     return []
@@ -95,9 +98,11 @@ const updateStackImages = async (dryRun: boolean) => {
     return []
   }
 
-  const results = await updateContainers(
-    environment.id,
-    updates.map((update) => update.containerId),
+  const results = await runStep(`Updating ${names.join(', ')}`, () =>
+    updateContainers(
+      environment.id,
+      updates.map((update) => update.containerId),
+    ),
   )
   const updated: string[] = []
   for (const result of results) {
