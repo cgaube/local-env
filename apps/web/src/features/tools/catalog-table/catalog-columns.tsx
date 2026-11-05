@@ -24,7 +24,7 @@ function PickSwitch({ tool }: { tool: CatalogRow }) {
     // it would overflow the table and keep a horizontal scrollbar on
     <div className="flex justify-end px-1.5">
       <Switch
-        aria-label={`Install ${tool.name}`}
+        aria-label={`Install ${tool.label}`}
         // A picked role or the profile includes it: it is installed with them
         checked={tool.picked || included}
         disabled={included}
@@ -37,7 +37,7 @@ function PickSwitch({ tool }: { tool: CatalogRow }) {
 export const catalogColumns = column.columns([
   // Searched by its name, description and tags
   column.accessor(
-    (tool) => [tool.name, tool.description, ...tool.tags].join(' '),
+    (tool) => [tool.label, tool.name, tool.description, ...tool.tags].join(' '),
     {
       id: 'tool',
       enableHiding: false,
@@ -56,7 +56,7 @@ export const catalogColumns = column.columns([
       ),
       cell: ({ row: { original: tool } }) => (
         <div className="flex flex-col gap-1 whitespace-normal">
-          <span className="font-medium">{tool.name}</span>
+          <span className="font-medium">{tool.label}</span>
           {tool.description ? (
             <span className="text-muted-foreground text-xs">
               {tool.description}

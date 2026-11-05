@@ -29,7 +29,7 @@ function ToolList({ title, tools }: { title: string; tools: CatalogRow[] }) {
       <ul className="flex flex-col gap-2">
         {tools.map((tool) => (
           <li key={tool.id} className="flex items-center gap-2 text-sm">
-            <span className="font-medium">{tool.name}</span>
+            <span className="font-medium">{tool.label}</span>
             <span className="text-muted-foreground">{tool.source}</span>
             <span className="ml-auto">
               {tool.status ? <ToolStatusBadge status={tool.status} /> : null}
@@ -83,14 +83,15 @@ export function InstallButton() {
         </DialogHeader>
         <div className="flex flex-col gap-4">
           {profile ? (
-            <ToolList title={`${profile.name} profile`} tools={inProfile} />
+            <ToolList title={`${profile.label} profile`} tools={inProfile} />
           ) : null}
           <ToolList title="Picked" tools={picked} />
         </div>
         <CodeSnippet code="local-env install" />
         {sudo.length > 0 ? (
           <p className="text-muted-foreground text-sm">
-            It asks for your password: {sudo.map(({ name }) => name).join(', ')}{' '}
+            It asks for your password:{' '}
+            {sudo.map(({ label }) => label).join(', ')}{' '}
             {sudo.length === 1 ? 'needs' : 'need'} sudo.
           </p>
         ) : null}

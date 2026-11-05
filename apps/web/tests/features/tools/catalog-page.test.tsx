@@ -379,10 +379,11 @@ describe('Catalog page', () => {
       ),
     )
 
-    const row = screen.getByRole('row', { name: /^git/ })
+    // Its folder name, title-cased: its label left with it
+    const row = screen.getByRole('row', { name: /^Git/ })
     expect(within(row).getByText('Gone from the sources')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('switch', { name: 'Install git' }))
+    await user.click(screen.getByRole('switch', { name: 'Install Git' }))
 
     expect(sentRoles(fetch)).toEqual([['acme/node']])
   })

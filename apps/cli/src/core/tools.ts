@@ -1,8 +1,10 @@
 import { execa } from 'execa'
-import { mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
+import { homedir } from 'os'
 import { join, resolve } from 'path'
 import {
   type Installed,
+  listCollections,
   listRoles,
   playbookOf,
   readInstalled,
@@ -36,7 +38,7 @@ export type PickedTools = {
 
 export const readPickedTools = (catalog: Role[]): PickedTools => {
   const byId = new Map(catalog.map((role) => [role.id, role]))
-  const picked = readSelection(TOOLS_DIR)
+  const picked = readSelection(TOOLS_DIR, catalog)
   return {
     roles: picked.flatMap((id) => byId.get(id) ?? []),
     missing: picked.filter((id) => !byId.has(id)),
@@ -46,10 +48,11 @@ export const readPickedTools = (catalog: Role[]): PickedTools => {
 export const listCatalog = () => listRoles(SOURCES_DIR)
 
 // Drops picks whose role left the sources: Ansible would stop on their path
-export const unpickTools = (ids: string[]) =>
+export const unpickTools = (catalog: Role[], ids: string[]) =>
   writeSelection(
     TOOLS_DIR,
-    readSelection(TOOLS_DIR).filter((id) => !ids.includes(id)),
+    catalog,
+    readSelection(TOOLS_DIR, catalog).filter((id) => !ids.includes(id)),
   )
 
 // The saved profile. One that left the sources is dropped, with the id it
@@ -73,10 +76,17 @@ export const saveProfile = (profile: Role | null) => {
 export const listProfiles = (catalog: Role[]) =>
   catalog.filter((role) => role.isProfile)
 
-// A profile by its name, or by <source>/<name> when two sources have one
+// The name to type: a collection's role without its collection
+export const shortName = (role: Role) => role.name.split('.').at(-1)!
+
+// A profile by its name (backend, cgaube.profiles.backend) or its label, or
+// by <source>/<name> when two sources have one
 export const findProfile = (catalog: Role[], name: string): Role => {
   const matches = catalog.filter((role) =>
-    name.includes('/') ? role.id === name : role.name === name,
+    name.includes('/')
+      ? role.id === name
+      : [role.name, shortName(role)].includes(name) ||
+        role.label.toLowerCase() === name.toLowerCase(),
   )
   const profiles = matches.filter((role) => role.isProfile)
   if (profiles.length > 1) {
@@ -91,7 +101,7 @@ export const findProfile = (catalog: Role[], name: string): Role => {
       `${name} is a tool, not a profile: pick it in the dashboard (Tools).`,
     )
   }
-  const known = listProfiles(catalog).map(({ name: other }) => other)
+  const known = listProfiles(catalog).map(shortName)
   throw new Error(
     known.length > 0
       ? `No profile named ${name}. Profiles: ${known.join(', ')}.`
@@ -125,6 +135,26 @@ const withDependencies = (catalog: Role[], roots: Role[]) => {
   return catalog.filter(({ id }) => wanted.has(id))
 }
 
+// Ansible finds a collection only at ansible_collections/<namespace>/<name>,
+// and a source has it at ansible/<folder>: links each collection of the
+// sources there, in this folder. Of two sources with the same collection, the
+// first one is linked. The folder, for ANSIBLE_COLLECTIONS_PATH.
+const linkCollections = (catalog: Role[], dir: string) => {
+  for (const source of new Set(catalog.map((role) => role.source))) {
+    const ansible = join(SOURCES_DIR, source, 'ansible')
+    for (const { folder, name } of listCollections(ansible)) {
+      const [namespace = '', collection = ''] = name.split('.')
+      const link = join(dir, 'ansible_collections', namespace, collection)
+      if (existsSync(link)) continue
+      mkdirSync(join(dir, 'ansible_collections', namespace), {
+        recursive: true,
+      })
+      symlinkSync(join(ansible, folder), link)
+    }
+  }
+  return dir
+}
+
 // Runs the roots (the profile, then the picked roles) on this Mac, as you,
 // drawn like the rest of the CLI (playbook-output.ts), or with Ansible's own
 // output when verbose. Their playbook is written to a folder only you can
@@ -142,13 +172,14 @@ export const runPlaybook = async (
   const password =
     sudo.length > 0
       ? await askPassword(
-          `Your password, for sudo (${sudo.map(({ name }) => name).join(', ')})`,
+          `Your password, for sudo (${sudo.map(({ label }) => label).join(', ')})`,
         )
       : null
 
   // Its playbook and the password, removed once Ansible is done, on Ctrl-C
   // too (run-folder.ts)
   using folder = createRunFolder()
+  const collections = linkCollections(catalog, join(folder.path, 'collections'))
   const playbook = join(folder.path, 'playbook.yml')
   const args = ['--inventory', 'localhost,', playbook]
   writeFileSync(
@@ -159,14 +190,24 @@ export const runPlaybook = async (
         catalog,
         roots.map(({ id }) => id),
       ).map((id) => {
-        const [source = '', name = ''] = id.split('/')
-        return join(SOURCES_DIR, source, 'ansible', name)
+        const role = catalog.find((other) => other.id === id)!
+        // A collection's role by its name, so it runs in its collection; a
+        // plain role by its path
+        return role.collection
+          ? role.name
+          : join(SOURCES_DIR, role.source, 'ansible', role.folder)
       }),
     ),
     { mode: 0o600 },
   )
   const env: Record<string, string> = {
-    // Dependencies are named, not paths: every source's roles
+    // The collections of the sources first, then where Ansible looks anyway
+    ANSIBLE_COLLECTIONS_PATH: [
+      collections,
+      process.env.ANSIBLE_COLLECTIONS_PATH ||
+        `${join(homedir(), '.ansible/collections')}:/usr/share/ansible/collections`,
+    ].join(':'),
+    // Dependencies are named, not paths: every source's plain roles
     ANSIBLE_ROLES_PATH: [
       ...new Set(
         catalog.map(({ source }) => join(SOURCES_DIR, source, 'ansible')),

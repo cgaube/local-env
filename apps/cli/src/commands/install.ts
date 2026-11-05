@@ -12,6 +12,7 @@ import {
   readSavedProfile,
   runPlaybook,
   saveProfile,
+  shortName,
   unpickTools,
 } from '#cli/core/tools.js'
 import {
@@ -28,7 +29,7 @@ const showForgotten = (forgotten: string[]) => {
     'info',
     [
       'No longer wanted, still on this Mac',
-      forgotten.map((id) => id.split('/')[1]).join(', '),
+      forgotten.map((id) => id.split('/').slice(1).join('/')).join(', '),
       `local-env doesn't uninstall: remove ${one ? 'it' : 'them'} yourself if you want ${one ? 'it' : 'them'} gone. ${one ? 'It is' : 'They are'} no longer listed as installed.`,
     ].join('\n'),
     { tinted: true, padded: false },
@@ -47,8 +48,8 @@ const describeRun = (catalog: Role[], profile: Role | null, picked: Role[]) => {
   const tools = picked.filter(({ id }) => !inProfile.has(id))
   if (!profile) return plural(tools.length, 'tool')
   return tools.length > 0
-    ? `the ${profile.name} profile and ${plural(tools.length, 'tool')}`
-    : `the ${profile.name} profile`
+    ? `the ${profile.label} profile and ${plural(tools.length, 'tool')}`
+    : `the ${profile.label} profile`
 }
 
 // The profile this run installs, first, where it is seen, and how to change
@@ -63,10 +64,10 @@ const showProfile = (
   }: { saved: Role | null; once: boolean; switched: boolean },
 ) => {
   const title = once
-    ? `Profile: ${profile.name}, this time only`
+    ? `Profile: ${profile.label}, this time only`
     : switched
-      ? `Profile: ${profile.name}, now yours`
-      : `Profile: ${profile.name}`
+      ? `Profile: ${profile.label}, now yours`
+      : `Profile: ${profile.label}`
   logger.callout(
     'info',
     [
@@ -74,7 +75,7 @@ const showProfile = (
       ...(profile.description ? [profile.description] : []),
       once
         ? saved
-          ? `Your profile stays ${saved.name}.`
+          ? `Your profile stays ${saved.label}.`
           : 'You have no profile saved.'
         : 'Change it on the Profiles page, or with `local-env install <profile>`.',
     ].join('\n'),
@@ -88,7 +89,7 @@ const showNothingPicked = async (catalog: Role[]) => {
   const profiles = listProfiles(catalog)
   logger.info(
     profiles.length > 0
-      ? `No profile or tool picked yet. Install a profile with \`local-env install <profile>\` (${profiles.map(({ name }) => name).join(', ')}), or pick tools in the dashboard: ${url}`
+      ? `No profile or tool picked yet. Install a profile with \`local-env install <profile>\` (${profiles.map(shortName).join(', ')}), or pick tools in the dashboard: ${url}`
       : `No tools picked yet. Pick them in the dashboard: ${url}`,
   )
   await execa('open', [url], { reject: false })
@@ -136,7 +137,7 @@ export const installCommand = new Command('install')
 
         const { roles: picked, missing } = readPickedTools(catalog)
         if (missing.length > 0) {
-          unpickTools(missing)
+          unpickTools(catalog, missing)
           logger.warn(
             `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} no longer in your sources: unpicked. local-env doesn't uninstall: ${missing.length === 1 ? 'it stays' : 'they stay'} on this Mac.`,
           )

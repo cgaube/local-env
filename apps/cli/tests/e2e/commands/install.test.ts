@@ -22,7 +22,8 @@ const sourceWithRoles = async (
   return acme
 }
 
-// The roles of the playbook the last install ran, by source/name
+// The roles of the playbook the last install ran: by source/name, or by
+// their full name for the roles of a collection
 const rolesRun = (cli: Cli) => {
   const run = cli.bin.calls('ansible-playbook').at(-1)
   const playbook = run?.args.at(-1) ?? ''
@@ -30,9 +31,10 @@ const rolesRun = (cli: Cli) => {
     roles: { role: string }[]
   }[]
   return plays.flatMap(({ roles }) =>
-    roles.map(
-      ({ role }) =>
-        `${basename(role.split('/ansible/')[0]!)}/${basename(role)}`,
+    roles.map(({ role }) =>
+      role.includes('/ansible/')
+        ? `${basename(role.split('/ansible/')[0]!)}/${basename(role)}`
+        : role,
     ),
   )
 }
@@ -166,7 +168,7 @@ describe.concurrent('local-env install', () => {
       cli.home.seedPickedTools(['acme/dns'])
 
       const result = await cli.run(['install'], {
-        answers: [{ ask: 'Your password, for sudo (dns)', answer: 'secret' }],
+        answers: [{ ask: 'Your password, for sudo (Dns)', answer: 'secret' }],
       })
 
       expect(result.exitCode).toBe(0)
@@ -189,7 +191,7 @@ describe.concurrent('local-env install', () => {
       cli.home.seedPickedTools(['acme/backend'])
 
       const result = await cli.run(['install'], {
-        answers: [{ ask: 'Your password, for sudo (base)', answer: 'secret' }],
+        answers: [{ ask: 'Your password, for sudo (Base)', answer: 'secret' }],
       })
 
       expect(result.exitCode).toBe(0)
@@ -208,7 +210,7 @@ describe.concurrent('local-env install', () => {
 
       for (const send of ['SIGINT', 'SIGTERM'] as const) {
         const result = await cli.run(['install'], {
-          answers: [{ ask: 'Your password, for sudo (dns)', answer: 'secret' }],
+          answers: [{ ask: 'Your password, for sudo (Dns)', answer: 'secret' }],
           signal: { send, after: 'ansible-playbook' },
         })
 
@@ -387,8 +389,8 @@ describe.concurrent('local-env install', () => {
     const result = await cli.run(['install', 'backend'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Installed the backend profile')
-    expect(result.output).toContain('Profile: backend, now yours')
+    expect(result.output).toContain('Installed the Backend profile')
+    expect(result.output).toContain('Profile: Backend, now yours')
     // Not its tools: a profile can have hundreds
     expect(result.output).not.toContain('tools: git')
     expect(rolesRun(cli)).toEqual(['acme/backend'])
@@ -399,6 +401,50 @@ describe.concurrent('local-env install', () => {
     expect(
       Object.keys(cli.home.readJson('volumes/tools/installed.json') as object),
     ).toEqual(['acme/backend', 'acme/base', 'acme/git', 'acme/node'])
+  })
+
+  test('installs a profile of a collection, which Ansible finds by name', async () => {
+    await using cli = await createInstallCli()
+    const acme = cli.createSource('acme')
+    acme.commit({
+      'ansible/tools/galaxy.yml': 'namespace: acme\nname: tools\n',
+      'ansible/tools/roles/git/tasks/main.yml': '- ping:\n',
+      'ansible/tools/roles/node/meta/main.yml': 'dependencies: [git]\n',
+      'ansible/profiles/galaxy.yml': 'namespace: acme\nname: profiles\n',
+      'ansible/profiles/roles/backend/meta/main.yml':
+        'galaxy_info:\n  galaxy_tags: [profile]\ndependencies: [acme.tools.node]\n',
+      'ansible/profiles/roles/backend/local-env.yml': 'label: Backend\n',
+    })
+    await cli.run(['sources', 'add', acme.dir])
+
+    // By its label, its short name or its full name
+    for (const name of ['Backend', 'backend', 'acme.profiles.backend']) {
+      const result = await cli.run(['install', name])
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('Profile: Backend')
+    }
+
+    const run = cli.bin.calls('ansible-playbook').at(-1)
+    expect(rolesRun(cli)).toEqual(['acme.profiles.backend'])
+    // Each collection of the sources, where Ansible looks for it first
+    expect(run?.collections).toEqual({
+      'acme.profiles': cli.home.path('volumes/sources/acme/ansible/profiles'),
+      'acme.tools': cli.home.path('volumes/sources/acme/ansible/tools'),
+    })
+    expect(run?.env.ANSIBLE_COLLECTIONS_PATH).toMatch(
+      /local-env-install-[^/]+\/collections:/,
+    )
+    expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
+      profile: 'acme/acme.profiles.backend',
+    })
+    // Found by their full name, and by a short name in their collection
+    expect(
+      Object.keys(cli.home.readJson('volumes/tools/installed.json') as object),
+    ).toEqual([
+      'acme/acme.profiles.backend',
+      'acme/acme.tools.git',
+      'acme/acme.tools.node',
+    ])
   })
 
   test('installs the saved profile with the picked tools', async () => {
@@ -412,8 +458,8 @@ describe.concurrent('local-env install', () => {
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Installed the frontend profile and 1 tool')
-    expect(result.output).toContain('Profile: frontend\n')
+    expect(result.output).toContain('Installed the Frontend profile and 1 tool')
+    expect(result.output).toContain('Profile: Frontend\n')
     expect(result.output).toContain(
       'Change it on the Profiles page, or with `local-env install <profile>`.',
     )
@@ -433,7 +479,7 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(rolesRun(cli)).toEqual(['acme/frontend', 'acme/git'])
-    expect(result.output).toContain('Installed the frontend profile and 1 tool')
+    expect(result.output).toContain('Installed the Frontend profile and 1 tool')
   })
 
   test('installs a profile without saving it with --no-save', async () => {
@@ -452,8 +498,8 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(rolesRun(cli)).toEqual(['acme/base'])
-    expect(result.output).toContain('Profile: base, this time only')
-    expect(result.output).toContain('Your profile stays frontend.')
+    expect(result.output).toContain('Profile: Base, this time only')
+    expect(result.output).toContain('Your profile stays Frontend.')
     expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
       profile: 'acme/frontend',
     })
@@ -704,7 +750,7 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain("Dockhand doesn't answer")
-    expect(result.output).toContain('Installed the backend profile')
+    expect(result.output).toContain('Installed the Backend profile')
   })
 
   test('stops when Ansible is not installed', async () => {

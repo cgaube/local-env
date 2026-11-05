@@ -31,7 +31,7 @@ export const profileRows = (tools: Tools): ProfileRow[] =>
         tools: own,
         includes: inTree
           .filter((role) => role.isProfile)
-          .map(({ name }) => name),
+          .map(({ label }) => label),
         pending: own.filter(
           ({ id, revision }) => tools.installed[id]?.revision !== revision,
         ),

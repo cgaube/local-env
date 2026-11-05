@@ -5,7 +5,11 @@ that tools need.
 
 ## What it does
 
-A **tool** is an Ansible role in a source: `ansible/<role>/` in the repo. A
+A **tool** is an Ansible role in a source. The roles are grouped in Ansible
+collections: `ansible/<collection>/galaxy.yml` gives the namespace and the name
+of the collection, and its roles are in `ansible/<collection>/roles/<role>/`.
+The full name of a role is `<namespace>.<collection>.<role>`. A folder of
+`ansible/` without `galaxy.yml` is a plain role, named by its folder. A
 **profile** is a tool that is a set of other tools. The user installs tools and
 profiles on the Mac with `local-env install`.
 
@@ -17,8 +21,12 @@ profiles on the Mac with `local-env install`.
   tools.
 - `local-env install <profile> --no-save` installs the profile one time. The
   saved profile does not change.
-- If two sources have a profile with the same name, the user writes
-  `<source>/<profile>`.
+- The user names a profile by its short name (`backend`), its full name
+  (`acme.profiles.backend`) or its label (`Backend`). If two sources have a
+  profile with this name, the user writes `<source>/<full name>`.
+- The dashboard and the CLI show the `label` of the role's `local-env.yml`, or
+  else the folder name of the role, title-cased: `git_extras` shows as
+  `Git Extras`. A brand name (`TablePlus`) needs a label.
 - local-env never uninstalls. When a tool is no longer wanted, it stays on the
   Mac. local-env removes it from the list of installed tools and shows a message
   ("No longer wanted, still on this Mac").
@@ -41,13 +49,13 @@ A profile is a plain Ansible role. The tag `profile` in `galaxy_tags` marks it.
 Its dependencies are the tools and profiles that it contains:
 
 ```yaml
-# ansible/backend/meta/main.yml
+# ansible/profiles/roles/backend/meta/main.yml
 galaxy_info:
   description: Backend developer setup
   galaxy_tags: [profile]
 dependencies:
-  - base # another profile
-  - node
+  - acme.profiles.base # another profile
+  - acme.runtimes.node
 ```
 
 ## How it works
@@ -56,10 +64,13 @@ dependencies:
 
 ```mermaid
 flowchart LR
-  subgraph source["volumes/sources/#lt;source#gt;/ansible/#lt;role#gt;/"]
-    meta["meta/main.yml<br/>description, tags, dependencies"]
-    settings["local-env.yml<br/>the stacks it needs"]
-    tasks["tasks/ and other files<br/>revision hash, become"]
+  subgraph source["volumes/sources/#lt;source#gt;/ansible/#lt;collection#gt;/"]
+    galaxy["galaxy.yml<br/>namespace and name"]
+    subgraph role["roles/#lt;role#gt;/"]
+      meta["meta/main.yml<br/>description, tags, dependencies"]
+      settings["local-env.yml<br/>label, the stacks it needs"]
+      tasks["tasks/ and other files<br/>revision hash, become"]
+    end
   end
 
   subgraph tools["volumes/tools/"]
@@ -85,21 +96,26 @@ flowchart LR
 ```
 
 `services/dashboard/tools.ts` reads and writes these files. The dashboard and
-the CLI both use it, so they read the files the same way.
+the CLI both use it, so they read the files the same way. The id of a role is
+`<source>/<full name>`. `playbook.yml` names each pick by its path,
+`../sources/<source>/ansible/<collection>/roles/<role>`. A pick whose role is no
+longer in a source keeps its path as its id, `<source>/<folder>`, so the user
+can unpick it.
 
 ### What `local-env install` runs
 
 The **roots** are the profile and the picked tools. The **wanted** tools are the
 roots and all the tools that they include, at all depths. A dependency is found
-by its name, in all the sources, as Ansible finds it.
+by its name, in all the sources, as Ansible finds it: by its full name, or by
+its short name in the collection of the role that names it.
 
 ```mermaid
 flowchart TD
-  backend["acme/backend<br/>profile, saved"]
-  base["acme/base<br/>profile"]
-  git["acme/git"]
-  node["acme/node"]
-  jq["acme/jq<br/>picked"]
+  backend["acme.profiles.backend<br/>profile, saved"]
+  base["acme.profiles.base<br/>profile"]
+  git["acme.tools.git"]
+  node["acme.tools.node"]
+  jq["acme.tools.jq<br/>picked"]
 
   backend --> base
   backend --> node
@@ -136,8 +152,9 @@ sequenceDiagram
     cli->>user: ask for the sudo password
     cli->>tmp: write the password file
   end
-  cli->>tmp: write playbook.yml (the roots, by absolute path)
-  cli->>ansible: run, ANSIBLE_ROLES_PATH = ansible/ of every source
+  cli->>tmp: link each collection at ansible_collections/#lt;namespace#gt;/#lt;name#gt;
+  cli->>tmp: write playbook.yml (the roots, by full name or absolute path)
+  cli->>ansible: run, ANSIBLE_COLLECTIONS_PATH = the links, ANSIBLE_ROLES_PATH = ansible/ of every source
   ansible-->>cli: events as JSON lines
   cli->>user: a group for each role, a line for each task
   cli->>tmp: remove the folder (also on Ctrl-C or a kill)
@@ -146,6 +163,13 @@ sequenceDiagram
 
 - `apps/cli/src/core/tools.ts` finds the profile, forgets the tools and runs the
   playbook.
+- Ansible finds a collection only in an `ansible_collections/<namespace>/<name>`
+  folder. The CLI links each collection of the sources there, in the temporary
+  folder, and puts this folder first in `ANSIBLE_COLLECTIONS_PATH`. The default
+  folders (`~/.ansible/collections`) and the collections of the `ansible`
+  package stay.
+- The playbook names a role of a collection by its full name, so that Ansible
+  runs it in its collection. It names a plain role by its absolute path.
 - `apps/cli/src/core/playbook-output.ts` shows the events of Ansible with clack.
   `install --verbose` shows the output of Ansible itself.
 - A task with `become: true` (or `yes`) in a wanted tool makes the CLI ask for
@@ -202,7 +226,22 @@ sequenceDiagram
   removes duplicates and stops on cycles. A profile that contains another
   profile needs no new code. The role also works without local-env.
 - **A tag marks the profile, not a folder.** `galaxy_tags` is a field of
-  Ansible. The role stays in `ansible/`, where `ANSIBLE_ROLES_PATH` finds it.
+  Ansible. A profile is a role of a collection, like the others.
+- **Roles are in collections.** A full name does not clash with a role of
+  another source. A collection also installs without local-env, with
+  `ansible-galaxy collection install`.
+- **local-env reads the files, not the output of an Ansible command.** No
+  command of Ansible gives the description, the tags and the dependencies of a
+  role: `ansible-doc -t role -l` reads only `meta/argument_specs.yml`. The
+  dashboard runs in a container without Ansible. local-env reads only the
+  formats that Ansible documents: `galaxy.yml` (`namespace`, `name`), the
+  `roles/` folder and `meta/main.yml`. Ansible itself finds the roles when the
+  playbook runs.
+- **The CLI links the collections, it does not install them.** A link takes no
+  time and needs no network. `ansible-galaxy collection install` builds and
+  copies the collection, and looks for its dependencies on Galaxy. A change to a
+  role then runs at the next install, without an install of the collection
+  first.
 - **The profile is in `volumes/tools/profile.json`, not in `config.json`.** The
   dashboard can write only to `volumes/tools/` (`compose.yaml`). The Profiles
   page must write the profile.
@@ -216,14 +255,15 @@ sequenceDiagram
   password then stays on the disk. A SIGKILL or a crash cannot be caught, so the
   next run removes the folders of runs whose process is gone. A folder of a run
   that is still active stays: two installs can run at the same time.
-- **The playbook names each role one time.** It names the roots by path, and a
+- **The playbook names each role one time.** It can name a root by path, and a
   profile names its dependencies by name. Ansible does not see that these are
   the same role, so a pick that the profile includes runs two times.
   `playbookRoots` (`services/dashboard/role-graph.ts`) removes a root that
   another root includes.
-- **The temporary playbook uses absolute paths.** It is not in `volumes/tools/`,
-  so the relative paths of `playbook.yml` do not work there. The output reads
-  the name of the role from the end of the path, so it does not change.
+- **The temporary playbook uses absolute paths for plain roles.** It is not in
+  `volumes/tools/`, so the relative paths of `playbook.yml` do not work there.
+  The output reads the name of the role from the end of the path, so it does not
+  change.
 - **`--no-save` keeps the saved profile wanted.** A profile that runs one time
   does not replace the saved profile. Without this rule, the next
   `local-env install` installs the tools of the saved profile again, as new.
@@ -256,7 +296,11 @@ sequenceDiagram
 - local-env does not uninstall tools.
 - A dependency is found by name in all the sources. If two sources have a role
   with this name, local-env records both as wanted. Ansible runs only the first
-  one that it finds in `ANSIBLE_ROLES_PATH`.
+  one that it finds. If two sources have a collection with the same name, the
+  CLI links only the collection of the first source.
+- local-env does not install the `dependencies` of `galaxy.yml`. The roles can
+  use only the collections that are on the Mac, such as the collections of the
+  `ansible` package.
 - `local-env setup` does not ask for a profile yet.
 - When the profile is saved, the dashboard does not install it. The Install
   button gives the `local-env install` command.

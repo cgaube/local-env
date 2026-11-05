@@ -1,4 +1,8 @@
-import { includedRoles, wantedRoles } from '#services/dashboard/role-graph.ts'
+import {
+  includedRoles,
+  titleize,
+  wantedRoles,
+} from '#services/dashboard/role-graph.ts'
 import type { Role, Tools } from '#ui/features/live-data/live-data.ts'
 
 // Where a tool stands on this Mac:
@@ -74,17 +78,23 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
       installedAt: tools.installed[role.id]?.installedAt ?? null,
       picked: tools.picked.includes(role.id),
       includedBy: included.get(role.id) ?? [],
-      inProfile: inProfile.has(role.id) ? (profile?.name ?? null) : null,
+      inProfile: inProfile.has(role.id) ? (profile?.label ?? null) : null,
       status: statusOf(tools, wanted, role),
     })),
     ...tools.picked
       .filter((id) => !known.has(id))
       .map((id) => {
-        const [source = '', name = id] = id.split('/')
+        // Its id is its path: <source>/<folder> (readSelection)
+        const [source = '', ...rest] = id.split('/')
+        const folder = rest.join('/')
+        const name = folder.split('/').at(-1) ?? folder
         return {
           id,
           source,
+          folder,
           name,
+          collection: null,
+          label: titleize(name),
           description: null,
           tags: [],
           dependencies: [],

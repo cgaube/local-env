@@ -18,7 +18,10 @@ your later changes too.
 │       ├── compose.yaml
 │       └── site/Dockerfile   # files a template builds from
 └── ansible/
-    └── git/                  # one Ansible role per tool (see Tools)
+    └── dev_tools/            # an Ansible collection (see Tools)
+        ├── galaxy.yml        # its namespace and name: acme.dev_tools
+        └── roles/
+            └── git/          # one Ansible role per tool
 ```
 
 Add it once, then sync it after each change:
@@ -243,19 +246,35 @@ unique (`scripts/check-templates.ts`). Copy it into your source.
 ## Tools
 
 A tool is something installed on the Mac itself, not in Docker: Git, Node.js, a
-CLI. Each folder of `ansible/` is a plain Ansible role, and a tool in the
-dashboard's catalog (`https://local-env.dev.test/tools`). People pick the ones
-they want there, then run `local-env install`, which runs the picked roles on
-their Mac with `ansible-playbook` (`connection: local`, as them).
+CLI. Each tool is a plain Ansible role, and a tool in the dashboard's catalog
+(`https://local-env.dev.test/tools`). People pick the ones they want there, then
+run `local-env install`, which runs the picked roles on their Mac with
+`ansible-playbook` (`connection: local`, as them).
+
+Group the roles in Ansible collections: one folder of `ansible/` per collection,
+with a `galaxy.yml` and its roles in `roles/`. The full name of a role is
+`<namespace>.<collection>.<role>`.
 
 ```
-ansible/git/
-├── meta/main.yml     # the catalog's description and tags
-└── tasks/main.yml    # what installing does
+ansible/dev_tools/
+├── galaxy.yml            # namespace: acme, name: dev_tools
+├── meta/runtime.yml      # requires_ansible
+└── roles/git/
+    ├── meta/main.yml     # the catalog's description and tags
+    └── tasks/main.yml    # what installing does
 ```
 
 ```yaml
-# ansible/git/meta/main.yml
+# ansible/dev_tools/galaxy.yml
+namespace: acme
+name: dev_tools
+version: 1.0.0
+authors: [Acme]
+readme: README.md
+```
+
+```yaml
+# ansible/dev_tools/roles/git/meta/main.yml
 galaxy_info:
   description: Git, the version control system, from Homebrew
   galaxy_tags: [vcs]
@@ -263,22 +282,37 @@ dependencies: []
 ```
 
 ```yaml
-# ansible/git/tasks/main.yml
+# ansible/dev_tools/roles/git/tasks/main.yml
 - name: Install git
   community.general.homebrew:
     name: git
     state: present
 ```
 
-- The catalog shows the folder name, `galaxy_info.description` and
-  `galaxy_tags`. A role without `meta/main.yml` is listed too, with no
-  description.
+- Ansible allows only lowercase letters, digits and `_` in the namespace, the
+  collection and the role: `git_extras`, not `git-extras`. A collection whose
+  `galaxy.yml` has no valid `namespace` and `name` is not listed.
+- The catalog shows the `label` of the role's `local-env.yml` (see below), or
+  else its folder name, title-cased (`git_extras` shows as `Git Extras`),
+  `galaxy_info.description` and `galaxy_tags`. A role without `meta/main.yml` is
+  listed too, with no description.
+- A folder of `ansible/` without `galaxy.yml` is a plain role, named by its
+  folder (`ansible/git/`). It still works, but a collection is better: its roles
+  have names that don't clash with the roles of other sources, and the
+  collection installs without local-env
+  (`ansible-galaxy collection install "git+<repo>#/ansible/<collection>"`).
 - Write tasks that can run again: `local-env install` runs every picked tool
   each time, and Ansible only changes what isn't in the expected state.
 - A task with `become: true` runs with sudo: `local-env install` then asks for
   the password first, and the catalog says so.
-- `dependencies` name other roles, in any source: a role made of other roles can
-  stand for a whole setup (a backend engineer's tools).
+- `dependencies` name other roles, in any source, by their full name
+  (`acme.dev_tools.git`). A role of the same collection can also be named by its
+  short name (`git`). A role made of other roles can stand for a whole setup (a
+  backend engineer's tools).
+- Don't list the collections of your sources in the `dependencies` of
+  `galaxy.yml`: `ansible-galaxy` looks for them on Galaxy and fails. local-env
+  doesn't install the collections of `galaxy.yml` either: the ones of the
+  `ansible` package (`community.general`) are there already.
 - When a role's files change, the dashboard shows its tool as **Update
   available** until the next `local-env install`.
 - Unpicking a tool doesn't uninstall it: local-env only adds. The next
@@ -294,35 +328,41 @@ A profile is a whole setup, picked at once: a role tagged `profile`, made of
 other roles. It can include other profiles.
 
 ```yaml
-# ansible/backend/meta/main.yml
+# ansible/profiles/roles/backend/meta/main.yml
 galaxy_info:
   description: Backend developer setup
   galaxy_tags: [profile]
 dependencies:
-  - base # another profile
-  - tableplus
-  - jetbrains-toolbox
+  - acme.profiles.base # another profile
+  - acme.databases.tableplus
+  - acme.editors.jetbrains_toolbox
 ```
 
 - People pick their profile on the dashboard's Profiles page, or with
-  `local-env install backend`, which saves it. The page lists every profile with
-  its tools and stacks, and the sidebar shows the current one. Later,
-  `local-env install` installs it again with the tools they picked.
-  `local-env install backend --no-save` installs it once.
+  `local-env install backend`, which saves it. The command takes the role's
+  short name (`backend`), its full name (`acme.profiles.backend`) or its label
+  (`Backend`). The page lists every profile with its tools and stacks, and the
+  sidebar shows the current one. Later, `local-env install` installs it again
+  with the tools they picked. `local-env install backend --no-save` installs it
+  once.
 - The roles of the profile are locked on in the catalog. Profiles are not rows
   of the catalog.
 - When two sources have a profile with the same name, people type
   `local-env install <source>/backend`.
 - A profile can have tasks of its own. Most only have dependencies.
 
-### Stacks a tool needs
+### The name to show, and the stacks a tool needs
+
+`local-env.yml`, next to `meta/`, holds what local-env reads of a role. Ansible
+doesn't read this file. Its `label` is the name the dashboard and the CLI show,
+in place of the folder name: `Backend`, not `backend`.
 
 A role, or a profile, can need Docker stacks: Mailpit for the apps it installs,
-a database for its client. List them in `local-env.yml`, next to `meta/`.
-Ansible doesn't read this file.
+a database for its client. List them in `stacks`.
 
 ```yaml
-# ansible/backend/local-env.yml
+# ansible/profiles/roles/backend/local-env.yml
+label: Backend
 stacks:
   - mailpit # docker/mailpit of this source
   - shared/postgres # docker/postgres of the source named shared

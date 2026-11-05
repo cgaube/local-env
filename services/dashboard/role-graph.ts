@@ -1,37 +1,58 @@
 // How roles bring other roles, and the stacks they need. Shared by the
 // dashboard's app (apps/web) and the CLI: no import, so the browser can load
 // it. A role names its dependencies (meta/main.yml) by name, found in any
-// source, as Ansible finds them through ANSIBLE_ROLES_PATH. A profile is a
-// role made of others: it is one more root, like a picked role.
+// source, as Ansible finds them through ANSIBLE_COLLECTIONS_PATH and
+// ANSIBLE_ROLES_PATH: <namespace>.<collection>.<role>, or a plain role's name.
+// A role of a collection can name one of its own collection by its short
+// name. A profile is a role made of others: it is one more root, like a
+// picked role.
+
+// The name to show of a role without a label: its folder name, title-cased
+// (git_extras -> Git Extras). Ansible allows only lowercase letters, digits
+// and _ there, so brand names (TablePlus) need a label.
+export const titleize = (name: string) =>
+  name.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 
 export type GraphRole = {
-  // <source>/<role>
+  // <source>/<name>
   id: string
+  // <namespace>.<collection>.<role>, or <role> for a plain role
   name: string
+  // <namespace>.<collection>, or null for a plain role
+  collection: string | null
+  // The name to show
+  label: string
   dependencies: string[]
   // Stack templates it needs, as <source>/<folder>
   stacks: string[]
 }
 
 // The roles the roots bring with them: their dependencies, and those of their
-// dependencies. By id: the names of the roots that include it. A root is
+// dependencies. By id: the labels of the roots that include it. A root is
 // never included by itself, even through a cycle.
 export const includedRoles = (roles: GraphRole[], roots: string[]) => {
   const byName = Map.groupBy(roles, (role) => role.name)
+  // As Ansible looks: the role's own collection first, then the name as is
+  const resolve = (role: GraphRole, name: string) =>
+    (role.collection && !name.includes('.')
+      ? byName.get(`${role.collection}.${name}`)
+      : undefined) ??
+    byName.get(name) ??
+    []
   const included = new Map<string, string[]>()
   for (const root of roles.filter((role) => roots.includes(role.id))) {
     const seen = new Set([root.id])
     const queue = [root]
     for (let role = queue.shift(); role; role = queue.shift()) {
-      for (const dependency of role.dependencies.flatMap(
-        (name) => byName.get(name) ?? [],
+      for (const dependency of role.dependencies.flatMap((name) =>
+        resolve(role, name),
       )) {
         if (seen.has(dependency.id)) continue
         seen.add(dependency.id)
         queue.push(dependency)
         included.set(dependency.id, [
           ...(included.get(dependency.id) ?? []),
-          root.name,
+          root.label,
         ])
       }
     }

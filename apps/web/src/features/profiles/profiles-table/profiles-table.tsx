@@ -42,44 +42,47 @@ const column = createColumnHelper<CatalogFeatures, ProfileRow>()
 
 const columns = column.columns([
   // Searched by its name and description
-  column.accessor((profile) => [profile.name, profile.description].join(' '), {
-    id: 'profile',
-    filterFn: 'includesString',
-    sortFn: 'text',
-    header: ({ column: header }) => (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2"
-        onClick={() => header.toggleSorting()}
-      >
-        Profile
-        <ArrowUpDownIcon data-icon="inline-end" />
-      </Button>
-    ),
-    // A checkmark before your profile; the others keep its room, so the
-    // names line up
-    cell: ({ row: { original: profile } }) => (
-      <div className="flex items-center gap-2 whitespace-normal">
-        <span className="text-primary flex size-5 shrink-0 items-center justify-center">
-          {profile.current ? (
-            <>
-              <CheckIcon aria-hidden="true" />
-              <span className="sr-only">Your profile</span>
-            </>
-          ) : null}
-        </span>
-        <div className="flex flex-col gap-1">
-          <span className="font-medium">{profile.name}</span>
-          {profile.description ? (
-            <span className="text-muted-foreground text-xs">
-              {profile.description}
-            </span>
-          ) : null}
+  column.accessor(
+    (profile) => [profile.label, profile.name, profile.description].join(' '),
+    {
+      id: 'profile',
+      filterFn: 'includesString',
+      sortFn: 'text',
+      header: ({ column: header }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2"
+          onClick={() => header.toggleSorting()}
+        >
+          Profile
+          <ArrowUpDownIcon data-icon="inline-end" />
+        </Button>
+      ),
+      // A checkmark before your profile; the others keep its room, so the
+      // names line up
+      cell: ({ row: { original: profile } }) => (
+        <div className="flex items-center gap-2 whitespace-normal">
+          <span className="text-primary flex size-5 shrink-0 items-center justify-center">
+            {profile.current ? (
+              <>
+                <CheckIcon aria-hidden="true" />
+                <span className="sr-only">Your profile</span>
+              </>
+            ) : null}
+          </span>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">{profile.label}</span>
+            {profile.description ? (
+              <span className="text-muted-foreground text-xs">
+                {profile.description}
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
-    ),
-  }),
+      ),
+    },
+  ),
   column.accessor('source', {
     filterFn: 'oneOf',
     sortFn: 'text',
@@ -119,7 +122,7 @@ const columns = column.columns([
           <Button
             size="sm"
             variant="ghost"
-            aria-label={`Details of ${profile.name}`}
+            aria-label={`Details of ${profile.label}`}
             onClick={() => open(profile.id)}
           >
             Details
@@ -129,7 +132,7 @@ const columns = column.columns([
             <Button
               size="sm"
               variant="outline"
-              aria-label={`Use ${profile.name}`}
+              aria-label={`Use ${profile.label}`}
               onClick={() => pick(profile.id)}
             >
               Use

@@ -64,8 +64,8 @@ export function CatalogPage() {
               </EmptyMedia>
               <EmptyTitle>No tools yet</EmptyTitle>
               <EmptyDescription>
-                Your sources have no Ansible roles. Each folder in the ansible/
-                folder of a source is a tool.
+                Your sources have no Ansible roles. Each role of a collection in
+                the ansible/ folder of a source is a tool.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

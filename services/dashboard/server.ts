@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
   isProfileChoice,
+  listRoleFolders,
   listRoles,
   readDeployedStacks,
   readInstalled,
@@ -87,7 +88,7 @@ const listSources = () =>
         name,
         origin: readOrigin(dir),
         docker: countTemplates(dir),
-        ansible: subfolders(join(dir, 'ansible')).length,
+        ansible: listRoleFolders(join(dir, 'ansible')).length,
       }
     })
 
@@ -105,15 +106,17 @@ const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
   sources: async () => JSON.stringify(listSources()),
-  tools: async () =>
-    JSON.stringify({
-      roles: listRoles(SOURCES_DIR),
-      picked: readSelection(TOOLS_DIR),
+  tools: async () => {
+    const roles = listRoles(SOURCES_DIR)
+    return JSON.stringify({
+      roles,
+      picked: readSelection(TOOLS_DIR, roles),
       installed: readInstalled(TOOLS_DIR),
       profile: readProfile(TOOLS_DIR),
       // The stacks `local-env install` deployed for the roles
       stacks: readDeployedStacks(TOOLS_DIR),
-    }),
+    })
+  },
 }
 type Topic = keyof typeof readers
 
@@ -180,9 +183,10 @@ const readPut = async (
 const pickTools = async (request: Request) => {
   const put = await readPut(request)
   if (put instanceof Response) return put
+  const catalog = listRoles(SOURCES_DIR)
   const known = new Set([
-    ...listRoles(SOURCES_DIR).map(({ id }) => id),
-    ...readSelection(TOOLS_DIR),
+    ...catalog.map(({ id }) => id),
+    ...readSelection(TOOLS_DIR, catalog),
   ])
   const { roles } = put.body
   if (
@@ -191,7 +195,7 @@ const pickTools = async (request: Request) => {
   ) {
     return new Response('Unknown roles', { status: 400 })
   }
-  writeSelection(TOOLS_DIR, [...new Set(roles as string[])])
+  writeSelection(TOOLS_DIR, catalog, [...new Set(roles as string[])])
   return new Response(null, { status: 204 })
 }
 

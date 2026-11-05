@@ -48,7 +48,7 @@ export function ProfileSheet({
           <>
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
-                {profile.name}
+                {profile.label}
                 {profile.current ? <Badge>Your profile</Badge> : null}
               </SheetTitle>
               <SheetDescription>
@@ -77,7 +77,7 @@ export function ProfileSheet({
                           key={tool.id}
                           className="flex items-center gap-2 text-sm"
                         >
-                          <span className="font-medium">{tool.name}</span>
+                          <span className="font-medium">{tool.label}</span>
                           {/* Only a tool from another source says which */}
                           {tool.source !== profile.source ? (
                             <span className="text-muted-foreground truncate">

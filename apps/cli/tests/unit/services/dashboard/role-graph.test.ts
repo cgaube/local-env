@@ -9,14 +9,58 @@ import {
 const role = (
   id: string,
   { dependencies = [], stacks = [] }: Partial<GraphRole> = {},
-): GraphRole => ({
-  id,
-  name: id.split('/')[1] ?? id,
-  dependencies,
-  stacks,
-})
+): GraphRole => {
+  // <source>/<role>, or <source>/<namespace>.<collection>.<role>
+  const name = id.split('/')[1] ?? id
+  const parts = name.split('.')
+  return {
+    id,
+    name,
+    collection: parts.length === 3 ? parts.slice(0, 2).join('.') : null,
+    label: parts.at(-1) ?? name,
+    dependencies,
+    stacks,
+  }
+}
 
 describe('includedRoles', () => {
+  test('finds the roles of collections by their full name, in any source', () => {
+    const roles = [
+      role('acme/acme.profiles.backend', {
+        dependencies: ['acme.tools.git', 'shared.db.postgres'],
+      }),
+      role('acme/acme.tools.git'),
+      role('team/shared.db.postgres'),
+    ]
+
+    expect(
+      Object.fromEntries(includedRoles(roles, ['acme/acme.profiles.backend'])),
+    ).toEqual({
+      'acme/acme.tools.git': ['backend'],
+      'team/shared.db.postgres': ['backend'],
+    })
+  })
+
+  test('finds a role of the same collection by its short name first', () => {
+    const roles = [
+      role('acme/acme.tools.node', { dependencies: ['git'] }),
+      role('acme/acme.tools.git'),
+      role('acme/git'),
+      role('acme/acme.tools.jq', { dependencies: ['curl'] }),
+      role('acme/curl'),
+    ]
+
+    expect([...wantedRoles(roles, ['acme/acme.tools.node'])]).toEqual([
+      'acme/acme.tools.node',
+      'acme/acme.tools.git',
+    ])
+    // Not in its collection: a plain role of that name
+    expect([...wantedRoles(roles, ['acme/acme.tools.jq'])]).toEqual([
+      'acme/acme.tools.jq',
+      'acme/curl',
+    ])
+  })
+
   test('follows a profile that depends on another profile', () => {
     const roles = [
       role('acme/backend', { dependencies: ['base', 'node'] }),

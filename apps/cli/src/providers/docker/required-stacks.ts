@@ -116,7 +116,7 @@ export const planRequiredStacks = async (
   { yes = false }: { yes?: boolean } = {},
 ): Promise<StackPlan | null> => {
   const deployed = readDeployedStacks(TOOLS_DIR)
-  const names = new Map(catalog.map(({ id, name }) => [id, name]))
+  const names = new Map(catalog.map(({ id, label }) => [id, label]))
   const wanted = wantedStacks(
     catalog,
     roots.map(({ id }) => id),
