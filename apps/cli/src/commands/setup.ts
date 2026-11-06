@@ -8,8 +8,10 @@ import {
   type Config,
 } from '#cli/core/config.js'
 import { settings } from '#cli/core/settings/index.js'
+import { runStart } from '#cli/core/start.js'
 import {
   askConfirm,
+  canAsk,
   ensureBrewInstalled,
   hasCommand,
   installBrewPackages,
@@ -106,21 +108,35 @@ export const setupCommand = new Command('setup')
   .option('-d, --domain <domain>', 'Domain for local services (dev.test)')
   .option('-y, --yes', 'Accept the current values and defaults', false)
   .action(async (options: { domain?: string; yes: boolean }) => {
+    let startNow = false
     try {
       await runSetup({
         yes: options.yes,
         values: options.domain ? { domain: options.domain } : {},
       })
+      // Not with --yes, nor without a terminal: scripts start it themselves
+      startNow =
+        !options.yes &&
+        canAsk() &&
+        (await askConfirm('Start local-env now?', true))
       logger.box(
         [
           'Setup complete',
-          'Run `local-env start` to start the services.',
+          ...(startNow ? [] : ['Run `local-env start` to start the services.']),
           // Firefox reads the trust of the macOS keychain only when it starts
           'If Firefox warns about a local-env site, restart it.',
         ].join('\n'),
       )
     } catch (error) {
       logger.error('Setup failed:', error)
+      process.exit(1)
+    }
+
+    if (!startNow) return
+    try {
+      await runStart({ build: false })
+    } catch (error) {
+      logger.error('Error starting services:', error)
       process.exit(1)
     }
   })

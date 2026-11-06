@@ -13,6 +13,7 @@ import { offerStackSync } from '#cli/providers/docker/stack-sync.js'
 import { autoUpdateStep } from '#cli/providers/docker/steps/auto-update.js'
 import { exposureWarningStep } from '#cli/providers/docker/steps/exposure-warning.js'
 import { localEnvironmentStep } from '#cli/providers/docker/steps/local-environment.js'
+import { sidebarStep } from '#cli/providers/docker/steps/sidebar.js'
 import {
   removeBuiltinTemplatesStep,
   templateSourcesStep,
@@ -24,6 +25,7 @@ const steps: DockhandStep[] = [
   localEnvironmentStep,
   exposureWarningStep,
   autoUpdateStep,
+  sidebarStep,
   removeBuiltinTemplatesStep,
   templateSourcesStep,
   // Last: it may ask questions, after the steps that need none

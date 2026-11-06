@@ -1,5 +1,6 @@
 import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import { HIDDEN_SIDEBAR_ITEMS } from '#cli/providers/docker/steps/sidebar.js'
 import { machineReady } from '#cli-tests/support/machine.js'
 import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
 
@@ -33,6 +34,25 @@ describe.concurrent('local-env start', () => {
       enabled: true,
       autoUpdate: true,
     })
+    expect(cli.dockhand.state.sidebar).toEqual({
+      order: [],
+      hidden: HIDDEN_SIDEBAR_ITEMS,
+    })
+  })
+
+  test("keeps the user's own Dockhand sidebar", async () => {
+    const sidebar = { order: ['/stacks', '/?home'], hidden: ['/logs'] }
+    await using cli = await createCli({
+      dockhand: { ...provisionedDockhand(), sidebar },
+    })
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    machineReady(cli)
+
+    const result = await cli.run(['start'])
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.dockhand.state.sidebar).toEqual(sidebar)
   })
 
   test('changes nothing in a provisioned Dockhand', async () => {

@@ -18,6 +18,7 @@ export type DockhandState = {
     number,
     { enabled: boolean; cron: string; autoUpdate: boolean }
   >
+  sidebar: { order: string[]; hidden: string[] }
   stacks: DockhandStack[]
   // What the image check finds, and the containers updated since
   containerUpdates: DockhandContainerUpdate[]
@@ -44,6 +45,7 @@ const freshState = (): DockhandState => ({
   templateSources: [],
   exposure: { warn: true, dismissed: false },
   updateChecks: {},
+  sidebar: { order: [], hidden: [] },
   stacks: [],
   containerUpdates: [],
   updatedContainers: [],
@@ -95,6 +97,11 @@ const ROUTES: Record<string, Handler> = {
     state.updateChecks[Number(params.id)] =
       body as DockhandState['updateChecks'][number]
     return {}
+  },
+  'GET /preferences/sidebar': (_, state) => ({ preferences: state.sidebar }),
+  'POST /preferences/sidebar': ({ body }, state) => {
+    state.sidebar = body as DockhandState['sidebar']
+    return { preferences: state.sidebar }
   },
 
   'GET /templates/sources': (_, state) => state.templateSources,
