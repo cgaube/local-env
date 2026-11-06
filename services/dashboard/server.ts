@@ -12,6 +12,10 @@
 //                   picked.json, which `local-env install` reads (tools.ts)
 //   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
 //                   profile.json, which `local-env install` reads
+//   /api/terminal -> a WebSocket to the dashboard agent, the process on the
+//                   Mac that runs `local-env install` and `update` in a pty
+//                   (apps/cli/src/agent/server.ts). Only this server has its
+//                   token, and only the dashboard's own pages can connect.
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
@@ -30,6 +34,9 @@ const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
 const SOURCES_DIR = '/sources'
 const TOOLS_DIR = '/tools'
+// The agent's token, mounted read-only: written by the agent when it starts
+const AGENT_DIR = '/agent'
+const AGENT_URL = process.env.AGENT_URL ?? 'http://host.docker.internal:17081'
 const DOMAIN = process.env.DOMAIN ?? 'dev.test'
 const PORT = 80
 
@@ -102,6 +109,35 @@ const readList = async (path: string) => {
   }
 }
 
+const readAgentToken = () => {
+  try {
+    return readFileSync(join(AGENT_DIR, 'token'), 'utf8').trim()
+  } catch {
+    return null
+  }
+}
+
+// Whether the agent answers, and its current or last run. Not running: the
+// page shows the command to run instead.
+const readAgent = async () => {
+  const token = readAgentToken()
+  if (token) {
+    try {
+      const response = await fetch(`${AGENT_URL}/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(2000),
+      })
+      if (response.ok) {
+        const { version, run } = await response.json()
+        return JSON.stringify({ available: true, version, run })
+      }
+    } catch {
+      // Stopped, or killed without removing its token
+    }
+  }
+  return JSON.stringify({ available: false, version: null, run: null })
+}
+
 const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
@@ -117,6 +153,7 @@ const readers = {
       stacks: readDeployedStacks(TOOLS_DIR),
     })
   },
+  agent: readAgent,
 }
 type Topic = keyof typeof readers
 
@@ -157,6 +194,19 @@ watch(SOURCES_DIR, { recursive: true }, () => {
 // picked.json and profile.json, written below and by `local-env install`,
 // and installed.json, by `local-env install`
 watch(TOOLS_DIR, () => publish('tools'))
+// The agent writes its token when it starts and removes it when it stops
+watch(AGENT_DIR, () => publish('agent'))
+
+// A run starts and ends without a file changing here: ask the agent while
+// pages are open, and tell them only what changed
+let lastAgent = ''
+setInterval(async () => {
+  if (clients.size === 0) return
+  const data = await readAgent()
+  if (data === lastAgent) return
+  lastAgent = data
+  for (const client of clients) send(client, 'agent', data)
+}, 3000)
 
 // A PUT of JSON, or the response that refuses it. JSON only: another site
 // can't send it without a CORS preflight, which this server never allows.
@@ -235,6 +285,43 @@ const events = () => {
   })
 }
 
+// The dashboard's own pages: browsers don't apply CORS to WebSockets, so
+// any site could otherwise open one to the agent
+const DASHBOARD_ORIGIN = `https://local-env.${DOMAIN}`
+
+type TerminalSocket = {
+  upstream: WebSocket | null
+  // What the page sent before the agent's socket opened: JSON, as text
+  queue: string[]
+}
+
+// A WebSocket of the page, piped both ways to one of the agent
+const openTerminal = (ws: Bun.ServerWebSocket<TerminalSocket>) => {
+  const token = readAgentToken()
+  if (!token) {
+    ws.close(1011, 'The dashboard agent is not running')
+    return
+  }
+  const upstream = new WebSocket(
+    `${AGENT_URL.replace(/^http/, 'ws')}/terminal`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    } as unknown as string[],
+  )
+  upstream.binaryType = 'arraybuffer'
+  ws.data.upstream = upstream
+  upstream.onopen = () => {
+    for (const message of ws.data.queue) upstream.send(message)
+    ws.data.queue = []
+  }
+  upstream.onmessage = (event) => {
+    if (typeof event.data === 'string') ws.send(event.data)
+    else ws.sendBinary(new Uint8Array(event.data as ArrayBuffer))
+  }
+  upstream.onclose = () => ws.close(1011, 'The dashboard agent closed')
+  upstream.onerror = () => ws.close(1011, 'The dashboard agent is not running')
+}
+
 const PUBLIC_DIR = join(import.meta.dir, 'public')
 const app = Bun.file(join(PUBLIC_DIR, 'index.html'))
 
@@ -245,13 +332,22 @@ const staticFile = (pathname: string) => {
   return existsSync(path) && statSync(path).isFile() ? Bun.file(path) : null
 }
 
-Bun.serve({
+Bun.serve<TerminalSocket>({
   port: PORT,
   // Event streams stay open with nothing to send
   idleTimeout: 0,
-  async fetch(request) {
+  async fetch(request, server) {
     const { pathname } = new URL(request.url)
     if (pathname === '/api/events') return events()
+    if (pathname === '/api/terminal') {
+      if (request.headers.get('Origin') !== DASHBOARD_ORIGIN) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      if (server.upgrade(request, { data: { upstream: null, queue: [] } })) {
+        return undefined
+      }
+      return new Response('Expected a WebSocket', { status: 426 })
+    }
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
     if (pathname === '/api/tools/picked') return pickTools(request)
     if (pathname === '/api/tools/profile') return chooseProfile(request)
@@ -271,6 +367,20 @@ Bun.serve({
       return new Response('Not found', { status: 404 })
     }
     return new Response(app, { headers: { 'Cache-Control': 'no-cache' } })
+  },
+  websocket: {
+    // A terminal stays open while a long task prints nothing
+    idleTimeout: 0,
+    open: openTerminal,
+    message(ws, message) {
+      const text = String(message)
+      const { upstream } = ws.data
+      if (upstream?.readyState === WebSocket.OPEN) upstream.send(text)
+      else ws.data.queue.push(text)
+    },
+    close(ws) {
+      ws.data.upstream?.close()
+    },
   },
 })
 

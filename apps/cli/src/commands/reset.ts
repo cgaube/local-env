@@ -2,6 +2,7 @@ import { Command } from 'commander'
 import { execa } from 'execa'
 import { existsSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
+import { stopAgent } from '#cli/core/agent.js'
 import { uninstallLocalCa } from '#cli/core/certificate.js'
 import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
 import { removeWildcardDns } from '#cli/core/dns.js'
@@ -178,6 +179,12 @@ export const resetCommand = new Command('reset')
           "Also remove mkcert's CA from your trust stores? Other projects using mkcert would stop being trusted.",
           false,
         ))
+
+      // Before its files go, and its runs with them
+      if (await stopAgent()) {
+        logger.group('Dashboard agent')
+        logger.success('Stopped the dashboard agent')
+      }
 
       if (docker) {
         logger.group('Docker')

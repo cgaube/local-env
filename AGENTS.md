@@ -63,7 +63,17 @@ holds what we build:
   Add a new piece there.
 - `compose.yaml` defines the core stack: `nginx-proxy`, `dockhand`,
   `catalog-server`, `proxy-connector`, `dashboard`. The CLI always passes
-  `-f <home>/compose.yaml`.
+  `-f <home>/compose.yaml`. The core services have `restart: 'no'`: after a
+  reboot, `local-env start` brings them back with the dashboard agent.
+- The dashboard agent runs `local-env install` and `update` for the dashboard,
+  in a pty (`Bun.Terminal`), on the Mac. `local-env start` spawns
+  `local-env agent` (hidden) detached (`src/core/agent.ts`); `stop` and `reset`
+  end it. It listens on `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`) and wants the
+  token it writes to `volumes/agent/token`, which only the dashboard mounts. The
+  dashboard pipes `/api/terminal` (WebSocket, its own Origin only) to it; the
+  page shows it with xterm.js (`features/terminal/`).
+  `services/dashboard/agent-protocol.ts` holds the messages.
+  `docs/features/dashboard-terminal.md` explains why.
 - `services/proxy/` builds the nginx proxy (plain `nginx:alpine`). It includes
   the routes that `proxy-connector` generates into `volumes/proxy/routes.conf`.
   Certificates are generated into `services/proxy/certs/` in the home folder by
@@ -74,10 +84,10 @@ holds what we build:
   `server.ts` serves the app built from `apps/web` (`public/`, with the app's
   routes falling back to `index.html`) and streams its data on `/api/events`:
   `volumes/proxy/routes.json` (like `local-env proxy routes`), the core
-  services, the sources' content counts and the tools. A core service with a
-  `local-env.app` label gets a card on the overview and a link in the sidebar;
-  `local-env.app.content` (`docker`, `ansible`) adds the count of that folder in
-  the sources.
+  services, the sources' content counts, the tools and whether the dashboard
+  agent runs. A core service with a `local-env.app` label gets a card on the
+  overview and a link in the sidebar; `local-env.app.content` (`docker`,
+  `ansible`) adds the count of that folder in the sources.
 - In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
   adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
   `package.json` beside `components.json`). Everything else is in
@@ -137,10 +147,12 @@ holds what we build:
   planned before the playbook (one confirmation, `--yes` to skip it, then
   registry logins and required variables) and deployed after it with Dockhand's
   `POST /stacks`, linked to their template, once: `stacks.json` keeps them from
-  coming back (`src/providers/docker/required-stacks.ts`). The dashboard never
-  runs anything on the Mac. `docs/features/tools-and-profiles.md` explains why.
+  coming back (`src/providers/docker/required-stacks.ts`). The dashboard runs
+  nothing on the Mac itself: it asks the dashboard agent.
+  `docs/features/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
-  sources and the tools (`volumes/tools/`).
+  sources, the tools (`volumes/tools/`) and the dashboard agent's files
+  (`volumes/agent/`).
 
 ## Feature docs
 

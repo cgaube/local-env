@@ -14,13 +14,17 @@ The full name of a role is `<namespace>.<collection>.<role>`. A folder of
 profiles on the Mac with `local-env install`.
 
 - The Tools page of the dashboard lists the tools of every source. The user
-  picks tools there with a switch. The dashboard does not install anything.
-- While tools wait for `local-env install`, a toast stays at the top center of
-  every page of the dashboard, with their count and the command
-  (`features/tools/install-toast/`). Its **Details** button opens a dialog: the
-  tools by profile and by pick, the command to copy, and the tools that use sudo
-  (`features/tools/install-dialog/`). The toast goes when they are installed. A
-  user who closes it sees it again when what waits changes.
+  picks tools there with a switch. Picking a tool does not install it.
+- The Tools and Profiles pages have an **Install** button
+  (`features/tools/install-button/`). When the next `local-env install` has
+  something to do, the button is primary, with the count: the tools to install
+  or update, and the unpicked tools that it forgets. The Tools item of the
+  sidebar shows the same count, on every page. The button then opens a dialog:
+  the tools by profile and by pick, the unpicked ones, the command to copy, and
+  the tools that use sudo (`features/tools/install-dialog/`). When the dashboard
+  agent runs, the dialog's **Install** runs `local-env install` on the Mac and
+  shows it in a terminal ([Dashboard terminal](dashboard-terminal.md)). With
+  nothing to do, the button runs the install at once.
 - `local-env install` installs the picked tools and the profile of the user. If
   the user has no profile and picked no tools, it asks for a profile in a
   terminal, with a select. It saves the profile (not with `--no-save`) and
@@ -252,6 +256,9 @@ sequenceDiagram
 
 ## Why
 
+- **A button that changes color, not a toast.** A toast on every page covered
+  the page and came back after each pick. The button is where the user picks,
+  and the sidebar's count is on every page.
 - **A profile is a plain Ansible role.** Ansible already resolves dependencies,
   removes duplicates and stops on cycles. A profile that contains another
   profile needs no new code. The role also works without local-env.
@@ -331,8 +338,11 @@ sequenceDiagram
   left the sources, gets the same select.
 - **local-env never uninstalls.** An Ansible role cannot always undo what it
   did. A tool can also hold data of the user. The user removes it.
-- **The dashboard runs nothing on the Mac.** It runs in a container. The install
-  needs the Mac, the user and sometimes sudo.
+- **The dashboard asks the agent to run the install.** The dashboard runs in a
+  container. The install needs the Mac, the user and sometimes sudo. The
+  dashboard agent is a process on the Mac that runs the real `local-env install`
+  in a terminal, so the install is the same from the dashboard and from a
+  terminal ([Dashboard terminal](dashboard-terminal.md)).
 - **The CLI deploys the stacks, not an Ansible role.** The docker provider of
   the CLI already links the stack to its template, saves the deployed version
   for the three-way merge, rewrites `build:` and asks for registry logins. An
@@ -366,8 +376,8 @@ sequenceDiagram
   for `become`. A role of such a collection that uses sudo fails without the
   password.
 - `local-env setup` does not ask for a profile yet.
-- When the profile is saved, the dashboard does not install it. The Install
-  button gives the `local-env install` command.
+- When the profile is saved, the dashboard does not install it. The user starts
+  the install from the install dialog, or with `local-env install`.
 - When profiles are in the sources, the sidebar does not show the domain.
 - Only stack templates (`"type": 3`) can be stacks of a tool. Container
   templates have no folder to name them.

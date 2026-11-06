@@ -18,8 +18,8 @@ export const NAVIGATION: NavSection[] = [
   { title: 'Overview', icon: LayoutDashboardIcon, to: '/' },
   // A set of tools and the stacks they need: first-class, not a kind of tool
   { title: 'Profiles', icon: LayersIcon, to: '/profiles' },
-  { title: 'Docker', icon: ContainerIcon, to: '/docker' },
   { title: 'Tools', icon: WrenchIcon, to: '/tools' },
+  { title: 'Docker', icon: ContainerIcon, to: '/docker' },
 ]
 
 // The section and page of a path, for the breadcrumb

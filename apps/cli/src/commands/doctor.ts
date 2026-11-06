@@ -1,3 +1,4 @@
+import { describeAgent } from '#cli/core/agent.js'
 import { Command } from 'commander'
 import { execa } from 'execa'
 import { existsSync, readdirSync, readFileSync } from 'fs'
@@ -485,6 +486,21 @@ export const doctorCommand = new Command('doctor')
           addResult(await checkHttpsProbe(host))
         }
       }
+
+      // Without it the dashboard can't run install and update
+      const agent = await describeAgent()
+      addResult(
+        agent.running
+          ? {
+              level: 'pass',
+              message: `Dashboard agent ${agent.version} on 127.0.0.1:${agent.port}`,
+            }
+          : {
+              level: 'warn',
+              message:
+                'Dashboard agent not running: run `local-env start` to install and update from the dashboard',
+            },
+      )
 
       logger.group('Sources')
       for (const result of await checkSources()) addResult(result)

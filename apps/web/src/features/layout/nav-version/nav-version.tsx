@@ -28,6 +28,8 @@ import {
 } from '#ui/components/ui/sidebar'
 import { isNewer, UPDATE_COMMAND } from '#cli/core/homebrew.ts'
 import { CodeSnippet } from '#ui/features/copy/code-snippet'
+import { useLiveData } from '#ui/features/live-data/live-data-provider'
+import { useTerminal } from '#ui/features/terminal/terminal-provider'
 import { useLatestVersion } from '#ui/features/version/use-latest-version.ts'
 
 // Where the update check answers
@@ -48,15 +50,19 @@ const DEV_LABELS = {
 // latest one. A build that isn't the Homebrew release says so, with its
 // commit: its version is only the one it will be released as, and brew
 // doesn't update it.
-// The dashboard can't run brew on the Mac: the terminal updates
+// A new release: what `local-env update` does, run here by the dashboard
+// agent, or in a terminal without it
 function UpdateDialog({
   version,
   open,
   onOpenChange,
+  onUpdate,
 }: {
   version: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Runs it in the terminal sheet: null when the agent isn't running
+  onUpdate: (() => void) | null
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,7 +70,10 @@ function UpdateDialog({
         <DialogHeader>
           <DialogTitle>Update local-env</DialogTitle>
           <DialogDescription>
-            local-env {version} is out. Run this in your terminal.
+            local-env {version} is out.{' '}
+            {onUpdate
+              ? 'Update from here, or run this in your terminal.'
+              : 'Run this in your terminal.'}
           </DialogDescription>
         </DialogHeader>
         <CodeSnippet code={UPDATE_COMMAND} />
@@ -75,6 +84,7 @@ function UpdateDialog({
         </p>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+          {onUpdate ? <Button onClick={onUpdate}>Update</Button> : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -83,7 +93,18 @@ function UpdateDialog({
 
 export function NavVersion({ build = __LOCAL_ENV_BUILD__ }) {
   const latest = useLatestVersion()
+  const { agent } = useLiveData()
+  const terminal = useTerminal()
   const [helpOpen, setHelpOpen] = useState(false)
+  // `local-env update` through the dashboard agent, in the terminal sheet
+  const runUpdate = agent?.available
+    ? () => {
+        setHelpOpen(false)
+        terminal.run('update')
+      }
+    : null
+  const updating =
+    agent?.run?.command === 'update' && agent.run.status === 'running'
   const release = build.kind === 'release'
   const update =
     release && latest.data && isNewer(latest.data, build.version)
@@ -187,12 +208,33 @@ export function NavVersion({ build = __LOCAL_ENV_BUILD__ }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              {update ? (
+              {/* Its terminal while it runs; a new release first says what
+                  it brings; otherwise it refreshes the services, sources and
+                  stacks */}
+              {updating ? (
+                <DropdownMenuItem onClick={terminal.show}>
+                  <ArrowUpCircleIcon />
+                  Updating…
+                </DropdownMenuItem>
+              ) : update ? (
                 <DropdownMenuItem onClick={() => setHelpOpen(true)}>
                   <ArrowUpCircleIcon />
-                  How to update
+                  Update to v{update}
                 </DropdownMenuItem>
-              ) : null}
+              ) : (
+                <DropdownMenuItem
+                  disabled={!runUpdate}
+                  onClick={runUpdate ?? undefined}
+                  title={
+                    runUpdate
+                      ? undefined
+                      : 'Run local-env start to update from here'
+                  }
+                >
+                  <ArrowUpCircleIcon />
+                  Update
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem disabled={checking} onClick={checkForUpdates}>
                 <RefreshCwIcon />
                 Check for updates
@@ -205,6 +247,7 @@ export function NavVersion({ build = __LOCAL_ENV_BUILD__ }) {
             version={update}
             open={helpOpen}
             onOpenChange={setHelpOpen}
+            onUpdate={runUpdate}
           />
         ) : null}
       </SidebarMenuItem>

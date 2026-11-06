@@ -159,6 +159,8 @@ const RUNTIME_DIRS = [
   'volumes/build-contexts',
   // The tools picked in the dashboard, installed by `local-env install`
   'volumes/tools',
+  // The dashboard agent's token, mounted into the dashboard alone
+  'volumes/agent',
 ]
 
 export const ensureRuntimeDirs = () => {

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { styleText } from 'node:util'
 import { join } from 'path'
+import { describeAgent } from '#cli/core/agent.js'
 import { checkCertificate, describeCertificate } from '#cli/core/certificate.js'
 import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
 import { COMPOSE_FILE, HOME_DIR } from '#cli/core/paths.js'
@@ -137,6 +138,20 @@ const showServices = async () => {
   }
 }
 
+// Runs install and update for the dashboard
+const showAgent = async () => {
+  const agent = await describeAgent()
+  if (agent.running) {
+    const run =
+      agent.run?.status === 'running' ? `, running ${agent.run.command}` : ''
+    logger.success(
+      `Dashboard agent ${agent.version} on 127.0.0.1:${agent.port}${run}`,
+    )
+  } else {
+    logger.warn('Dashboard agent not running. Run `local-env start`.')
+  }
+}
+
 const showDomain = async () => {
   logger.group('Domain')
   if (!existsSync(CONFIG_PATH)) {
@@ -234,6 +249,7 @@ export const statusCommand = new Command('status')
   .action(async (options: { services: boolean }) => {
     try {
       const { running, dockhand } = await showServices()
+      await showAgent()
       if (options.services) return
       await showDomain()
       await showSources()

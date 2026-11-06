@@ -1,20 +1,5 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`local-env status says what to run when nothing is set up 1`] = `
-"│
-◇  Core services
-│  ▲ Docker is not running
-│
-◇  Domain
-│  ▲ Not set up yet. Run \`local-env setup\`.
-│
-◇  Sources
-│  None. Add one with \`local-env sources add <repo>\`.
-│
-◇  Routes
-│  None while the proxy is stopped"
-`;
-
 exports[`local-env status shows the services, domain, sources and routes 1`] = `
 "│
 ◇  Core services
@@ -22,6 +7,7 @@ exports[`local-env status shows the services, domain, sources and routes 1`] = `
 │  dockhand         running    http://localhost:17300                Docker UI: deploy and manage stacks from your templates
 │  nginx-proxy      running    ports 80, 443                         HTTPS proxy: serves every container with a VIRTUAL_HOST
 │  proxy-connector  running                                          Connects containers with a VIRTUAL_HOST to the proxy
+│  ▲ Dashboard agent not running. Run \`local-env start\`.
 │
 ◇  Domain
 │  local-env-e2e.test: *.local-env-e2e.test valid until 2126-10-07
@@ -33,4 +19,20 @@ exports[`local-env status shows the services, domain, sources and routes 1`] = `
 │  https://mail.local-env-e2e.test      mail      running
 │  https://db-admin.local-env-e2e.test  db-admin  restarting
 │  2 other containers without a route: docker ps, or http://localhost:17300"
+`;
+
+exports[`local-env status says what to run when nothing is set up 1`] = `
+"│
+◇  Core services
+│  ▲ Docker is not running
+│  ▲ Dashboard agent not running. Run \`local-env start\`.
+│
+◇  Domain
+│  ▲ Not set up yet. Run \`local-env setup\`.
+│
+◇  Sources
+│  None. Add one with \`local-env sources add <repo>\`.
+│
+◇  Routes
+│  None while the proxy is stopped"
 `;

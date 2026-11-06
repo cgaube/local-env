@@ -17,9 +17,11 @@ describe.concurrent('local-env start', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(`*.${TEST_DOMAIN} valid until 2126`)
+    expect(result.output).toContain('local-env is running')
     expect(result.output).toContain(
-      `local-env is running: https://local-env.${TEST_DOMAIN}`,
+      `Dashboard: https://local-env.${TEST_DOMAIN}`,
     )
+    expect(result.output).toContain(`Dockhand:  https://docker.${TEST_DOMAIN}`)
     const up = cli.bin.calls('docker').find((call) => composeUp(call.args))
     expect(up?.args).not.toContain('--build')
     // Bind mounts, created before compose

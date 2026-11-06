@@ -86,6 +86,14 @@ export default defineConfig(({ command, mode }) => ({
               changeOrigin: true,
               // The mkcert CA isn't in Node's trust store
               secure: false,
+              // /api/terminal, the dashboard agent's WebSocket. The dashboard
+              // takes only its own pages' Origin.
+              ws: true,
+              configure: (proxy) => {
+                proxy.on('proxyReqWs', (request) =>
+                  request.setHeader('Origin', dashboardUrl()),
+                )
+              },
             },
           },
         }

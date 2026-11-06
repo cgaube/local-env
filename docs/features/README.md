@@ -8,6 +8,7 @@ the people who change local-env.
 | Feature                                     | What it does                                                     |
 | ------------------------------------------- | ---------------------------------------------------------------- |
 | [Tools and profiles](tools-and-profiles.md) | Installs the Ansible roles of the sources on the Mac, by profile |
+| [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install` and `update` from the dashboard         |
 
 ## Write a feature file
 
