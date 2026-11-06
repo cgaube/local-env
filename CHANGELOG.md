@@ -1,5 +1,17 @@
 # local-env
 
+## 0.6.0
+
+### Minor Changes
+
+- 4a276bc: `local-env setup` now ends by asking "Start local-env now?", so a new
+  setup ends with Dockhand running and configured. `setup --yes` doesn't start
+  it.
+- 4a276bc: Hide the Dockhand pages local-env users rarely need (Activity,
+  Registry, Schedules, Images, Volumes, Networks) from its sidebar on a fresh
+  setup. A sidebar you already changed is kept, and Dockhand's sidebar settings
+  show the pages again.
+
 ## 0.5.0
 
 ### Minor Changes
