@@ -166,7 +166,6 @@ sequenceDiagram
   cli->>files: forget the tools no longer wanted (installed.json)
   opt a wanted tool, or a Galaxy role it includes, uses become
     cli->>user: ask for the sudo password
-    cli->>tmp: write the password file
   end
   opt the collections of wanted tools need Galaxy collections
     cli->>tmp: write requirements.yml (every range, without the collections of the sources)
@@ -175,6 +174,9 @@ sequenceDiagram
   cli->>tmp: link each collection at ansible_collections/#lt;namespace#gt;/#lt;name#gt;
   cli->>tmp: write playbook.yml (the roots, by full name or absolute path)
   cli->>ansible: run, ANSIBLE_COLLECTIONS_PATH = the links, ANSIBLE_ROLES_PATH = ansible/ of every source
+  opt there is a password
+    cli->>ansible: the password on stdin (--become-password-file -), then close stdin
+  end
   ansible-->>cli: events as JSON lines
   cli->>user: a group for each role, a line for each task
   cli->>tmp: remove the folder (also on Ctrl-C or a kill)
@@ -207,7 +209,13 @@ sequenceDiagram
 - `apps/cli/src/core/playbook-output.ts` shows the events of Ansible with clack.
   `install --verbose` shows the output of Ansible itself.
 - A task with `become: true` (or `yes`) in a wanted tool makes the CLI ask for
-  the password. Ansible reads it from `ANSIBLE_BECOME_PASSWORD_FILE`.
+  the password. The CLI runs `ansible-playbook --become-password-file -` and
+  writes the password to its stdin, then closes stdin. Without a password, the
+  CLI gives no flag and closes stdin at once. Ansible then runs sudo with `-n`:
+  a task that needs the password fails at once and does not wait. The CLI names
+  its role and asks the user to report it.
+- With `--verbose`, the output of Ansible goes to the terminal, but stdin is
+  still the pipe of the password.
 - `apps/cli/src/core/run-folder.ts` makes the temporary folder
   (`$TMPDIR/local-env-install-*`). The folder holds a `pid` file. On SIGINT,
   SIGTERM or SIGHUP, the CLI stops Ansible, removes the folder and exits (130,
@@ -310,14 +318,24 @@ sequenceDiagram
   profile includes. A list of ids, like `profile.json`, says what the file is.
 - **`install` writes its own playbook in a temporary folder.** `picked.json`
   holds only the picks. With `--no-save`, the profile of the run is not the
-  saved profile. A temporary playbook holds both cases. It goes in the same
-  folder as the password, which only the user can read, and local-env removes it
-  after the run.
-- **The password folder is removed on signals, not only at the end.** Without a
-  signal handler, Ctrl-C ends the process before its `finally` runs. The
-  password then stays on the disk. A SIGKILL or a crash cannot be caught, so the
-  next run removes the folders of runs whose process is gone. A folder of a run
-  that is still active stays: two installs can run at the same time.
+  saved profile. A temporary playbook holds both cases. It goes in a folder that
+  only the user can read, and local-env removes it after the run.
+- **The sudo password goes to Ansible on stdin, not in a file.** A file puts the
+  password on the disk, and a SIGKILL or a crash leaves it there. An environment
+  variable or a command-line argument (`-e ansible_become_password=…`) is
+  visible to other processes of the user (`ps`). Ansible reads `-` as stdin
+  until the end, before it starts the play, so the password is only in the
+  memory of local-env and Ansible. Ansible also removes the spaces at the start
+  and end of a password file, but only the newline from stdin: a password that
+  starts or ends with a space works only on stdin. The sudo cache (`sudo -v`
+  before the run) does not work: macOS keeps it for each terminal, Ansible's
+  sudo has no terminal, and the cache expires after 5 minutes.
+- **The run folder is removed on signals, not only at the end.** Without a
+  signal handler, Ctrl-C ends the process before its `finally` runs, and the
+  folder stays in `$TMPDIR`. It holds no secret, only the playbook and the
+  links. A SIGKILL or a crash cannot be caught, so the next run removes the
+  folders of runs whose process is gone. A folder of a run that is still active
+  stays: two installs can run at the same time.
 - **The playbook names each role one time.** It can name a root by path, and a
   profile names its dependencies by name. Ansible does not see that these are
   the same role, so a pick that the profile includes runs two times.
@@ -375,7 +393,12 @@ sequenceDiagram
   collection is not in the sources.
 - The CLI does not read the roles of the collections of the `ansible` package
   for `become`. A role of such a collection that uses sudo fails without the
-  password.
+  password. The scan finds only `become: true` or `yes`: a templated value
+  (`become: "{{ … }}"`) fails the same way. The CLI then names the role.
+- With `--verbose`, stdin is a pipe, not the terminal: a role that asks a
+  question (`pause`, `vars_prompt`) gets no answer. The CLI cannot name a role
+  that needs a password it did not ask for: Ansible's own output shows the
+  error.
 - `local-env setup` does not ask for a profile yet.
 - When the profile is saved, the dashboard does not install it. The user starts
   the install from the install dialog, or with `local-env install`.

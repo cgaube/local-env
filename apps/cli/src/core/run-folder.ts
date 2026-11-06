@@ -11,10 +11,11 @@ import { join } from 'path'
 import { cancelFrame } from '#cli/utils/logger.js'
 
 // A folder only you can read (mkdtemp makes it 0700), for the files of one
-// Ansible run: its playbook and the sudo password. Removed when the run ends,
-// on Ctrl-C or a kill too: the password must not stay on disk. A run killed
-// with no chance to clean up (SIGKILL, a crash) leaves it: the next run
-// removes the folders whose process is gone.
+// Ansible run: its playbook, the links to the collections, a Galaxy
+// requirements file. No secret: Ansible gets the sudo password on its stdin
+// (tools.ts). Removed when the run ends, on Ctrl-C or a kill too, so runs
+// leave nothing behind. A run killed with no chance to clean up (SIGKILL, a
+// crash) leaves it: the next run removes the folders whose process is gone.
 
 const PREFIX = 'local-env-install-'
 const OWNER_FILE = 'pid'

@@ -228,7 +228,8 @@ const linkCollections = (catalog: Role[], dir: string) => {
 // output when verbose. Their playbook is written to a folder only you can
 // read, removed once Ansible is done, or stopped (run-folder.ts). A role that
 // uses sudo makes local-env ask for your password first: Ansible reads it
-// from a file there. Records what ran, for the dashboard.
+// from its stdin, so it is never on the disk. Records what ran, for the
+// dashboard.
 export const runPlaybook = async (
   catalog: Role[],
   roots: Role[],
@@ -237,8 +238,8 @@ export const runPlaybook = async (
   // What Ansible runs: the roots and the ones they include
   const run = withDependencies(catalog, roots)
 
-  // Its playbook and the password, removed once Ansible is done, on Ctrl-C
-  // too (run-folder.ts)
+  // Its playbook and the collection links, removed once Ansible is done, on
+  // Ctrl-C too (run-folder.ts)
   using folder = createRunFolder()
 
   // The Galaxy collections they need first: their roles can use sudo too
@@ -254,14 +255,25 @@ export const runPlaybook = async (
       ),
     ),
   ]
+  // Required: without it, Ansible runs sudo without a password and the role
+  // fails
   const password =
     sudo.length > 0
-      ? await askPassword(`Your password, for sudo (${sudo.join(', ')})`)
+      ? await askPassword(`Your password, for sudo (${sudo.join(', ')})`, {
+          required: true,
+        })
       : null
 
   const collections = linkCollections(catalog, join(folder.path, 'collections'))
   const playbook = join(folder.path, 'playbook.yml')
-  const args = ['--inventory', 'localhost,', playbook]
+  const args = [
+    '--inventory',
+    'localhost,',
+    // `-` is stdin: Ansible reads it to the end, then strips the newline
+    // (only that: a password can start or end with a space)
+    ...(password ? ['--become-password-file', '-'] : []),
+    playbook,
+  ]
   writeFileSync(
     playbook,
     // Each role once: a pick the profile includes is not named again
@@ -294,23 +306,28 @@ export const runPlaybook = async (
     ANSIBLE_PYTHON_INTERPRETER: 'auto_silent',
     ANSIBLE_LOCALHOST_WARNING: 'false',
   }
-  if (password) {
-    const file = join(folder.path, 'become')
-    // Not executable: Ansible would run it to get the password
-    writeFileSync(file, `${password}\n`, { mode: 0o600 })
-    env.ANSIBLE_BECOME_PASSWORD_FILE = file
-  }
+  // The password, written then closed. Without one, nothing: a role never
+  // waits for input.
+  const stdin = password
+    ? { input: `${password}\n` }
+    : { stdin: 'ignore' as const }
 
   // null with Ansible's own output, which has its recap
   let summary: PlaybookSummary | null = null
   if (verbose) {
-    const child = execa('ansible-playbook', args, { stdio: 'inherit', env })
-    // A terminal's Ctrl-C reaches Ansible too, a kill doesn't
+    const child = execa('ansible-playbook', args, {
+      ...stdin,
+      stdout: 'inherit',
+      stderr: 'inherit',
+      env,
+    })
+    // A terminal's Ctrl-C reaches Ansible too (same process group), a kill
+    // doesn't
     folder.onSignal((signal) => child.kill(signal))
     await child
   } else {
     const child = execa('ansible-playbook', args, {
-      stdin: 'ignore',
+      ...stdin,
       reject: false,
       env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
     })
@@ -327,6 +344,17 @@ export const runPlaybook = async (
       // before any task: they are only in its stderr
       if (summary.failed === 0 && stderr) {
         logger.log(String(stderr).trim().split('\n').slice(-10).join('\n'))
+      }
+      // sudo wanted a password local-env didn't ask for: the scan missed a
+      // become (`become: "{{ … }}"`, a role it doesn't read)
+      if (!password && summary.needPassword.length > 0) {
+        logger.callout(
+          'warn',
+          [
+            `A role needs your sudo password: ${summary.needPassword.join(', ')}`,
+            'local-env did not see that it uses sudo, so it did not ask for it. Please report it, with the name of the role.',
+          ].join('\n'),
+        )
       }
       throw new Error(`ansible-playbook exited with ${exitCode}`)
     }

@@ -60,6 +60,11 @@ export type FakeCall = {
   inputs: Record<string, string>
   // Ansible's collections, by name: where each one links
   collections: Record<string, string>
+  // ansible-playbook only: what it read on its stdin (empty when the CLI
+  // closed it), and every file of its playbook's folder, by path, read
+  // during the call (links not followed)
+  stdin?: string
+  runFolder?: Record<string, string>
   // false when no rule answered: the stub failed
   matched: boolean
 }

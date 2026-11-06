@@ -86,12 +86,35 @@ const collections = env.ANSIBLE_COLLECTIONS_PATH
       ),
     )
   : {}
+// ansible-playbook: its stdin (the CLI writes the sudo password there, or
+// closes it) and the files of the run folder, to check that none holds the
+// password. Other commands may keep stdin open: not read.
+const filesIn = (folder: string): [string, string][] =>
+  readdirSync(folder).flatMap((name) => {
+    const path = join(folder, name)
+    const stat = lstatSync(path)
+    if (stat.isSymbolicLink()) return []
+    return stat.isDirectory()
+      ? filesIn(path)
+      : [[path, readFileSync(path, 'utf8')] as [string, string]]
+  })
+const playbook = args.at(-1) ?? ''
+const playbookRun =
+  command === 'ansible-playbook'
+    ? {
+        stdin: await Bun.stdin.text(),
+        runFolder: existsSync(playbook)
+          ? Object.fromEntries(filesIn(dirname(playbook)))
+          : {},
+      }
+    : {}
 const call: FakeCall = {
   command,
   args,
   env,
   inputs,
   collections,
+  ...playbookRun,
   matched: Boolean(rule),
 }
 appendFileSync(join(dir, 'calls.jsonl'), `${JSON.stringify(call)}\n`)
