@@ -39,6 +39,23 @@ const rolesRun = (cli: Cli) => {
   )
 }
 
+// Ansible got the password on its stdin, with `--become-password-file -`,
+// and no file of its run folder held it
+const expectPasswordOnStdin = (cli: Cli, password: string) => {
+  const run = cli.bin.calls('ansible-playbook').at(-1)
+  const flag = run?.args.indexOf('--become-password-file') ?? -1
+  expect(flag).toBeGreaterThan(-1)
+  expect(run?.args[flag + 1]).toBe('-')
+  expect(run?.stdin).toBe(`${password}\n`)
+  expect(run?.env.ANSIBLE_BECOME_PASSWORD_FILE).toBeUndefined()
+  expect(Object.keys(run?.runFolder ?? {})).toContainEqual(
+    expect.stringMatching(/playbook\.yml$/),
+  )
+  for (const content of Object.values(run?.runFolder ?? {})) {
+    expect(content).not.toContain(password.trim())
+  }
+}
+
 // A source with a profile: backend, made of base (itself a profile) and node
 const sourceWithProfiles = (cli: Cli) =>
   sourceWithRoles(cli, ['git', 'node', 'backend', 'base', 'frontend'], {
@@ -287,9 +304,51 @@ describe.concurrent('local-env install', () => {
       })
 
       expect(result.exitCode).toBe(0)
-      expect(
-        cli.bin.calls('ansible-playbook')[0]?.env.ANSIBLE_BECOME_PASSWORD_FILE,
-      ).toBeDefined()
+      expectPasswordOnStdin(cli, 'secret')
+    },
+  )
+
+  test('passes no password when no role needs sudo', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git'])
+    cli.home.seedPickedTools(['acme/git'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    const [run] = cli.bin.calls('ansible-playbook')
+    expect(run?.args).not.toContain('--become-password-file')
+    // Closed: a role never waits for input
+    expect(run?.stdin).toBe('')
+  })
+
+  test.skipIf(COMPILED)(
+    'names the role when sudo wants a password local-env did not ask for',
+    async () => {
+      await using cli = await createInstallCli()
+      // A templated become: the scan doesn't see it
+      await sourceWithRoles(cli, ['dns'], {
+        'ansible/dns/tasks/main.yml':
+          '- name: x\n  become: "{{ true }}"\n  ping:\n',
+      })
+      cli.home.seedPickedTools(['acme/dns'])
+      cli.bin.on('ansible-playbook', [], {
+        exitCode: 2,
+        stdout: playbookEvents([
+          {
+            role: 'dns',
+            task: 'Create the resolver',
+            result: 'failed',
+            msg: 'Task failed: Premature end of stream waiting for become success.\n>>> Standard Error\nsudo: a password is required',
+          },
+        ]),
+      })
+
+      const result = await cli.run(['install'])
+
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain('A role needs your sudo password: Dns')
+      expect(result.output).toContain('did not ask for it')
     },
   )
 
@@ -338,11 +397,41 @@ describe.concurrent('local-env install', () => {
       })
 
       expect(result.exitCode).toBe(0)
-      // Ansible reads it from a file, removed once the run ends
-      const file =
-        cli.bin.calls('ansible-playbook')[0]?.env.ANSIBLE_BECOME_PASSWORD_FILE
-      expect(file).toBeString()
-      expect(existsSync(file!)).toBe(false)
+      expectPasswordOnStdin(cli, 'secret')
+    },
+  )
+
+  test.skipIf(COMPILED)('keeps the spaces around the password', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['dns'], {
+      'ansible/dns/tasks/main.yml': '- name: x\n  become: true\n  ping:\n',
+    })
+    cli.home.seedPickedTools(['acme/dns'])
+
+    await cli.run(['install'], {
+      answers: [{ ask: 'Your password, for sudo (Dns)', answer: ' s3 cret ' }],
+    })
+
+    expectPasswordOnStdin(cli, ' s3 cret ')
+  })
+
+  test.skipIf(COMPILED)(
+    'passes the password on stdin with --verbose too',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithRoles(cli, ['dns'], {
+        'ansible/dns/tasks/main.yml': '- name: x\n  become: true\n  ping:\n',
+      })
+      cli.home.seedPickedTools(['acme/dns'])
+      cli.bin.on('ansible-playbook', [], { stdout: 'PLAY [local-env tools]\n' })
+
+      const result = await cli.run(['install', '--verbose'], {
+        answers: [{ ask: 'Your password, for sudo (Dns)', answer: 'secret' }],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('PLAY [local-env tools]')
+      expectPasswordOnStdin(cli, 'secret')
     },
   )
 
@@ -365,7 +454,7 @@ describe.concurrent('local-env install', () => {
   )
 
   test.skipIf(COMPILED)(
-    'removes the password when stopped halfway',
+    'removes the run folder when stopped halfway',
     async () => {
       await using cli = await createInstallCli()
       await sourceWithRoles(cli, ['dns'], {
@@ -383,11 +472,6 @@ describe.concurrent('local-env install', () => {
         expect(result.exitCode).toBe(send === 'SIGINT' ? 130 : 143)
         expect(result.output).toContain('Cancelled')
         expect(result.output).not.toContain('Failed')
-        // Ansible had it, then the folder went
-        const file = cli.bin.calls('ansible-playbook').at(-1)
-          ?.env.ANSIBLE_BECOME_PASSWORD_FILE
-        expect(file).toBeString()
-        expect(existsSync(file!)).toBe(false)
         expect(readdirSync(cli.tmp)).not.toContainEqual(
           expect.stringMatching(/^local-env-install-/),
         )
@@ -403,7 +487,7 @@ describe.concurrent('local-env install', () => {
     // Its process is gone: no pid of a real process is this large
     const old = join(cli.tmp, 'local-env-install-old')
     mkdirSync(old, { recursive: true })
-    writeFileSync(join(old, 'become'), 'secret\n')
+    writeFileSync(join(old, 'playbook.yml'), '- hosts: localhost\n')
     writeFileSync(join(old, 'pid'), '99999999')
 
     await cli.run(['install'])

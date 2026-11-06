@@ -136,19 +136,19 @@ holds what we build:
   `volumes/tools/collections/` with `ansible-galaxy`
   (`src/core/galaxy-collections.ts`; `update` upgrades them); the dashboard
   shows their roles in a profile's details (`externalRoles`). When a wanted role
-  uses `become`, the CLI asks for the password (`askPassword`) and hands it to
-  Ansible in a file of that folder (`ANSIBLE_BECOME_PASSWORD_FILE`). The folder
-  goes when the run ends, on SIGINT, SIGTERM and SIGHUP too; the next run
-  removes the ones of runs that were killed. Ansible prints its events as JSON
-  lines (`ansible.posix.jsonl`), which `src/core/playbook-output.ts` draws with
-  clack: a group per role, a spinner per task, a line per result
-  (`install --verbose` shows Ansible's own output). Tests fake them with
-  `tests/support/factories/ansible.ts`. The stacks the wanted roles need are
-  planned before the playbook (one confirmation, `--yes` to skip it, then
-  registry logins and required variables) and deployed after it with Dockhand's
-  `POST /stacks`, linked to their template, once: `stacks.json` keeps them from
-  coming back (`src/providers/docker/required-stacks.ts`). The dashboard runs
-  nothing on the Mac itself: it asks the dashboard agent.
+  uses `become`, the CLI asks for the password (`askPassword`, required) and
+  writes it to Ansible's stdin (`--become-password-file -`): it is never on the
+  disk. The folder goes when the run ends, on SIGINT, SIGTERM and SIGHUP too;
+  the next run removes the ones of runs that were killed. Ansible prints its
+  events as JSON lines (`ansible.posix.jsonl`), which
+  `src/core/playbook-output.ts` draws with clack: a group per role, a spinner
+  per task, a line per result (`install --verbose` shows Ansible's own output).
+  Tests fake them with `tests/support/factories/ansible.ts`. The stacks the
+  wanted roles need are planned before the playbook (one confirmation, `--yes`
+  to skip it, then registry logins and required variables) and deployed after it
+  with Dockhand's `POST /stacks`, linked to their template, once: `stacks.json`
+  keeps them from coming back (`src/providers/docker/required-stacks.ts`). The
+  dashboard runs nothing on the Mac itself: it asks the dashboard agent.
   `docs/features/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources, the tools (`volumes/tools/`) and the dashboard agent's files

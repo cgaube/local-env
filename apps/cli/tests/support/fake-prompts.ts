@@ -75,10 +75,17 @@ export const askText = async (message: string, _initialValue: string) => {
 // A test can run the CLI as if without a terminal: FAKE_PROMPTS_NO_TTY=1
 export const canAsk = () => process.env.FAKE_PROMPTS_NO_TTY !== '1'
 
-export const askPassword = async (message: string) => {
+export const askPassword = async (
+  message: string,
+  { required = false }: { required?: boolean } = {},
+) => {
   const answer = next(message)
   if (typeof answer !== 'string') {
     return fail(message, `a password question, answered ${answer}`)
+  }
+  // The real prompt asks again: a test can't get past it with nothing
+  if (required && !answer) {
+    return fail(message, 'a required password, answered with nothing')
   }
   return answer
 }

@@ -35,9 +35,19 @@ export const askText = async (message: string, initialValue: string) => {
 // answer
 export const canAsk = () => process.stdin.isTTY === true
 
-// Masked as it is typed
-export const askPassword = async (message: string) => {
-  const answer = await password({ message })
+// Masked as it is typed. Required: an empty answer asks again (Ctrl-C still
+// stops)
+export const askPassword = async (
+  message: string,
+  { required = false }: { required?: boolean } = {},
+) => {
+  const answer = await password({
+    message,
+    validate: required
+      ? (value) =>
+          value ? undefined : 'Type your password, or press Ctrl-C to stop'
+      : undefined,
+  })
   exitOnCancel(answer)
   return String(answer)
 }

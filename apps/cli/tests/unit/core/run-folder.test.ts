@@ -10,7 +10,7 @@ afterAll(() => rmSync(parent, { recursive: true, force: true }))
 const runFolder = (name: string, pid: string | null) => {
   const dir = join(parent, name)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'become'), 'secret\n')
+  writeFileSync(join(dir, 'playbook.yml'), '- hosts: localhost\n')
   if (pid !== null) writeFileSync(join(dir, 'pid'), pid)
   return dir
 }

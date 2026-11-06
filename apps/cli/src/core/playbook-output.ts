@@ -24,7 +24,12 @@ export type PlaybookSummary = {
   changed: number
   skipped: number
   failed: number
+  // The roles whose task failed as sudo wanted a password, as shown
+  needPassword: string[]
 }
+
+// What sudo says when it has no password (Ansible runs it with -n then)
+const NO_PASSWORD = /a password is required/
 
 // Lines of a failed task's stderr shown
 const FAILURE_TAIL = 10
@@ -67,7 +72,13 @@ export const renderPlaybook = async (
   lines: AsyncIterable<string>,
   labels: ReadonlyMap<string, string> = new Map(),
 ): Promise<PlaybookSummary> => {
-  const summary: PlaybookSummary = { ok: 0, changed: 0, skipped: 0, failed: 0 }
+  const summary: PlaybookSummary = {
+    ok: 0,
+    changed: 0,
+    skipped: 0,
+    failed: 0,
+    needPassword: [],
+  }
   let group: string | null = null
   let task: string | null = null
   let progress: ReturnType<typeof spinner> | null = null
@@ -141,6 +152,13 @@ export const renderPlaybook = async (
         const stderr = host.stderr?.trim().split('\n').slice(-FAILURE_TAIL)
         const details = [message, ...(stderr ?? [])].filter(Boolean)
         if (details.length > 0) logger.log(styleText('red', details.join('\n')))
+        const role = group ? (labels.get(group) ?? group) : task
+        if (
+          details.some((detail) => NO_PASSWORD.test(detail!)) &&
+          !summary.needPassword.includes(role)
+        ) {
+          summary.needPassword.push(role)
+        }
         break
       }
     }
