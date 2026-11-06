@@ -3,10 +3,12 @@ import { SidebarTrigger } from '#ui/components/ui/sidebar'
 import { ThemeSwitcher } from '#ui/features/theme/theme-switcher'
 import { PageBreadcrumb } from '#ui/features/layout/page-breadcrumb'
 
-// sidebar-07: the page's header, lower while the sidebar shows only icons
+// sidebar-06's header: white, with a border under it, above the muted
+// canvas of the pages. Lower while the sidebar shows only icons, like
+// sidebar-07's.
 export function SiteHeader() {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+    <header className="bg-background flex h-16 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <div className="flex w-full items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator

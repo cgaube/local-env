@@ -12,6 +12,7 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import type { Tools } from '#ui/features/live-data/live-data.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
+import { InstallButton } from '#ui/features/tools/install-button'
 import { CatalogTable } from '#ui/features/tools/catalog-table'
 import { catalogRows } from '#ui/features/tools/tools.ts'
 import { usePickedTools } from '#ui/features/tools/use-picked-tools.ts'
@@ -45,8 +46,10 @@ export function CatalogPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Tools"
-        description="The tools your sources can install on this Mac. Pick them here, install them with local-env install."
-      />
+        description="The tools your sources can install on this Mac. Pick them here, then install them."
+      >
+        <InstallButton />
+      </PageHeader>
       {!tools ? (
         <Card className="py-0">
           <div className="p-4">

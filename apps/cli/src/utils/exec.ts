@@ -1,4 +1,5 @@
 import { execa } from 'execa'
+import { agentPort } from '#cli/core/agent.js'
 import { readConfig } from '#cli/core/config.js'
 import { COMPOSE_FILE } from '#cli/core/paths.js'
 import {
@@ -20,6 +21,7 @@ const composeEnv = () => {
   return {
     LOCAL_ENV_DOMAIN: domain,
     LOCAL_ENV_BUILD_PORT: String(buildPort),
+    LOCAL_ENV_AGENT_PORT: String(agentPort()),
     ...readRevisions(),
   }
 }

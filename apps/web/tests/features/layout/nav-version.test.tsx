@@ -5,6 +5,10 @@ import { SidebarProvider } from '#ui/components/ui/sidebar'
 import { Toaster } from '#ui/components/ui/sonner'
 import { ThemeProvider } from '#ui/features/theme/theme-provider'
 import { NavVersion } from '#ui/features/layout/nav-version'
+import { createLiveDataStore } from '#ui/features/live-data/live-data.ts'
+import { LiveDataProvider } from '#ui/features/live-data/live-data-provider'
+import { TerminalProvider } from '#ui/features/terminal/terminal-provider'
+import { FakeEventSource } from '#ui-tests/support/fake-event-source.ts'
 
 type Build = Parameters<typeof NavVersion>[0]['build']
 
@@ -16,13 +20,20 @@ const renderVersion = (build: Build, latest: string | null | undefined) => {
   if (latest !== undefined) {
     queryClient.setQueryData(['latest-version'], latest)
   }
+  // Whether the dashboard agent runs: the Update of the dialog
+  const events = new FakeEventSource()
+  const store = createLiveDataStore(() => events as unknown as EventSource)
   render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <SidebarProvider>
-          <NavVersion build={build} />
-          <Toaster />
-        </SidebarProvider>
+        <LiveDataProvider store={store}>
+          <TerminalProvider>
+            <SidebarProvider>
+              <NavVersion build={build} />
+              <Toaster />
+            </SidebarProvider>
+          </TerminalProvider>
+        </LiveDataProvider>
       </QueryClientProvider>
     </ThemeProvider>,
   )
@@ -39,7 +50,7 @@ describe('NavVersion', () => {
 
     await user.click(screen.getByRole('button', { name: /v0\.2\.0.*Update/ }))
     expect(await screen.findByText('v0.3.0')).toBeInTheDocument()
-    await user.click(screen.getByRole('menuitem', { name: 'How to update' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Update to v0.3.0' }))
 
     const dialog = await screen.findByRole('dialog', {
       name: 'Update local-env',
@@ -48,6 +59,10 @@ describe('NavVersion', () => {
       within(dialog).getByText('local-env 0.3.0 is out.', { exact: false }),
     ).toBeInTheDocument()
     expect(within(dialog).getByText('local-env update')).toBeInTheDocument()
+    // The dashboard agent isn't running: the command only
+    expect(
+      within(dialog).queryByRole('button', { name: 'Update' }),
+    ).not.toBeInTheDocument()
   })
 
   test('says nothing about updates when this is the latest', async () => {
@@ -57,9 +72,12 @@ describe('NavVersion', () => {
     await user.click(screen.getByRole('button', { name: /v0\.2\.0/ }))
 
     const menu = await screen.findByRole('menu')
-    expect(screen.queryByText('Update')).not.toBeInTheDocument()
+    // No badge on the version: no release to update to
     expect(
-      screen.queryByRole('menuitem', { name: 'How to update' }),
+      screen.getByRole('button', { name: /v0\.2\.0/ }),
+    ).not.toHaveTextContent('Update')
+    expect(
+      screen.queryByRole('menuitem', { name: /^Update to/ }),
     ).not.toBeInTheDocument()
     // Running and Latest
     expect(within(menu).getAllByText('v0.2.0')).toHaveLength(2)
@@ -130,7 +148,10 @@ describe('NavVersion', () => {
     // The commit is too long for the sidebar
     expect(screen.getByText('v0.1.1')).toBeInTheDocument()
     expect(screen.queryByText(/abc1234/)).not.toBeInTheDocument()
-    expect(screen.queryByText('Update')).not.toBeInTheDocument()
+    // No badge on the version: a checkout updates with git
+    expect(
+      screen.getByRole('button', { name: /v0\.1\.1/ }),
+    ).not.toHaveTextContent('Update')
 
     await user.click(screen.getByRole('button', { name: /v0\.1\.1/ }))
     expect(await screen.findByText('abc1234-dirty')).toBeInTheDocument()

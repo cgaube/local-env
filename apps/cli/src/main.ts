@@ -100,7 +100,14 @@ program.hook('preAction', (_, command) => {
 
 // Only for commands: --version and --help leave the home folder alone
 const command = process.argv[2] ?? ''
-if (command && !command.startsWith('-') && command !== 'help') {
+// The agent runs in the background, for the dashboard: nobody reads its
+// callouts
+if (
+  command &&
+  !command.startsWith('-') &&
+  command !== 'help' &&
+  command !== 'agent'
+) {
   await prepareHome()
   // start and update recreate them anyway
   if (!['start', 'update'].includes(command)) {

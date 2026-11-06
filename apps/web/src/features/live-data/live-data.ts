@@ -1,6 +1,9 @@
 // What services/dashboard/server.ts streams on /api/events: proxy-connector's
-// routes and core services, the sources' content counts and the tools
-// (services/dashboard/tools.ts)
+// routes and core services, the sources' content counts, the tools
+// (services/dashboard/tools.ts) and the dashboard agent
+import type { AgentState } from '#services/dashboard/agent-protocol.ts'
+
+export type { AgentState }
 
 export type Route = {
   hosts: string[]
@@ -80,11 +83,13 @@ export type LiveData = {
   services: Service[] | null
   sources: Source[] | null
   tools: Tools | null
+  // Whether install and update can run from here, and the current run
+  agent: AgentState | null
   connected: boolean
   updatedAt: Date | null
 }
 
-const TOPICS = ['routes', 'services', 'sources', 'tools'] as const
+const TOPICS = ['routes', 'services', 'sources', 'tools', 'agent'] as const
 
 type Listener = () => void
 
@@ -99,6 +104,7 @@ export const createLiveDataStore = (
     services: null,
     sources: null,
     tools: null,
+    agent: null,
     connected: false,
     updatedAt: null,
   }

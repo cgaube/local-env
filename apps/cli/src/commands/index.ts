@@ -1,3 +1,4 @@
+import { agentCommand } from '#cli/commands/agent.js'
 import { configCommand } from '#cli/commands/config.js'
 import { doctorCommand } from '#cli/commands/doctor.js'
 import { installCommand } from '#cli/commands/install.js'
@@ -24,7 +25,8 @@ export const commands = [
   doctorCommand,
   resetCommand,
   uiCommand,
+  agentCommand,
 ]
 
 // For working on local-env, not in --help
-export const hiddenCommands = new Set([uiCommand])
+export const hiddenCommands = new Set([uiCommand, agentCommand])

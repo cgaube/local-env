@@ -33,24 +33,32 @@ function ToolList({ title, tools }: { title: string; tools: CatalogRow[] }) {
   )
 }
 
-// What waits for `local-env install`, opened from the install toast. The
-// dashboard can't run anything on the Mac: it gives the command to run. A
-// profile is a set of tools, not one: its tools are listed under its name.
+// What the next `local-env install` changes, opened by the Install button
+// when something waits. With the dashboard agent running, Install runs it
+// here, in the terminal sheet; without it, the dialog gives the command to
+// run. A profile is a set of tools, not one: its tools are listed under its
+// name.
 export function InstallDialog({
   open,
   onOpenChange,
   pending,
+  unpicked,
   sudo,
   profile,
+  onInstall,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   // The tools, without the profiles
   pending: CatalogRow[]
+  // Installed, then unpicked: the install forgets them, they stay installed
+  unpicked: CatalogRow[]
   // The labels of what runs with sudo, the profile's own tasks included
   sudo: string[]
   // Only its name is shown
   profile: { label: string } | null
+  // Runs `local-env install` through the agent: null when it isn't running
+  onInstall: (() => void) | null
 }) {
   const inProfile = pending.filter((tool) => tool.inProfile !== null)
   const picked = pending.filter((tool) => tool.inProfile === null)
@@ -58,10 +66,18 @@ export function InstallDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Install {plural(pending.length, 'tool')}</DialogTitle>
+          <DialogTitle>
+            {pending.length > 0
+              ? `Install ${plural(pending.length, 'tool')}`
+              : 'Apply your changes'}
+          </DialogTitle>
           <DialogDescription>
-            Picked in the catalog or in your profile, not installed on this Mac
-            yet, or changed since. Run this in your terminal to install them.
+            {pending.length > 0
+              ? 'Picked in the catalog or in your profile, not installed on this Mac yet, or changed since. '
+              : null}
+            {onInstall
+              ? 'Install from here, or run this in your terminal.'
+              : 'Run this in your terminal.'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
@@ -69,8 +85,16 @@ export function InstallDialog({
             <ToolList title={`${profile.label} profile`} tools={inProfile} />
           ) : null}
           <ToolList title="Picked" tools={picked} />
+          <ToolList title="Unpicked, stay on this Mac" tools={unpicked} />
         </div>
         <CodeSnippet code="local-env install" />
+        {onInstall ? null : (
+          <p className="text-muted-foreground text-sm">
+            To install from here, run{' '}
+            <code className="font-mono">local-env start</code>: it starts the
+            agent that runs the install on this Mac.
+          </p>
+        )}
         {sudo.length > 0 ? (
           <p className="text-muted-foreground text-sm">
             It asks for your password: {sudo.join(', ')}{' '}
@@ -79,6 +103,7 @@ export function InstallDialog({
         ) : null}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+          {onInstall ? <Button onClick={onInstall}>Install</Button> : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

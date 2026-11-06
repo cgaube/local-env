@@ -3,25 +3,28 @@ import { SidebarInset, SidebarProvider } from '#ui/components/ui/sidebar'
 import { Toaster } from '#ui/components/ui/sonner'
 import { AppSidebar } from '#ui/features/layout/app-sidebar'
 import { SiteHeader } from '#ui/features/layout/site-header'
-import { InstallToast } from '#ui/features/tools/install-toast'
+import { TerminalProvider } from '#ui/features/terminal/terminal-provider'
 
 // sidebar-07: the sidebar, collapsing to its icons, and beside it the page
 // under its header
 export function AppShell() {
   return (
     <SidebarProvider>
-      <AppSidebar />
-      {/* White cards on a muted canvas, like the shadcn/create preview.
+      {/* The terminal of install and update, open across pages */}
+      <TerminalProvider>
+        <AppSidebar />
+        {/* White cards on a muted canvas, like the shadcn/create preview.
           Dark cards already stand out from the background. */}
-      <SidebarInset className="bg-muted dark:bg-background">
-        <SiteHeader />
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <Outlet />
-        </div>
-      </SidebarInset>
-      {/* What a background action found (Check for updates) */}
-      <Toaster />
-      <InstallToast />
+        <SidebarInset className="bg-muted dark:bg-background">
+          <SiteHeader />
+          {/* Below the header's border: padded all round, like sidebar-06 */}
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <Outlet />
+          </div>
+        </SidebarInset>
+        {/* What a background action found (Check for updates) */}
+        <Toaster />
+      </TerminalProvider>
     </SidebarProvider>
   )
 }
