@@ -1,8 +1,9 @@
 # Runs Renovate on this repo as the release GitHub App, with the config of
 # .github/renovate.json5. Every day: the config opens the monthly pull request
-# on the 1st only, and security fixes on any day. Run it by hand (Run workflow)
-# to pick up a change at once. Its commits run CI, like the App's "Version
-# packages" pull request.
+# on the 1st only, and security fixes on any day. A box ticked in the
+# Dependency Dashboard or in one of its pull requests runs it at once, and so
+# does Run workflow. Its commits run CI, like the App's "Version packages" pull
+# request.
 # Needs the RELEASE_APP_CLIENT_ID variable and RELEASE_APP_PRIVATE_KEY secret.
 # The App needs these repository permissions: Contents, Pull requests, Issues
 # (the Dependency Dashboard), Workflows (the actions in .github/workflows/) and
@@ -14,6 +15,11 @@ on:
     # Inside the monthly window of the config: before 4am UTC on the 1st
     - cron: '0 1 * * *'
   workflow_dispatch:
+  # A ticked box edits the issue or the pull request's description
+  issues:
+    types: [edited]
+  pull_request:
+    types: [edited]
 
 # One run at a time
 concurrency:
@@ -26,6 +32,19 @@ permissions:
 
 jobs:
   renovate:
+    # Edits by a person, of Renovate's own issue and pull requests: Renovate
+    # edits them on every run, which must not start another one
+    if: >-
+      github.event_name == 'schedule' || github.event_name ==
+      'workflow_dispatch' || (
+        github.event.sender.type == 'User' && (
+          github.event.issue.title == 'Dependency Dashboard' ||
+          startsWith(github.event.pull_request.head.ref, 'renovate/')
+        ) && (
+          github.event.issue.user.login == 'changeset-release-bot-cgaube[bot]' ||
+          github.event.pull_request.user.login == 'changeset-release-bot-cgaube[bot]'
+        )
+      )
     runs-on: ubuntu-26.04
     steps:
       - name: Create the App token
