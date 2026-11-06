@@ -1,0 +1,36 @@
+// Renovate (https://docs.renovatebot.com), through the Mend Renovate GitHub
+// App. It reads package.json and bun.lock, mise.toml, compose.yaml, the
+// Dockerfiles in services/ and the GitHub Actions in .github/workflows/.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    // Every update in a single pull request, majors included
+    'group:all',
+    // On the first day of the month
+    'schedule:monthly',
+  ],
+  // sourcery-review: Sourcery reviews only the pull requests with this label
+  labels: ['dependencies', 'sourcery-review'],
+  // package.json ranges follow the latest versions
+  rangeStrategy: 'bump',
+  // "update all dependencies", like our own commit messages
+  commitMessageAction: 'update',
+  // Only versions out for 3 days: most bad releases are pulled by then
+  minimumReleaseAge: '3 days',
+
+  // Security fixes skip the schedule, the group and the release age: one pull
+  // request per vulnerable package, opened at once. The vulnerabilities come
+  // from osv.dev, which includes GitHub's advisories: no other app is needed.
+  osvVulnerabilityAlerts: true,
+  vulnerabilityAlerts: {
+    labels: ['dependencies', 'security', 'sourcery-review'],
+  },
+
+  // The renovate-changeset workflow adds a changeset to these pull requests
+  // as the release App: Renovate still rebases and updates a branch that
+  // only has its commits
+  gitIgnoredAuthors: [
+    '350063951+changeset-release-bot-cgaube[bot]@users.noreply.github.com',
+  ],
+}
