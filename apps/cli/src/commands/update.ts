@@ -7,6 +7,7 @@ import { updateSelf } from '#cli/core/self-update.js'
 import { pullSources } from '#cli/sources/sources.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { upgradeGalaxyCollections } from '#cli/core/tools.js'
+import { runStep } from '#cli/utils/task.js'
 import {
   runCompose,
   execDocker,
@@ -76,9 +77,9 @@ export const updateCommand = new Command('update')
       }
 
       if (!options.dryRun) {
-        const { stdout } = await execDocker(['image', 'prune', '-f'], {
-          capture: true,
-        })
+        const { stdout } = await runStep('Pruning old images', () =>
+          execDocker(['image', 'prune', '-f'], { capture: true }),
+        )
         const reclaimed = /Total reclaimed space: (.+)/.exec(stdout ?? '')?.[1]
         logger.success(`Pruned old images (${reclaimed ?? '0B'} reclaimed)`)
       }
