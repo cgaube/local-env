@@ -33,16 +33,16 @@ The binary is also attached to every
 Then set it up and start it:
 
 ```sh
-local-env setup    # wildcard DNS (dnsmasq) + certificates (mkcert), asks for sudo
-local-env start    # proxy, Dockhand and the catalog server
+local-env setup    # wildcard DNS (dnsmasq) + certificates (mkcert), asks for sudo,
+                   # then offers to start: proxy, Dockhand and the catalog server
 local-env sources add ~/Projects/local-env-templates   # or a git URL
 ```
 
 Open `https://docker.dev.test`, go to Templates and deploy one.
 
-`setup` is safe to re-run: it only redoes what changed or broke. local-env keeps
-its config, certificates and Dockhand data in `~/.local-env` (or
-`$LOCAL_ENV_HOME`).
+`setup` is safe to re-run: it only redoes what changed or broke. With `--yes`,
+it doesn't start local-env: run `local-env start`. local-env keeps its config,
+certificates and Dockhand data in `~/.local-env` (or `$LOCAL_ENV_HOME`).
 
 ### From source
 

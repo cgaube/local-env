@@ -95,6 +95,38 @@ describe.concurrent('local-env setup', () => {
     },
   )
 
+  test('--yes does not start local-env', async () => {
+    await using cli = await createCli()
+    machineReady(cli)
+
+    const result = await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Run `local-env start`')
+    expect(
+      cli.bin.calls('docker').some((call) => call.args.includes('up')),
+    ).toBe(false)
+  })
+
+  test.skipIf(COMPILED)('starts local-env when accepted', async () => {
+    await using cli = await createCli()
+    machineReady(cli)
+
+    const result = await cli.run(['setup', '--domain', TEST_DOMAIN], {
+      answers: [
+        { ask: 'Port for template builds', answer: '47080' },
+        { ask: 'Start local-env now?', answer: true },
+      ],
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).not.toContain('Run `local-env start`')
+    expect(result.output).toContain('local-env is running')
+    // Dockhand is configured, its sidebar included
+    expect(cli.dockhand.state.environments).toHaveLength(1)
+    expect(cli.dockhand.state.sidebar.hidden).not.toEqual([])
+  })
+
   test.skipIf(COMPILED)('asks for each setting', async () => {
     await using cli = await createCli()
     machineReady(cli)
@@ -103,6 +135,7 @@ describe.concurrent('local-env setup', () => {
       answers: [
         { ask: 'Domain for local services', answer: ` .${TEST_DOMAIN} ` },
         { ask: 'Port for template builds', answer: '47081' },
+        { ask: 'Start local-env now?', answer: false },
       ],
     })
 
@@ -126,6 +159,7 @@ describe.concurrent('local-env setup', () => {
           { ask: 'Domain for local services', answer: TEST_DOMAIN },
           { ask: 'Port for template builds', answer: '47080' },
           { ask: 'is valid. Replace it anyway?', answer: true },
+          { ask: 'Start local-env now?', answer: false },
         ],
       })
 
@@ -150,6 +184,7 @@ describe.concurrent('local-env setup', () => {
           { ask: 'Port for template builds', answer: '47080' },
           { ask: 'Remove the DNS setup of old-e2e.test?', answer: true },
           { ask: 'Remove the certificate of *.old-e2e.test?', answer: true },
+          { ask: 'Start local-env now?', answer: false },
         ],
       })
 

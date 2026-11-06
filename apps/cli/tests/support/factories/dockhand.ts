@@ -1,4 +1,5 @@
 import type { Environment } from '#cli/providers/docker/environments.js'
+import { HIDDEN_SIDEBAR_ITEMS } from '#cli/providers/docker/steps/sidebar.js'
 
 export type DockhandEnvironment = Environment & { socketPath?: string }
 
@@ -99,4 +100,5 @@ export const provisionedDockhand = () => ({
   updateChecks: {
     1: { enabled: true, autoUpdate: true, cron: '0 10,14 * * 1-5' },
   },
+  sidebar: { order: [], hidden: HIDDEN_SIDEBAR_ITEMS },
 })
