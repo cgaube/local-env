@@ -1,5 +1,11 @@
 # local-env
 
+## 0.6.1
+
+### Patch Changes
+
+- 2f5aeed: Update dependencies.
+
 ## 0.6.0
 
 ### Minor Changes
