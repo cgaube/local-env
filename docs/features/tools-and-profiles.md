@@ -294,7 +294,8 @@ sequenceDiagram
 - **Only the Galaxy collections of the wanted tools install.** A source can have
   many collections. The user gets only what the tools on the Mac need.
 - **The dashboard does not install Galaxy collections.** It runs in a container
-  without Ansible and runs nothing on the Mac. It shows a Galaxy role of a
+  without Ansible: `local-env install` installs them, on the Mac, also when the
+  dashboard asks the agent to run it. The dashboard shows a Galaxy role of a
   profile from the `galaxy.yml` of its collection, without its description.
 - **The CLI links the collections of the sources, it does not install them.** A
   link takes no time and needs no network. `ansible-galaxy collection install`

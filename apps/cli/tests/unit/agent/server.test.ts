@@ -52,7 +52,7 @@ const connect = async (port: number): Promise<Client> => {
       if (Date.now() > deadline) {
         throw new Error(`Timed out: ${JSON.stringify({ messages, output })}`)
       }
-      await Bun.sleep(10)
+      await new Promise((resolve) => setTimeout(resolve, 10))
     }
   }
   return {
