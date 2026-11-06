@@ -1,0 +1,53 @@
+# Runs Renovate on this repo as the release GitHub App, with the config of
+# .github/renovate.json5. Every day: the config opens the monthly pull request
+# on the 1st only, and security fixes on any day. Run it by hand (Run workflow)
+# to pick up a change at once. Its commits run CI, like the App's "Version
+# packages" pull request.
+# Needs the RELEASE_APP_CLIENT_ID variable and RELEASE_APP_PRIVATE_KEY secret.
+# The App needs these repository permissions: Contents, Pull requests, Issues
+# (the Dependency Dashboard), Workflows (the actions in .github/workflows/) and
+# Commit statuses, all read and write.
+name: Renovate
+
+on:
+  schedule:
+    # Inside the monthly window of the config: before 4am UTC on the 1st
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+# One run at a time
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+# The App token does the writing
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Create the App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: local-env
+
+      - uses: renovatebot/github-action@1c0cf989c02653fba0efe7ca5772338860ca71dc # v46.3.12
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          # The config is already in the repo: no onboarding pull request
+          RENOVATE_ONBOARDING: 'false'
+          # An App token can't tell Renovate who it is
+          RENOVATE_USERNAME: changeset-release-bot-cgaube[bot]
+          RENOVATE_GIT_AUTHOR:
+            changeset-release-bot-cgaube[bot]
+            <350063951+changeset-release-bot-cgaube[bot]@users.noreply.github.com>
+          # The only command the config may run (postUpgradeTasks)
+          RENOVATE_ALLOWED_COMMANDS:
+            '["^sh \\.github/scripts/renovate-changeset\\.sh [a-zA-Z0-9/._-]+$"]'
