@@ -1,5 +1,26 @@
 # local-env
 
+## 0.5.0
+
+### Minor Changes
+
+- db05fec: Install and update from the dashboard. Install is in the header of
+  the Tools and Profiles pages, and turns primary with a count when changes
+  wait; Update is in the version menu of the sidebar. Each opens a terminal in
+  the page and runs the command on your Mac, where you answer its questions and
+  type the sudo password. `local-env start` starts the dashboard agent that runs
+  them, and `local-env stop` stops it. The core services no longer restart on
+  their own: after a restart of your Mac, run `local-env start`.
+
+### Patch Changes
+
+- 4119e28: `local-env update` shows a spinner while it checks for image updates,
+  updates containers and prunes old images.
+- ce1d845: `local-env install` gives the sudo password to Ansible on its stdin,
+  so the password is never written to the disk. A password that starts or ends
+  with a space now works, and an empty password asks again. When a role needs
+  sudo but local-env did not ask for the password, the install names the role.
+
 ## 0.4.0
 
 ### Minor Changes
