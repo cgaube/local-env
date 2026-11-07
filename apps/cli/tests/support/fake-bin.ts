@@ -56,7 +56,8 @@ export type FakeCall = {
   // The LOCAL_ENV_* (compose settings), ANSIBLE_* and TRUST_STORES (mkcert)
   // variables the call got
   env: Record<string, string>
-  // The YAML files among its args, by path, as they were during the call
+  // The YAML and JSON files among its args (`@<path>` too), by path, as
+  // they were during the call
   inputs: Record<string, string>
   // Ansible's collections, by name: where each one links
   collections: Record<string, string>

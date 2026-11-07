@@ -2,8 +2,9 @@
 // routes and core services, the sources' content counts, the tools
 // (services/dashboard/tools.ts) and the dashboard agent
 import type { AgentState } from '#services/dashboard/agent-protocol.ts'
+import type { GalaxyRole, RoleInput } from '#services/dashboard/role-graph.ts'
 
-export type { AgentState }
+export type { AgentState, GalaxyRole, RoleInput }
 
 export type Route = {
   hosts: string[]
@@ -51,6 +52,8 @@ export type Role = {
   description: string | null
   tags: string[]
   dependencies: string[]
+  // The variables it passes to each dependency (`vars:`), in the same order
+  dependencyVars?: Record<string, unknown>[]
   // Tagged `profile`: a set of roles, picked as a whole
   isProfile: boolean
   // Stack templates it needs, as <source>/<folder>
@@ -61,20 +64,34 @@ export type Role = {
   // The Galaxy collections its collection needs (galaxy.yml), by name: their
   // version ranges. `local-env install` installs them.
   galaxy: Record<string, string>
+  // The values it takes: its meta/argument_specs.yml
+  inputs: RoleInput[]
 }
 
 export type Tools = {
   roles: Role[]
   // Ids of the roles picked in the catalog
   picked: string[]
-  // What `local-env install` ran, by id
-  installed: Record<string, { revision: string; installedAt: string }>
+  // What `local-env install` ran, by id, with the values its inputs got
+  installed: Record<
+    string,
+    {
+      revision: string
+      installedAt: string
+      values?: Record<string, unknown>
+    }
+  >
   // Id of the profile, picked in the sidebar or by `local-env install
   // <profile>`. One no longer in a source is the CLI's to drop.
   profile: string | null
   // The stacks `local-env install` deployed for the roles, by template
   // (<source>/<folder>): once each, even if removed since
   stacks: Record<string, { stack: string; by: string; deployedAt: string }>
+  // The values of the roles' inputs, by variable name (variables.json)
+  variables: Record<string, unknown>
+  // The roles of the installed Galaxy collections: their inputs count once
+  // a wanted role includes them
+  galaxyRoles: GalaxyRole[]
 }
 
 export type LiveData = {

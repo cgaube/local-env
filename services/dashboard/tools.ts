@@ -14,11 +14,24 @@
 //                                          dashboard and `local-env install`
 //   <tools>/stacks.json                 -> the stacks `local-env install`
 //                                          deployed for the roles
+//   <tools>/variables.json              -> the values of the roles' inputs
+//                                          (meta/argument_specs.yml), by
+//                                          name: written by the dashboard
+//                                          and `local-env install`
+//   <tools>/collections/                -> the Galaxy collections
+//                                          `local-env install` installed
 // A role's id is <source>/<name>, so two sources can have a role of the same
 // name.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
-import { type GraphRole, titleize } from './role-graph.js'
+import {
+  type GalaxyRole,
+  type GraphRole,
+  isInputValue,
+  type RoleInput,
+  titleize,
+  wantedInputs,
+} from './role-graph.js'
 
 export type Role = GraphRole & {
   source: string
@@ -40,15 +53,27 @@ export type Role = GraphRole & {
   // `dependencies`), by name or URL: their version ranges, `*` for any.
   // `local-env install` installs them from Galaxy.
   galaxy: Record<string, string>
+  // The values it takes: meta/argument_specs.yml, entry point `main`
+  inputs: RoleInput[]
 }
 
-export type InstalledRole = { revision: string; installedAt: string }
+export type InstalledRole = {
+  revision: string
+  installedAt: string
+  // The values of its inputs the install passed (roleValues): a change
+  // makes it changed. Absent before inputs existed: none.
+  values?: Record<string, unknown>
+}
 export type Installed = Record<string, InstalledRole>
 
 export const PICKED_FILE = 'picked.json'
 export const INSTALLED_FILE = 'installed.json'
 export const PROFILE_FILE = 'profile.json'
 export const STACKS_FILE = 'stacks.json'
+export const VARIABLES_FILE = 'variables.json'
+// Where `local-env install` installs the Galaxy collections, in the tools
+// folder
+export const GALAXY_FOLDER = 'collections'
 // Beside meta/: what local-env reads of a role that Ansible doesn't
 export const ROLE_SETTINGS_FILE = 'local-env.yml'
 
@@ -200,8 +225,9 @@ export const listRoleFolders = (ansibleDir: string): RoleFolder[] =>
   })
 
 // What local-env reads of a role's folder that Ansible would run: whether a
-// task uses sudo, and the roles it depends on (meta/main.yml). For the
-// roles of Galaxy collections too, installed by `local-env install`.
+// task uses sudo, the roles it depends on (meta/main.yml) and its inputs
+// (meta/argument_specs.yml). For the roles of Galaxy collections too,
+// installed by `local-env install`.
 export const readRoleDir = (dir: string) => {
   const meta = readMeta(dir)
   return {
@@ -209,13 +235,88 @@ export const readRoleDir = (dir: string) => {
       (file) =>
         /\.ya?ml$/.test(file) && BECOME.test(readFileSync(file, 'utf8')),
     ),
-    dependencies: readDependencies(meta),
+    ...readDependencyEntries(meta),
+    inputs: readInputs(dir, meta),
   }
 }
 
 type Meta = {
   galaxy_info?: { description?: unknown; galaxy_tags?: unknown }
   dependencies?: unknown
+  argument_specs?: unknown
+}
+
+// A name Ansible accepts for a variable
+const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+const isMap = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// The variables of the role's defaults/main.yml: a value there is a default
+// too, which Ansible accepts for a required option
+const readRoleDefaults = (dir: string): Record<string, unknown> => {
+  const file = ['main.yml', 'main.yaml']
+    .map((name) => join(dir, 'defaults', name))
+    .find((path) => existsSync(path))
+  const defaults = file ? readYaml(file) : null
+  return isMap(defaults) ? defaults : {}
+}
+
+// One option of an entry point. Its description can be a list of lines. Its
+// default is the spec's, else the value of the role's defaults/main.yml.
+const readInput = (
+  name: string,
+  option: unknown,
+  roleDefaults: Record<string, unknown>,
+): RoleInput[] => {
+  if (!VARIABLE.test(name) || !isMap(option)) return []
+  const description = Array.isArray(option.description)
+    ? option.description.filter((line) => typeof line === 'string').join(' ')
+    : option.description
+  const choices = Array.isArray(option.choices)
+    ? option.choices.filter((choice): choice is string | number | boolean =>
+        ['string', 'number', 'boolean'].includes(typeof choice),
+      )
+    : []
+  // null is no default, as for Ansible
+  const fallback =
+    option.default !== undefined && option.default !== null
+      ? option.default
+      : roleDefaults[name]
+  const hasDefault = fallback !== undefined && fallback !== null
+  return [
+    {
+      name,
+      type: typeof option.type === 'string' ? option.type : 'str',
+      required: option.required === true && !hasDefault,
+      ...(hasDefault ? { default: fallback } : {}),
+      choices: choices.length > 0 ? choices : null,
+      description:
+        typeof description === 'string' && description.trim()
+          ? description.trim()
+          : null,
+      secret: option.no_log === true,
+    },
+  ]
+}
+
+// The options of the `main` entry point: meta/argument_specs.yml, else the
+// `argument_specs` of meta/main.yml, as Ansible reads them. None, or not
+// valid: no inputs, and the role still installs.
+const readInputs = (dir: string, meta: Meta): RoleInput[] => {
+  const file = ['argument_specs.yml', 'argument_specs.yaml']
+    .map((name) => join(dir, 'meta', name))
+    .find((path) => existsSync(path))
+  const specs = file
+    ? (readYaml(file) as { argument_specs?: unknown } | null)?.argument_specs
+    : meta.argument_specs
+  const main = isMap(specs) ? specs.main : null
+  const options = isMap(main) ? main.options : null
+  if (!isMap(options)) return []
+  const roleDefaults = readRoleDefaults(dir)
+  return Object.entries(options).flatMap(([name, option]) =>
+    readInput(name, option, roleDefaults),
+  )
 }
 
 // Galaxy's own fields, so roles stay plain Ansible roles
@@ -225,16 +326,58 @@ const readMeta = (dir: string): Meta => {
   return typeof parsed === 'object' && parsed !== null ? parsed : {}
 }
 
-const readDependencies = (meta: Meta) =>
-  (Array.isArray(meta.dependencies) ? meta.dependencies : []).flatMap(
-    (dependency) => {
-      const role =
-        typeof dependency === 'string'
-          ? dependency
-          : (dependency?.role ?? dependency?.name)
-      return typeof role === 'string' ? [role] : []
-    },
-  )
+// The keys of a dependency entry that are not variables it passes: the
+// others are role parameters, as `vars:` is
+const DEPENDENCY_KEYWORDS = new Set([
+  'role',
+  'name',
+  'src',
+  'scm',
+  'version',
+  'vars',
+  'when',
+  'tags',
+  'become',
+  'become_user',
+  'become_method',
+  'become_flags',
+  'ignore_errors',
+  'delegate_to',
+  'environment',
+  'connection',
+  'no_log',
+  'run_once',
+  'apply',
+  'public',
+  'allow_duplicates',
+])
+
+// The roles it depends on, by name, and the variables it passes to each
+// (`vars:` of the entry, or its role parameters) with their values as
+// written, in the same order
+const readDependencyEntries = (meta: Meta) => {
+  const entries = (
+    Array.isArray(meta.dependencies) ? meta.dependencies : []
+  ).flatMap((dependency: unknown) => {
+    if (typeof dependency === 'string') return [{ name: dependency, vars: {} }]
+    if (!isMap(dependency)) return []
+    const name = dependency.role ?? dependency.name
+    if (typeof name !== 'string') return []
+    const vars = Object.fromEntries(
+      [
+        ...Object.entries(isMap(dependency.vars) ? dependency.vars : {}),
+        ...Object.entries(dependency).filter(
+          ([key]) => !DEPENDENCY_KEYWORDS.has(key),
+        ),
+      ].filter(([key]) => VARIABLE.test(key)),
+    )
+    return [{ name, vars }]
+  })
+  return {
+    dependencies: entries.map(({ name }) => name),
+    dependencyVars: entries.map(({ vars }) => vars),
+  }
+}
 
 // A JSON of the map, by key: the same map gives the same text
 const sortedJson = (map: Record<string, string>) =>
@@ -279,7 +422,7 @@ const readRole = (
       typeof info.description === 'string' ? info.description.trim() : null,
     tags,
     isProfile: tags.includes(PROFILE_TAG),
-    dependencies: readDependencies(meta),
+    ...readDependencyEntries(meta),
     stacks: settings.stacks,
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
@@ -290,7 +433,36 @@ const readRole = (
         ([dependency]) => !provided.has(dependency),
       ),
     ),
+    // Its file is one of the files above: a change is a new revision
+    inputs: readInputs(dir, meta),
   }
+}
+
+// The roles of the Galaxy collections that `local-env install` installed
+// (<tools>/collections/ansible_collections/<namespace>/<name>/roles/<role>):
+// their dependencies, by full name, and their inputs
+export const listGalaxyRoles = (collectionsDir: string): GalaxyRole[] => {
+  const root = join(collectionsDir, 'ansible_collections')
+  return subfolders(root).flatMap((namespace) =>
+    subfolders(join(root, namespace)).flatMap((collection) =>
+      subfolders(join(root, namespace, collection, 'roles')).map((role) => {
+        const dir = join(root, namespace, collection, 'roles', role)
+        const meta = readMeta(dir)
+        const { dependencies, dependencyVars } = readDependencyEntries(meta)
+        return {
+          name: `${namespace}.${collection}.${role}`,
+          // A short name is a role of the same collection
+          dependencies: dependencies.map((dependency) =>
+            dependency.includes('.')
+              ? dependency
+              : `${namespace}.${collection}.${dependency}`,
+          ),
+          dependencyVars,
+          inputs: readInputs(dir, meta),
+        }
+      }),
+    ),
+  )
 }
 
 // The roles of every source, by source then folder
@@ -423,4 +595,76 @@ export const writeDeployedStacks = (
   writeFileSync(
     join(toolsDir, STACKS_FILE),
     `${JSON.stringify(stacks, null, 2)}\n`,
+  )
+
+// The values of the inputs, by variable name. A name Ansible would refuse,
+// or a null, is left out.
+export const readVariables = (toolsDir: string): Record<string, unknown> => {
+  try {
+    const variables: unknown = JSON.parse(
+      readFileSync(join(toolsDir, VARIABLES_FILE), 'utf8'),
+    )
+    return isMap(variables)
+      ? Object.fromEntries(
+          Object.entries(variables).filter(
+            ([name, value]) => VARIABLE.test(name) && value !== null,
+          ),
+        )
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+// What the dashboard may change in the values: by name, a value of an input
+// of a role of the catalog or of an installed Galaxy role, of its type, and
+// no secret (no_log); one the file holds already, unchanged (its role left
+// the sources); or null, which removes it. A name left out stays as it is.
+export const isVariablesChange = (
+  roles: Role[],
+  galaxyRoles: GalaxyRole[],
+  saved: Record<string, unknown>,
+  value: unknown,
+): value is Record<string, unknown> => {
+  if (!isMap(value)) return false
+  const inputs = new Map(
+    wantedInputs(
+      roles,
+      roles.map(({ id }) => id),
+      galaxyRoles,
+    ).map((input) => [input.name, input]),
+  )
+  return Object.entries(value).every(([name, variable]) => {
+    if (variable === null) return VARIABLE.test(name)
+    const input = inputs.get(name)
+    if (!input) return name in saved && Bun.deepEquals(saved[name], variable)
+    return !input.secret && isInputValue(input, variable)
+  })
+}
+
+// The values with a change applied: null removes a name
+export const applyVariablesChange = (
+  saved: Record<string, unknown>,
+  change: Record<string, unknown>,
+) =>
+  Object.fromEntries(
+    Object.entries({ ...saved, ...change }).filter(
+      ([, value]) => value !== null,
+    ),
+  )
+
+// By name, so the file reads the same after each save
+export const writeVariables = (
+  toolsDir: string,
+  variables: Record<string, unknown>,
+) =>
+  writeFileSync(
+    join(toolsDir, VARIABLES_FILE),
+    `${JSON.stringify(
+      Object.fromEntries(
+        Object.entries(variables).sort(([a], [b]) => a.localeCompare(b)),
+      ),
+      null,
+      2,
+    )}\n`,
   )

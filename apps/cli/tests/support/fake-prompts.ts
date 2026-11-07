@@ -10,7 +10,7 @@ import { join } from 'path'
 
 export type FakeAnswer =
   // `ask` is part of the question: a typo in the test fails it
-  | { ask: string; answer: boolean | string }
+  | { ask: string; answer: boolean | string | string[] }
   // Ctrl-C on that question
   | { ask: string; cancel: true }
 
@@ -64,11 +64,18 @@ export const askConfirm = async (message: string, _initialValue: boolean) => {
   return answer
 }
 
-export const askText = async (message: string, _initialValue: string) => {
+export const askText = async (
+  message: string,
+  _initialValue: string,
+  { validate }: { validate?: (value: string) => string | undefined } = {},
+) => {
   const answer = next(message)
   if (typeof answer !== 'string') {
     return fail(message, `a text question, answered ${answer}`)
   }
+  // The real prompt asks again: a test can't get past it
+  const refused = validate?.(answer)
+  if (refused) return fail(message, `answered ${answer}, refused: ${refused}`)
   return answer
 }
 
@@ -86,6 +93,23 @@ export const askPassword = async (
   // The real prompt asks again: a test can't get past it with nothing
   if (required && !answer) {
     return fail(message, 'a required password, answered with nothing')
+  }
+  return answer
+}
+
+// The values ticked, in the answer: each one of the options, at least one
+export const askMultiSelect = async (
+  message: string,
+  options: { value: string; label: string; hint?: string }[],
+) => {
+  const answer = next(message)
+  if (
+    !Array.isArray(answer) ||
+    answer.length === 0 ||
+    !answer.every((value) => options.some((option) => option.value === value))
+  ) {
+    const values = options.map((option) => option.value).join(', ')
+    return fail(message, `answered ${answer}, not some of: ${values}`)
   }
   return answer
 }
@@ -109,5 +133,6 @@ export const fakePrompts = {
   askText,
   askPassword,
   askSelect,
+  askMultiSelect,
   canAsk,
 } satisfies typeof import('#cli/utils/prompt.js')

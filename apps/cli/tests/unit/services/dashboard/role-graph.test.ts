@@ -2,14 +2,43 @@ import {
   externalRoles,
   type GraphRole,
   includedRoles,
+  inputText,
+  isInputValue,
+  missingInputs,
+  parseInputText,
   playbookRoots,
+  type RoleInput,
+  passedValues,
+  roleValues,
+  unsupportedSecrets,
+  valuesChanged,
+  wantedInputs,
   wantedRoles,
   wantedStacks,
 } from '#services/dashboard/role-graph.js'
 
+const input = (
+  name: string,
+  overrides: Partial<RoleInput> = {},
+): RoleInput => ({
+  name,
+  type: 'str',
+  required: false,
+  choices: null,
+  description: null,
+  secret: false,
+  ...overrides,
+})
+
 const role = (
   id: string,
-  { dependencies = [], stacks = [], galaxy = {} }: Partial<GraphRole> = {},
+  {
+    dependencies = [],
+    stacks = [],
+    galaxy = {},
+    inputs = [],
+    dependencyVars,
+  }: Partial<GraphRole> = {},
 ): GraphRole => {
   // <source>/<role>, or <source>/<namespace>.<collection>.<role>
   const name = id.split('/')[1] ?? id
@@ -22,6 +51,8 @@ const role = (
     dependencies,
     stacks,
     galaxy,
+    inputs,
+    ...(dependencyVars ? { dependencyVars } : {}),
   }
 }
 
@@ -220,5 +251,255 @@ describe('externalRoles', () => {
         by: 'acme/acme.tools.git',
       },
     ])
+  })
+})
+
+describe('wantedInputs', () => {
+  const email = input('git_email', { required: true })
+  const roles = [
+    role('acme/backend', {
+      dependencies: ['git', 'geerlingguy.mac.dock'],
+      galaxy: { 'geerlingguy.mac': '*' },
+    }),
+    role('acme/git', {
+      inputs: [email, input('editor', { default: 'vim', choices: ['vim'] })],
+    }),
+    role('acme/node', {
+      inputs: [
+        input('git_email', { description: 'For npm' }),
+        input('token', { required: true, secret: true }),
+      ],
+    }),
+    role('acme/zsh', { inputs: [input('editor', { required: true })] }),
+  ]
+  const galaxy = [
+    {
+      name: 'geerlingguy.mac.dock',
+      dependencies: ['geerlingguy.mac.homebrew'],
+      inputs: [input('dock_items', { type: 'list' })],
+    },
+    {
+      name: 'geerlingguy.mac.homebrew',
+      dependencies: [],
+      inputs: [input('git_email')],
+    },
+  ]
+
+  test('lists the inputs of the wanted roles and the Galaxy roles they include', () => {
+    expect(wantedInputs(roles, ['acme/backend'], galaxy)).toEqual([
+      {
+        ...email,
+        roles: ['git', 'geerlingguy.mac.homebrew'],
+        setBy: [],
+        provided: false,
+        conflict: false,
+      },
+      {
+        ...input('editor', { default: 'vim', choices: ['vim'] }),
+        roles: ['git'],
+        setBy: [],
+        provided: false,
+        conflict: false,
+      },
+      {
+        ...input('dock_items', { type: 'list' }),
+        roles: ['geerlingguy.mac.dock'],
+        setBy: [],
+        provided: false,
+        conflict: false,
+      },
+    ])
+  })
+
+  test('needs no value from the user for an input that the role including it passes', () => {
+    const child = role('acme/child', {
+      inputs: [input('child_name', { required: true })],
+    })
+    const parent = role('acme/parent', {
+      dependencies: ['child', 'geerlingguy.mac.dock'],
+      dependencyVars: [{ child_name: 'from-parent' }, { dock_items: [] }],
+      galaxy: { 'geerlingguy.mac': '*' },
+    })
+    const graph = [child, parent]
+
+    const inputs = wantedInputs(graph, ['acme/parent'], galaxy)
+
+    expect(
+      inputs.map(({ name, required, setBy, provided }) => [
+        name,
+        required,
+        setBy,
+        provided,
+      ]),
+    ).toEqual([
+      ['child_name', false, ['parent'], true],
+      ['dock_items', false, ['parent'], true],
+      // homebrew, under dock: dock does not pass it
+      ['git_email', false, [], false],
+    ])
+    // The value it gives, as written
+    expect(inputs[0]?.given).toBe('from-parent')
+    expect(missingInputs(inputs, {})).toEqual([])
+    // A saved value is not passed: the parent's stays
+    expect(passedValues(inputs, { child_name: 'me', git_email: 'a' })).toEqual({
+      git_email: 'a',
+    })
+  })
+
+  test("keeps the parent's value when the role is picked too: it runs inside the parent", () => {
+    const child = role('acme/child', {
+      inputs: [input('child_name', { required: true })],
+    })
+    const parent = role('acme/parent', {
+      dependencies: ['child'],
+      dependencyVars: [{ child_name: 'from-parent' }],
+    })
+
+    // The playbook names only the parent: the pick runs inside it
+    const [childName] = wantedInputs(
+      [child, parent],
+      ['acme/parent', 'acme/child'],
+    )
+
+    expect(childName).toMatchObject({
+      required: false,
+      setBy: ['parent'],
+      provided: true,
+      given: 'from-parent',
+    })
+    expect(passedValues([childName!], { child_name: 'me' })).toEqual({})
+  })
+
+  test("keeps the parent's value when another role includes it without one", () => {
+    const child = role('acme/child', {
+      inputs: [input('child_name', { required: true })],
+    })
+    const parent = role('acme/parent', {
+      dependencies: ['child'],
+      dependencyVars: [{ child_name: 'from-parent' }],
+    })
+    const other = role('acme/other', { dependencies: ['child'] })
+
+    const [childName] = wantedInputs(
+      [child, parent, other],
+      ['acme/parent', 'acme/other'],
+    )
+
+    // Its owner chose it: it wins over the user's
+    expect(childName).toMatchObject({ provided: true, required: false })
+  })
+
+  test('says when two roles declare a name differently', () => {
+    const inputs = wantedInputs(
+      [
+        role('acme/git', { inputs: [input('editor', { choices: ['vim'] })] }),
+        role('acme/zsh', { inputs: [input('editor', { type: 'list' })] }),
+        role('acme/node', { inputs: [input('jobs', { type: 'int' })] }),
+        role('acme/ruby', { inputs: [input('jobs', { type: 'int' })] }),
+      ],
+      ['acme/git', 'acme/zsh', 'acme/node', 'acme/ruby'],
+    )
+
+    expect(inputs.map(({ name, conflict }) => [name, conflict])).toEqual([
+      ['editor', true],
+      ['jobs', false],
+    ])
+  })
+
+  test('merges a name two roles declare: required or secret when one is', () => {
+    const inputs = wantedInputs(roles, ['acme/git', 'acme/node', 'acme/zsh'])
+
+    expect(
+      inputs.map(({ name, required, roles }) => [name, required, roles]),
+    ).toEqual([
+      ['git_email', true, ['git', 'node']],
+      ['editor', true, ['git', 'zsh']],
+      ['token', true, ['node']],
+    ])
+    // The first declaration describes it
+    expect(inputs[0]?.description).toBeNull()
+    expect(inputs[1]?.default).toBe('vim')
+    expect(
+      missingInputs(inputs, { editor: 'nano' }).map(({ name }) => name),
+    ).toEqual(['git_email'])
+    expect(unsupportedSecrets(inputs).map(({ name }) => name)).toEqual([
+      'token',
+    ])
+  })
+})
+
+describe('isInputValue', () => {
+  test('wants a value of its type, or of its choices', () => {
+    expect(isInputValue(input('a'), 'x')).toBe(true)
+    expect(isInputValue(input('a'), 3)).toBe(false)
+    expect(isInputValue(input('a', { type: 'int' }), 3)).toBe(true)
+    expect(isInputValue(input('a', { type: 'int' }), 3.5)).toBe(false)
+    expect(isInputValue(input('a', { type: 'float' }), 3.5)).toBe(true)
+    expect(isInputValue(input('a', { type: 'bool' }), false)).toBe(true)
+    // Ansible checks that the text can be a list, but the role gets the text
+    expect(isInputValue(input('a', { type: 'list' }), 'a,b')).toBe(false)
+    expect(isInputValue(input('a', { type: 'list' }), ['a', 'b'])).toBe(true)
+    expect(isInputValue(input('a', { type: 'dict' }), { a: 1 })).toBe(true)
+    expect(isInputValue(input('a', { type: 'dict' }), [1])).toBe(false)
+    expect(isInputValue(input('a', { choices: [1, 2] }), 2)).toBe(true)
+    expect(isInputValue(input('a', { choices: [1, 2] }), '2')).toBe(false)
+    expect(isInputValue(input('a', { type: 'raw' }), null)).toBe(false)
+  })
+})
+
+describe('roleValues', () => {
+  test('are the saved values of its own inputs, without secrets, by name', () => {
+    const git = role('acme/git', {
+      inputs: [
+        input('b'),
+        input('a'),
+        input('s', { secret: true }),
+        input('c'),
+      ],
+    })
+
+    expect(roleValues(git, { b: 2, a: 1, s: 'x', other: 3 })).toEqual({
+      a: 1,
+      b: 2,
+    })
+    expect(valuesChanged(git, { a: 1, b: 2 }, { b: 2, a: 1 })).toBe(false)
+    expect(valuesChanged(git, { a: 1, b: 3 }, { b: 2, a: 1 })).toBe(true)
+    expect(valuesChanged(git, {}, undefined)).toBe(false)
+    expect(valuesChanged(git, { other: 1 }, undefined)).toBe(false)
+  })
+})
+
+describe('parseInputText', () => {
+  test('turns the text of a field into a value of the input type', () => {
+    expect(parseInputText(input('a'), 'x')).toEqual({ value: 'x' })
+    expect(parseInputText(input('a'), '  ')).toEqual({ value: undefined })
+    expect(parseInputText(input('a', { type: 'int' }), '8')).toEqual({
+      value: 8,
+    })
+    expect(parseInputText(input('a', { type: 'int' }), '8.5')).toEqual({
+      error: 'Type a whole number.',
+    })
+    expect(parseInputText(input('a', { type: 'float' }), '8.5')).toEqual({
+      value: 8.5,
+    })
+    expect(parseInputText(input('a', { type: 'list' }), 'Ana, Bo,')).toEqual({
+      value: ['Ana', 'Bo'],
+    })
+    expect(parseInputText(input('a', { type: 'dict' }), '{"a": 1}')).toEqual({
+      value: { a: 1 },
+    })
+    expect(parseInputText(input('a', { type: 'dict' }), 'a=1')).toEqual({
+      error: 'Type a JSON object: {"key": "value"}.',
+    })
+  })
+
+  test('shows a list as text it reads back, a dict as JSON', () => {
+    const list = input('a', { type: 'list' })
+    expect(inputText(list, ['Ana', 'Bo'])).toBe('Ana, Bo')
+    expect(parseInputText(list, inputText(list, ['Ana', 'Bo']))).toEqual({
+      value: ['Ana', 'Bo'],
+    })
+    expect(inputText(input('a', { type: 'dict' }), { a: 1 })).toBe('{"a":1}')
+    expect(inputText(input('a'), undefined)).toBe('')
   })
 })

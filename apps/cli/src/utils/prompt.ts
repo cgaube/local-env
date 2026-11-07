@@ -2,6 +2,7 @@ import {
   cancel,
   confirm,
   isCancel,
+  multiselect,
   password,
   select,
   text,
@@ -25,8 +26,17 @@ export const askConfirm = async (message: string, initialValue: boolean) => {
   return answer === true
 }
 
-export const askText = async (message: string, initialValue: string) => {
-  const answer = await text({ message, initialValue })
+// validate returns why an answer is refused, and the prompt asks again
+export const askText = async (
+  message: string,
+  initialValue: string,
+  { validate }: { validate?: (value: string) => string | undefined } = {},
+) => {
+  const answer = await text({
+    message,
+    initialValue,
+    validate: validate ? (value) => validate(value ?? '') : undefined,
+  })
   exitOnCancel(answer)
   return String(answer)
 }
@@ -59,4 +69,14 @@ export const askSelect = async (
   const answer = await select({ message, options })
   exitOnCancel(answer)
   return String(answer)
+}
+
+// Several of the options (space ticks one, enter confirms): at least one
+export const askMultiSelect = async (
+  message: string,
+  options: { value: string; label: string; hint?: string }[],
+) => {
+  const answer = await multiselect({ message, options, required: true })
+  exitOnCancel(answer)
+  return (answer as string[]).map(String)
 }

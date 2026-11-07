@@ -3,6 +3,7 @@ import { wantedRoles } from '#services/dashboard/role-graph.js'
 import type { Role } from '#services/dashboard/tools.js'
 import { readConfig } from '#cli/core/config.js'
 import {
+  describeInputs,
   describeProfile,
   findProfile,
   forgetUnwanted,
@@ -10,6 +11,7 @@ import {
   listProfiles,
   readPickedTools,
   readSavedProfile,
+  readWantedInputs,
   runPlaybook,
   saveProfile,
   unpickTools,
@@ -157,6 +159,17 @@ const showNothingPicked = (catalog: Role[]) => {
   )
 }
 
+// --dry-run: what an install would run and the values it would pass,
+// without running, saving or asking anything
+const showDryRun = (catalog: Role[], roots: Role[], ran: string) => {
+  logger.group('Dry run')
+  logger.info(`Would install ${ran}`)
+  const inputs = readWantedInputs(catalog, roots)
+  if (inputs.length === 0) return
+  logger.group('Variables')
+  for (const line of describeInputs(inputs)) logger.log(line)
+}
+
 // Tools are picked in the dashboard, which can't run anything on the Mac:
 // this runs what was picked, with the profile. A profile named here, or
 // picked in the select when there is nothing to install, is saved as yours,
@@ -175,6 +188,11 @@ export const installCommand = new Command('install')
     'Switch your profile and deploy the stacks your tools need without asking',
   )
   .option('-v, --verbose', "Show Ansible's own output", false)
+  .option(
+    '--dry-run',
+    'Show what would install and the values your tools need, without running anything',
+    false,
+  )
   .action(
     async (
       name: string | undefined,
@@ -182,8 +200,12 @@ export const installCommand = new Command('install')
         save: boolean
         verbose: boolean
         yes?: boolean
+        dryRun: boolean
       },
     ) => {
+      // A dry run writes nothing: as --no-save, and nothing unpicked or
+      // forgotten
+      const write = !options.dryRun
       let forgotten: string[] = []
       let catalog: Role[] = []
       try {
@@ -195,7 +217,7 @@ export const installCommand = new Command('install')
           )
         }
         const { roles: picked, missing } = readPickedTools(catalog)
-        if (missing.length > 0) {
+        if (missing.length > 0 && write) {
           unpickTools(catalog, missing)
           logger.warn(
             `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} no longer in your sources: unpicked. local-env doesn't uninstall: ${missing.length === 1 ? 'it stays' : 'they stay'} on this Mac.`,
@@ -206,12 +228,13 @@ export const installCommand = new Command('install')
         // to install
         const named =
           (name ? findProfile(catalog, name) : null) ??
-          (!saved.profile && picked.length === 0
+          (write && !saved.profile && picked.length === 0
             ? await askProfile(catalog)
             : null)
         // Named here, another than yours: asked first, as it changes what
         // every later install runs
         if (
+          write &&
           name &&
           named &&
           options.save &&
@@ -221,14 +244,17 @@ export const installCommand = new Command('install')
         ) {
           return
         }
-        if (named && options.save) saveProfile(named)
+        if (named && options.save && write) saveProfile(named)
         const profile = named ?? saved.profile
         if (profile) {
           showProfile(profile, {
             saved: saved.profile,
             once: named !== null && !options.save,
             switched:
-              named !== null && options.save && named.id !== saved.profile?.id,
+              write &&
+              named !== null &&
+              options.save &&
+              named.id !== saved.profile?.id,
           })
         }
         const roots = [
@@ -237,10 +263,19 @@ export const installCommand = new Command('install')
         ]
         // A profile run once (--no-save) leaves the saved one wanted
         const kept = named && !options.save ? saved.profile : null
-        forgotten = forgetUnwanted(catalog, [...roots, ...(kept ? [kept] : [])])
+        if (write) {
+          forgotten = forgetUnwanted(catalog, [
+            ...roots,
+            ...(kept ? [kept] : []),
+          ])
+        }
         if (roots.length === 0) {
           showNothingPicked(catalog)
           showForgotten(forgotten, catalog)
+          return
+        }
+        if (options.dryRun) {
+          showDryRun(catalog, roots, describeRun(catalog, profile, picked))
           return
         }
         if (!(await hasCommand('ansible-playbook'))) {

@@ -1171,6 +1171,332 @@ describe.concurrent('local-env install', () => {
   })
 })
 
+// git needs an email (required), an editor (choices, with a default) and a
+// signing switch; node needs the same email
+const GIT_SPECS = [
+  'argument_specs:',
+  '  main:',
+  '    options:',
+  '      git_email:',
+  '        type: str',
+  '        required: true',
+  '        description: Your email, for commits',
+  '      git_editor:',
+  '        choices: [vim, nano]',
+  '        default: vim',
+  '      git_sign:',
+  '        type: bool',
+  '',
+].join('\n')
+
+const sourceWithInputs = (cli: Cli, files: Record<string, string> = {}) =>
+  sourceWithRoles(cli, ['git', 'node'], {
+    'ansible/git/meta/argument_specs.yml': GIT_SPECS,
+    'ansible/node/meta/argument_specs.yml':
+      'argument_specs:\n  main:\n    options:\n      git_email: { required: true }\n',
+    ...files,
+  })
+
+// What the last playbook run got with `--extra-vars @<file>`, or null
+const extraVarsSent = (cli: Cli) => {
+  const run = cli.bin.calls('ansible-playbook').at(-1)
+  const flag = run?.args.indexOf('--extra-vars') ?? -1
+  if (flag === -1) return null
+  const file = run!.args[flag + 1]!
+  expect(file).toMatch(/^@.*local-env-install-[^/]+\/extra-vars\.json$/)
+  return JSON.parse(run!.inputs[file.slice(1)] ?? 'null')
+}
+
+describe.concurrent('local-env install inputs', () => {
+  test.skipIf(COMPILED)(
+    'asks for a required value it has no value for, then saves it',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithInputs(cli)
+      cli.home.seedPickedTools(['acme/git', 'acme/node'])
+
+      const result = await cli.run(['install'], {
+        answers: [{ ask: 'git_email, for Git, Node', answer: 'me@acme.test' }],
+      })
+
+      expect(result.exitCode).toBe(0)
+      // Once, for both roles; the editor has a default, the switch is not
+      // required
+      expect(result.questions).toEqual([
+        'git_email, for Git, Node · Your email, for commits',
+      ])
+      expect(cli.home.readJson('volumes/tools/variables.json')).toEqual({
+        git_email: 'me@acme.test',
+      })
+      // Where it went, and where to change it
+      expect(result.output).toContain('Saved git_email')
+      expect(result.output).toContain(
+        `Change it with \`local-env vars set\`, or in Variables on the Tools page: https://local-env.${TEST_DOMAIN}/tools`,
+      )
+      // Only what was set: the role's defaults/main.yml gives the default
+      expect(extraVarsSent(cli)).toEqual({ git_email: 'me@acme.test' })
+      // Recorded: a change makes the roles changed
+      const installed = cli.home.readJson<
+        Record<string, { values?: Record<string, unknown> }>
+      >('volumes/tools/installed.json')
+      expect(installed['acme/git']?.values).toEqual({
+        git_email: 'me@acme.test',
+      })
+    },
+  )
+
+  test('uses a saved value without a question, and passes only declared inputs', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithInputs(cli)
+    cli.home.seedPickedTools(['acme/git'])
+    cli.home.writeJson('volumes/tools/variables.json', {
+      git_email: 'me@acme.test',
+      git_editor: 'nano',
+      // Of a role that is not wanted
+      ruby_version: '3.4',
+    })
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.questions).toEqual([])
+    expect(extraVarsSent(cli)).toEqual({
+      git_email: 'me@acme.test',
+      git_editor: 'nano',
+    })
+    // Only the user can read it
+    const run = cli.bin.calls('ansible-playbook').at(-1)
+    const file = run!.args[run!.args.indexOf('--extra-vars') + 1]!.slice(1)
+    expect(existsSync(file)).toBe(false)
+  })
+
+  test('asks nothing and passes no extra vars when every input has a default', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git'], {
+      'ansible/git/meta/argument_specs.yml':
+        'argument_specs:\n  main:\n    options:\n      git_editor: { required: true, default: vim }\n',
+    })
+    cli.home.seedPickedTools(['acme/git'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.questions).toEqual([])
+    expect(extraVarsSent(cli)).toBeNull()
+    expect(existsSync(cli.home.path('volumes/tools/variables.json'))).toBe(
+      false,
+    )
+  })
+
+  test('asks nothing for a required input that defaults/main.yml sets', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git'], {
+      'ansible/git/meta/argument_specs.yml':
+        'argument_specs:\n  main:\n    options:\n      git_email: { required: true }\n',
+      'ansible/git/defaults/main.yml': 'git_email: team@acme.test\n',
+    })
+    cli.home.seedPickedTools(['acme/git'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.questions).toEqual([])
+    expect(extraVarsSent(cli)).toBeNull()
+  })
+
+  test('leaves an input to the role that passes it, and does not pass a saved value over it', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git', 'backend'], {
+      'ansible/git/meta/argument_specs.yml':
+        'argument_specs:\n  main:\n    options:\n      git_email: { required: true }\n',
+      'ansible/backend/meta/main.yml': [
+        'galaxy_info:',
+        '  galaxy_tags: [profile]',
+        'dependencies:',
+        '  - role: git',
+        '    vars:',
+        '      git_email: backend@acme.test',
+        '',
+      ].join('\n'),
+    })
+    cli.home.writeJson('volumes/tools/variables.json', {
+      git_email: 'me@acme.test',
+    })
+
+    const result = await cli.run(['install', 'backend'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.questions).toEqual([])
+    // Extra vars would win over the profile's value
+    expect(extraVarsSent(cli)).toBeNull()
+  })
+
+  test("keeps the profile's value when the tool is picked too", async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git', 'backend'], {
+      'ansible/git/meta/argument_specs.yml':
+        'argument_specs:\n  main:\n    options:\n      git_editor: {}\n      git_email: {}\n',
+      'ansible/backend/meta/main.yml': [
+        'galaxy_info:',
+        '  galaxy_tags: [profile]',
+        'dependencies:',
+        '  - role: git',
+        '    vars:',
+        '      git_editor: code',
+        '',
+      ].join('\n'),
+    })
+    cli.home.seedPickedTools(['acme/git'])
+    cli.home.writeJson('volumes/tools/variables.json', {
+      git_editor: 'vim',
+      git_email: 'me@acme.test',
+    })
+
+    const result = await cli.run(['install', 'backend'])
+
+    expect(result.exitCode).toBe(0)
+    // git runs inside the profile: the profile's editor stays, the email
+    // the profile doesn't set goes
+    expect(rolesRun(cli)).toEqual(['acme/backend'])
+    expect(extraVarsSent(cli)).toEqual({ git_email: 'me@acme.test' })
+  })
+
+  test.skipIf(COMPILED)(
+    'asks with a select for choices, a number for an int, a list for a list',
+    async () => {
+      await using cli = await createInstallCli()
+      await sourceWithRoles(cli, ['editor'], {
+        'ansible/editor/meta/argument_specs.yml': [
+          'argument_specs:',
+          '  main:',
+          '    options:',
+          '      editor: { required: true, choices: [vim, code] }',
+          '      tab_width: { required: true, type: int }',
+          '      plugins: { required: true, type: list }',
+          '',
+        ].join('\n'),
+      })
+      cli.home.seedPickedTools(['acme/editor'])
+
+      const result = await cli.run(['install'], {
+        answers: [
+          { ask: 'editor, for Editor', answer: 'code' },
+          { ask: 'tab_width, for Editor', answer: '2' },
+          { ask: 'plugins, for Editor', answer: 'copilot, vim' },
+        ],
+      })
+
+      expect(result.exitCode).toBe(0)
+      // A list as a list: Ansible would give the role the text
+      expect(extraVarsSent(cli)).toEqual({
+        editor: 'code',
+        tab_width: 2,
+        plugins: ['copilot', 'vim'],
+      })
+    },
+  )
+
+  test.skipIf(COMPILED)('uses the answer once with --no-save', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithInputs(cli)
+    cli.home.seedPickedTools(['acme/git'])
+
+    const result = await cli.run(['install', '--no-save'], {
+      answers: [{ ask: 'git_email, for Git', answer: 'me@acme.test' }],
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain(
+      'Used git_email for this run only: not saved (--no-save).',
+    )
+    expect(extraVarsSent(cli)).toEqual({ git_email: 'me@acme.test' })
+    expect(existsSync(cli.home.path('volumes/tools/variables.json'))).toBe(
+      false,
+    )
+  })
+
+  test('stops before Ansible without a terminal, and names the missing inputs', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithInputs(cli)
+    cli.home.seedPickedTools(['acme/git', 'acme/node'])
+
+    const result = await cli.run(['install'], {
+      env: { FAKE_PROMPTS_NO_TTY: '1' },
+    })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Your tools need values: git_email (Git, Node).',
+    )
+    expect(result.output).toContain('Tools page of the dashboard')
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('stops on a required secret, which it never asks or passes', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['deploy'], {
+      'ansible/deploy/meta/argument_specs.yml': [
+        'argument_specs:',
+        '  main:',
+        '    options:',
+        '      deploy_token: { required: true, no_log: true }',
+        '',
+      ].join('\n'),
+    })
+    cli.home.seedPickedTools(['acme/deploy'])
+    // Written by hand: still never passed
+    cli.home.writeJson('volumes/tools/variables.json', { deploy_token: 'x' })
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Your tools need a secret that local-env does not support yet: deploy_token (Deploy).',
+    )
+    expect(result.questions).toEqual([])
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('leaves out an optional secret, and runs', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['deploy'], {
+      'ansible/deploy/meta/argument_specs.yml':
+        'argument_specs:\n  main:\n    options:\n      deploy_token: { no_log: true }\n',
+    })
+    cli.home.seedPickedTools(['acme/deploy'])
+    cli.home.writeJson('volumes/tools/variables.json', { deploy_token: 'x' })
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(extraVarsSent(cli)).toBeNull()
+  })
+
+  test('lists the inputs with --dry-run, and runs, asks and writes nothing', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithInputs(cli)
+    cli.home.seedPickedTools(['acme/git'])
+    cli.home.writeJson('volumes/tools/variables.json', { git_sign: true })
+
+    const result = await cli.run(['install', '--dry-run'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Would install 1 tool')
+    expect(result.output).toContain(
+      'git_email (Git): missing: install asks for it',
+    )
+    expect(result.output).toContain(
+      'git_editor (Git): the role\'s default, "vim"',
+    )
+    expect(result.output).toContain('git_sign (Git): true, saved')
+    expect(result.questions).toEqual([])
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+    expect(existsSync(cli.home.path('volumes/tools/installed.json'))).toBe(
+      false,
+    )
+  })
+})
+
 // Snapshots can't run concurrently
 describe('local-env install output', () => {
   test('a group per role and a line per task, like the rest of the CLI', async () => {
@@ -1188,6 +1514,48 @@ describe('local-env install output', () => {
         },
         { role: 'colima', task: 'Look for a docker CLI', result: 'ok' },
         { role: 'colima', task: 'Install the docker CLI', result: 'skipped' },
+      ]),
+    })
+
+    const result = await cli.run(['install'])
+
+    expect(result.output).toMatchSnapshot()
+  })
+
+  test('a line for each item of a loop, as Ansible shows them', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['hello'])
+    cli.home.seedPickedTools(['acme/hello'])
+    cli.bin.on('ansible-playbook', [], {
+      exitCode: 2,
+      stdout: playbookEvents([
+        {
+          role: 'hello',
+          task: 'Say hello',
+          result: 'ok',
+          msg: 'All items completed',
+          items: [
+            { label: 1, result: 'ok', msg: 'Hello, Ana!' },
+            { label: 2, result: 'ok', msg: 'Hello, Ana!' },
+          ],
+        },
+        {
+          role: 'hello',
+          task: 'Install the packages',
+          result: 'failed',
+          msg: 'One or more items failed',
+          items: [
+            { label: 'git', result: 'ok' },
+            // A command's empty message is none
+            { label: 'jq', result: 'changed', msg: '' },
+            { label: { name: 'old' }, result: 'skipped' },
+            {
+              label: 'nope',
+              result: 'failed',
+              msg: 'No available formula with the name "nope"',
+            },
+          ],
+        },
       ]),
     })
 
