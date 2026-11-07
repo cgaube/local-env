@@ -7,5 +7,5 @@
   "singleQuote": true,
   "trailingComma": "all",
   "sortPackageJson": false,
-  "ignorePatterns": []
+  "ignorePatterns": ["apps/web/src/routeTree.gen.ts"]
 }

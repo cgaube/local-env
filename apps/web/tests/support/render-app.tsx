@@ -1,15 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-  createMemoryHistory,
-  createRouter,
-  RouterProvider,
-} from '@tanstack/react-router'
+import { createMemoryHistory, RouterProvider } from '@tanstack/react-router'
 import { act, render } from '@testing-library/react'
 import { TooltipProvider } from '#ui/components/ui/tooltip'
 import { createLiveDataStore } from '#ui/features/live-data/live-data.ts'
 import { LiveDataProvider } from '#ui/features/live-data/live-data-provider'
 import { ThemeProvider } from '#ui/features/theme/theme-provider'
-import { router } from '#ui/router.tsx'
+import { createAppRouter } from '#ui/router.tsx'
 import { FakeEventSource } from '#ui-tests/support/fake-event-source.ts'
 
 // The whole app at a path, with the data of a fake event stream. The domain
@@ -25,8 +21,7 @@ export const renderApp = async (
   })
   queryClient.setQueryData(['config'], { domain: 'dev.test' })
   queryClient.setQueryData(['latest-version'], latestVersion)
-  const testRouter = createRouter({
-    routeTree: router.routeTree,
+  const testRouter = createAppRouter({
     history: createMemoryHistory({ initialEntries: [path] }),
   })
 

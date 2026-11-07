@@ -95,7 +95,12 @@ holds what we build:
   `features/<feature>/`: one folder per component with an `index.ts` that
   re-exports it, and the feature's logic beside them
   (`features/routes/routes.ts`). `lib/` is for helpers shared by features.
-  `features/layout/navigation.ts` lists the sidebar; `router.tsx` its routes.
+  `features/layout/navigation.ts` lists the sidebar. The routes are files in
+  `routes/` (TanStack Router's file-based routing): a file is a path
+  (`routes/tools.tsx` is `/tools`) and only maps it to a page of `features/`.
+  The Vite plugin generates `routeTree.gen.ts` from them, on `dev`, `build:web`
+  and the tests; it is committed, so typecheck runs without a build, and oxlint
+  and oxfmt skip it.
 - `services/proxy-connector/connector.ts` turns running containers into routes:
   it attaches each container with a `VIRTUAL_HOST` to the proxy network, adds
   the domain to short hosts, writes `routes.conf` and `routes.json`, and reloads

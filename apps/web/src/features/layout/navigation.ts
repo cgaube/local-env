@@ -13,7 +13,7 @@ export type NavSection = {
   icon: LucideIcon
 } & ({ to: string; items?: never } | { to?: never; items: NavLink[] })
 
-// The sidebar. Each path is a route in router.tsx.
+// The sidebar. Each path is a file of routes/.
 export const NAVIGATION: NavSection[] = [
   { title: 'Overview', icon: LayoutDashboardIcon, to: '/' },
   // A set of tools and the stacks they need: first-class, not a kind of tool
