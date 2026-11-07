@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -46,7 +47,19 @@ const commit = () => {
 export default defineConfig(({ command, mode }) => ({
   // The scripts run from the repo root, with --config
   root: import.meta.dirname,
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // The routes are the files of src/routes, which it turns into
+    // src/routeTree.gen.ts. Before react(), as the plugin wants.
+    tanstackRouter({
+      target: 'react',
+      routesDirectory: './src/routes',
+      generatedRouteTree: './src/routeTree.gen.ts',
+      quoteStyle: 'single',
+      semicolons: false,
+    }),
+    react(),
+    tailwindcss(),
+  ],
   // The CLI's version, which ships this build (`local-env --version`), and
   // where the build comes from: the release workflow sets LOCAL_ENV_RELEASE,
   // any other build is one of a checkout
@@ -67,7 +80,7 @@ export default defineConfig(({ command, mode }) => ({
   build: {
     outDir: '../../services/dashboard/public',
     emptyOutDir: true,
-    // One bundle of about 500 kB, served from this Mac: not worth splitting
+    // One bundle of about 800 kB, served from this Mac: not worth splitting
     chunkSizeWarningLimit: 1000,
   },
   test: {

@@ -5,6 +5,7 @@
     "correctness": "error"
   },
   "rules": {},
+  "ignorePatterns": ["apps/web/src/routeTree.gen.ts"],
   "env": {
     "builtin": true
   }
