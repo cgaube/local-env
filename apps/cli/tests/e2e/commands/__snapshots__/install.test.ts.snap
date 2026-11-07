@@ -15,3 +15,18 @@ exports[`local-env install output a group per role and a line per task, like the
 ┃  1 changed · 2 unchanged · 1 skipped
 ┃"
 `;
+
+exports[`local-env install output a line for each item of a loop, as Ansible shows them 1`] = `
+"│
+◇  Hello
+│  ✓ Say hello  2 items
+│    ✓ 1  Hello, Ana!
+│    ✓ 2  Hello, Ana!
+│  ✗ Install the packages  4 items
+│    ✓ git
+│    ● jq  changed
+│    ↷ {"name":"old"}  skipped
+│    ✗ nope
+│      No available formula with the name "nope"
+│  ✗ Error installing tools: ansible-playbook exited with 2"
+`;

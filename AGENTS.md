@@ -25,14 +25,15 @@ holds what we build:
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
   `update`, `sources` (add, list, remove, sync, links, login, logout),
-  `install`, `proxy routes`, `doctor`. `update` first upgrades local-env with
-  Homebrew when a newer version is out, then hands over to the new version
-  (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
-  and the sources, then lists the stacks whose template changed and offers to
-  run the `sources sync` flow. Last, it upgrades the Galaxy collections of the
-  wanted tools (`upgradeGalaxyCollections`), without running the playbook.
-  `sources sync` pulls the sources first (`--no-pull` to skip): it is the
-  everyday command after a template change, `update` refreshes everything.
+  `install`, `vars` (list, set, unset), `proxy routes`, `doctor`. `update` first
+  upgrades local-env with Homebrew when a newer version is out, then hands over
+  to the new version (`src/core/self-update.ts`; a checkout skips it). It
+  refreshes the core stack and the sources, then lists the stacks whose template
+  changed and offers to run the `sources sync` flow. Last, it upgrades the
+  Galaxy collections of the wanted tools (`upgradeGalaxyCollections`), without
+  running the playbook. `sources sync` pulls the sources first (`--no-pull` to
+  skip): it is the everyday command after a template change, `update` refreshes
+  everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The
@@ -120,7 +121,15 @@ holds what we build:
   (`<source>/<full name>`), written by the dashboard (`PUT /api/tools/picked`);
   `profile.json`, written by the dashboard's Profiles page
   (`PUT /api/tools/profile`, `features/profiles/`) and
-  `local-env install <profile>` (`--no-save` skips it); `installed.json` and
+  `local-env install <profile>` (`--no-save` skips it); `variables.json`, the
+  values of the roles' inputs (`meta/argument_specs.yml`, entry point `main`) by
+  variable name, written by the dashboard's Variables sheet, one form for the
+  whole next install (`features/tools/variables-sheet/`,
+  `PATCH /api/tools/variables`, which merges the names that change; a value that
+  a profile sets in its dependency `vars:` wins and is not passed), and by
+  `local-env install`, which asks for a missing required one and passes the
+  wanted roles' values with `--extra-vars @<run folder>/extra-vars.json`
+  (`no_log` options are never shown, asked or saved); `installed.json` and
   `stacks.json`, written by `local-env install` (`src/core/tools.ts`), which
   also forgets the tools no longer wanted (it never uninstalls).
   `services/dashboard/role-graph.ts` (no imports: the web app loads it too)

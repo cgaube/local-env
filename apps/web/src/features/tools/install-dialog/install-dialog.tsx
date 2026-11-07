@@ -1,3 +1,11 @@
+import { TriangleAlertIcon } from 'lucide-react'
+import type { WantedInput } from '#services/dashboard/role-graph.ts'
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from '#ui/components/ui/alert'
 import { Button } from '#ui/components/ui/button'
 import {
   Dialog,
@@ -33,6 +41,10 @@ function ToolList({ title, tools }: { title: string; tools: CatalogRow[] }) {
   )
 }
 
+// "git_email (Git, Node)": an input, and the roles that use it
+const describeInputs = (inputs: WantedInput[]) =>
+  inputs.map(({ name, roles }) => `${name} (${roles.join(', ')})`).join(', ')
+
 // What the next `local-env install` changes, opened by the Install button
 // when something waits. With the dashboard agent running, Install runs it
 // here, in the terminal sheet; without it, the dialog gives the command to
@@ -45,6 +57,9 @@ export function InstallDialog({
   unpicked,
   sudo,
   profile,
+  missing,
+  secrets,
+  onOpenVariables,
   onInstall,
 }: {
   open: boolean
@@ -57,6 +72,12 @@ export function InstallDialog({
   sudo: string[]
   // Only its name is shown
   profile: { label: string } | null
+  // Required, without a value: the install asks for them
+  missing: WantedInput[]
+  // Required secrets: the install stops, local-env can't give them yet
+  secrets: WantedInput[]
+  // Opens the Variables sheet to set them
+  onOpenVariables: (() => void) | null
   // Runs `local-env install` through the agent: null when it isn't running
   onInstall: (() => void) | null
 }) {
@@ -69,7 +90,9 @@ export function InstallDialog({
           <DialogTitle>
             {pending.length > 0
               ? `Install ${plural(pending.length, 'tool')}`
-              : 'Apply your changes'}
+              : unpicked.length > 0
+                ? 'Apply your changes'
+                : 'Install your tools'}
           </DialogTitle>
           <DialogDescription>
             {pending.length > 0
@@ -87,6 +110,38 @@ export function InstallDialog({
           <ToolList title="Picked" tools={picked} />
           <ToolList title="Unpicked, stay on this Mac" tools={unpicked} />
         </div>
+        {missing.length > 0 ? (
+          <Alert variant="warning">
+            <TriangleAlertIcon />
+            <AlertTitle>Variables missing</AlertTitle>
+            <AlertDescription>
+              {describeInputs(missing)}. Set them in Variables before you
+              install from here.
+            </AlertDescription>
+            {onOpenVariables ? (
+              <AlertAction>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label="Set the variables"
+                  onClick={onOpenVariables}
+                >
+                  Set
+                </Button>
+              </AlertAction>
+            ) : null}
+          </Alert>
+        ) : null}
+        {secrets.length > 0 ? (
+          <Alert variant="destructive">
+            <TriangleAlertIcon />
+            <AlertTitle>Secrets not supported yet</AlertTitle>
+            <AlertDescription>
+              {describeInputs(secrets)}. local-env cannot give a secret yet, so
+              the install stops before it runs.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <CodeSnippet code="local-env install" />
         {onInstall ? null : (
           <p className="text-muted-foreground text-sm">
@@ -103,7 +158,15 @@ export function InstallDialog({
         ) : null}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-          {onInstall ? <Button onClick={onInstall}>Install</Button> : null}
+          {onInstall ? (
+            // Not before the values it needs: the alert above says which
+            <Button
+              disabled={missing.length + secrets.length > 0}
+              onClick={onInstall}
+            >
+              Install
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

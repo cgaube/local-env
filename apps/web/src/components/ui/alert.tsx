@@ -10,6 +10,9 @@ const alertVariants = cva(
         default: 'bg-card text-card-foreground',
         destructive:
           'bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current',
+        // As the warning badge: something to do before it can go on
+        warning:
+          'border-warning/30 bg-warning/10 text-warning dark:bg-warning/15 *:data-[slot=alert-description]:text-warning/90 *:[svg]:text-current',
       },
     },
     defaultVariants: {

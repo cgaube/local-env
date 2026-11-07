@@ -13,7 +13,7 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import type { Tools } from '#ui/features/live-data/live-data.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
-import { InstallButton } from '#ui/features/tools/install-button'
+import { ToolActions } from '#ui/features/tools/tool-actions'
 import { CurrentProfileCard } from '#ui/features/profiles/current-profile-card'
 import { ProfileSheet } from '#ui/features/profiles/profile-sheet'
 import { profileRows } from '#ui/features/profiles/profiles.ts'
@@ -63,7 +63,7 @@ export function ProfilesPage() {
         title="Profiles"
         description="A profile is a whole setup: the tools your sources install on this Mac and the Docker stacks they need. Pick yours here, then install it."
       >
-        <InstallButton />
+        <ToolActions />
       </PageHeader>
       {!tools ? (
         <Card className="py-0">

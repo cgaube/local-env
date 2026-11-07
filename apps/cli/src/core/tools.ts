@@ -1,30 +1,48 @@
 import { execa } from 'execa'
+import { styleText } from 'node:util'
 import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import {
   type Installed,
   listCollections,
+  listGalaxyRoles,
   listRoles,
   playbookOf,
   readInstalled,
   readProfile,
   readSelection,
+  readVariables,
   type Role,
   writeInstalled,
   writeProfile,
   writeSelection,
+  writeVariables,
 } from '#services/dashboard/tools.js'
 import {
   externalRoles,
+  missingInputs,
+  parseInputText,
+  passedValues,
   playbookRoots,
+  roleValues,
+  unsupportedSecrets,
+  type WantedInput,
+  wantedInputs,
   wantedRoles,
 } from '#services/dashboard/role-graph.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/logger.js'
-import { askPassword } from '#cli/utils/prompt.js'
+import {
+  askConfirm,
+  askPassword,
+  askSelect,
+  askText,
+  canAsk,
+} from '#cli/utils/prompt.js'
 import { hasCommand } from '#cli/utils/brew.js'
 import { HOME_DIR } from '#cli/core/paths.js'
 import { createRunFolder } from '#cli/core/run-folder.js'
+import { readConfig } from '#cli/core/config.js'
 import {
   GALAXY_DIR,
   galaxyRequirements,
@@ -160,6 +178,17 @@ const withDependencies = (catalog: Role[], roots: Role[]) => {
   return catalog.filter(({ id }) => wanted.has(id))
 }
 
+// The roots of the next install: the saved profile and the picks still in
+// the sources. Read only: install says when the profile or a pick left them.
+export const currentRoots = (catalog: Role[]) => {
+  const profileId = readProfile(TOOLS_DIR)
+  const picked = readSelection(TOOLS_DIR)
+  return catalog.filter(
+    ({ id, isProfile }) =>
+      (id === profileId && isProfile) || picked.includes(id),
+  )
+}
+
 // For `local-env update`: upgrades the Galaxy collections of the tools you
 // want (your profile, your picks and what they include) to the newest
 // version their ranges allow. It runs no playbook: what it installed, as
@@ -171,12 +200,7 @@ export const upgradeGalaxyCollections = async ({
   dryRun?: boolean
 }): Promise<string[]> => {
   const catalog = listCatalog()
-  // Read only: install says when the profile or a pick left the sources
-  const profileId = readProfile(TOOLS_DIR)
-  const roots = catalog.filter(
-    ({ id, isProfile }) =>
-      (id === profileId && isProfile) || readSelection(TOOLS_DIR).includes(id),
-  )
+  const roots = currentRoots(catalog)
   const requirements = galaxyRequirements(withDependencies(catalog, roots))
   if (requirements.length === 0) return []
   // The install opens this group itself
@@ -201,6 +225,151 @@ export const upgradeGalaxyCollections = async ({
     logger.warn(error instanceof Error ? error.message : String(error))
     return []
   }
+}
+
+// The inputs of the roots and the roles they include
+// (meta/argument_specs.yml), Galaxy roles included once installed
+export const readWantedInputs = (catalog: Role[], roots: Role[]) =>
+  wantedInputs(
+    catalog,
+    roots.map(({ id }) => id),
+    listGalaxyRoles(GALAXY_DIR),
+  )
+
+// "email (Git, Node)": an input, and the roles that use it
+export const describeInput = ({ name, roles }: WantedInput) =>
+  `${name} (${roles.join(', ')})`
+
+// Where each input stands, for `install --dry-run`: one line each
+export const describeInputs = (inputs: WantedInput[]) => {
+  const values = readVariables(TOOLS_DIR)
+  return inputs.map((input) => {
+    const state = input.provided
+      ? `${JSON.stringify(input.given)}, set by ${input.setBy.join(', ')}`
+      : input.secret
+        ? input.required
+          ? 'a secret local-env does not support yet'
+          : 'a secret, not passed'
+        : input.name in values
+          ? `${JSON.stringify(values[input.name])}, saved`
+          : input.default !== undefined
+            ? `the role's default, ${JSON.stringify(input.default)}`
+            : input.required
+              ? 'missing: install asks for it'
+              : 'not set'
+    return `${describeInput(input)}: ${state}`
+  })
+}
+
+// The value of a text typed for an input (`local-env vars set`), or why it
+// is refused: a bool from true or false, one of the choices, else as the
+// dashboard reads it (a number, a list from "a, b", a dict from JSON)
+export const parseVariableText = (
+  input: WantedInput,
+  text: string,
+): { value: unknown } | { error: string } => {
+  if (text.trim() === '') {
+    return { error: 'Give a value, or use `local-env vars unset`.' }
+  }
+  if (input.choices) {
+    const choice = input.choices.find((option) => String(option) === text)
+    return choice === undefined
+      ? { error: `Use one of: ${input.choices.join(', ')}.` }
+      : { value: choice }
+  }
+  if (input.type === 'bool') {
+    if (/^(true|yes|on)$/i.test(text)) return { value: true }
+    if (/^(false|no|off)$/i.test(text)) return { value: false }
+    return { error: 'Use true or false.' }
+  }
+  return parseInputText(input, text)
+}
+
+// The inputs of every role of the sources, and of the installed Galaxy
+// roles: what `vars set` accepts a value for
+export const readAllInputs = (catalog: Role[]) =>
+  wantedInputs(
+    catalog,
+    catalog.map(({ id }) => id),
+    listGalaxyRoles(GALAXY_DIR),
+  )
+
+// Stops before anything runs when a role needs what local-env can't give:
+// a secret (no_log), or values without a terminal to ask them in
+export const checkInputs = (inputs: WantedInput[]) => {
+  const secrets = unsupportedSecrets(inputs)
+  if (secrets.length > 0) {
+    throw new Error(
+      `Your tools need a secret that local-env does not support yet: ${secrets.map(describeInput).join(', ')}. The role would fail without it, so nothing ran.`,
+    )
+  }
+  const missing = missingInputs(inputs, readVariables(TOOLS_DIR))
+  if (missing.length > 0 && !canAsk()) {
+    throw new Error(
+      `Your tools need values: ${missing.map(describeInput).join(', ')}. Set them with \`local-env vars set\`, in Variables on the Tools page of the dashboard, or run \`local-env install\` in a terminal.`,
+    )
+  }
+  return missing
+}
+
+// A question about a variable on one line, its description dimmed after
+// it: clack draws its left border on the first line of a question only
+export const questionOf = (head: string, description: string | null) =>
+  description ? `${head} · ${styleText('dim', description)}` : head
+
+// Asks for each value in the terminal, of its type: a select for choices, a
+// yes/no for a bool, text for the rest (parseInputText). The answers, by
+// name.
+const askInputs = async (missing: WantedInput[]) => {
+  const answers: Record<string, unknown> = {}
+  for (const input of missing) {
+    const message = questionOf(
+      `${input.name}, for ${input.roles.join(', ')}`,
+      input.description,
+    )
+    if (input.choices) {
+      const choices = input.choices
+      const value = await askSelect(
+        message,
+        choices.map((choice) => ({
+          value: String(choice),
+          label: String(choice),
+        })),
+      )
+      answers[input.name] = choices.find((choice) => String(choice) === value)
+    } else if (input.type === 'bool') {
+      answers[input.name] = await askConfirm(message, false)
+    } else {
+      // Text, turned into a value of its type: a number, a list from "a, b",
+      // a dict from JSON
+      const text = await askText(message, '', {
+        validate: (answer) => {
+          if (!answer.trim()) return 'Type a value, or press Ctrl-C to stop'
+          const parsed = parseInputText(input, answer)
+          return 'error' in parsed ? parsed.error : undefined
+        },
+      })
+      const parsed = parseInputText(input, text)
+      answers[input.name] = 'value' in parsed ? parsed.value : text
+    }
+  }
+  return answers
+}
+
+// Where the answers went, and where to change them: `local-env vars set` and
+// the dashboard's Variables sheet edit the same file. With --no-save, they
+// were for this run only.
+const showAnswers = (answered: WantedInput[], saved: boolean) => {
+  const names = answered.map(({ name }) => name).join(', ')
+  const one = answered.length === 1
+  if (!saved) {
+    logger.info(`Used ${names} for this run only: not saved (--no-save).`)
+    return
+  }
+  logger.step(`Saved ${names}`)
+  logger.info(
+    `Change ${one ? 'it' : 'them'} with \`local-env vars set\`, or in Variables on the Tools page: https://local-env.${readConfig().domain}/tools`,
+  )
 }
 
 // Ansible finds a collection only at ansible_collections/<namespace>/<name>,
@@ -228,12 +397,13 @@ const linkCollections = (catalog: Role[], dir: string) => {
 // output when verbose. Their playbook is written to a folder only you can
 // read, removed once Ansible is done, or stopped (run-folder.ts). A role that
 // uses sudo makes local-env ask for your password first: Ansible reads it
-// from its stdin, so it is never on the disk. Records what ran, for the
-// dashboard.
+// from its stdin, so it is never on the disk. The roles' inputs it lacks are
+// asked next, saved unless `save` is false, and passed to Ansible as extra
+// vars. Records what ran, for the dashboard.
 export const runPlaybook = async (
   catalog: Role[],
   roots: Role[],
-  { verbose = false }: { verbose?: boolean } = {},
+  { verbose = false, save = true }: { verbose?: boolean; save?: boolean } = {},
 ): Promise<PlaybookSummary | null> => {
   // What Ansible runs: the roots and the ones they include
   const run = withDependencies(catalog, roots)
@@ -246,6 +416,10 @@ export const runPlaybook = async (
   await installGalaxyCollections(galaxyRequirements(run), folder.path, {
     verbose,
   })
+  // Read once the Galaxy roles are installed. Checked before the password:
+  // a run that can't start asks nothing.
+  const inputs = readWantedInputs(catalog, roots)
+  const missing = checkInputs(inputs)
   const sudo = [
     ...run.filter((role) => role.needsSudo).map(({ label }) => label),
     ...galaxyRolesNeedingSudo(
@@ -264,6 +438,24 @@ export const runPlaybook = async (
         })
       : null
 
+  const answers = await askInputs(missing)
+  if (save && missing.length > 0) {
+    mkdirSync(TOOLS_DIR, { recursive: true })
+    writeVariables(TOOLS_DIR, { ...readVariables(TOOLS_DIR), ...answers })
+  }
+  if (missing.length > 0) showAnswers(missing, save)
+  const values = { ...readVariables(TOOLS_DIR), ...answers }
+  // Only the inputs the wanted roles declare, never a secret, and not one
+  // that the roles including it give: extra vars win over every other
+  // variable of every role, the `vars:` of a dependency too
+  const extraVars = passedValues(inputs, values)
+  const extraVarsFile = join(folder.path, 'extra-vars.json')
+  if (Object.keys(extraVars).length > 0) {
+    writeFileSync(extraVarsFile, `${JSON.stringify(extraVars, null, 2)}\n`, {
+      mode: 0o600,
+    })
+  }
+
   const collections = linkCollections(catalog, join(folder.path, 'collections'))
   const playbook = join(folder.path, 'playbook.yml')
   const args = [
@@ -272,6 +464,9 @@ export const runPlaybook = async (
     // `-` is stdin: Ansible reads it to the end, then strips the newline
     // (only that: a password can start or end with a space)
     ...(password ? ['--become-password-file', '-'] : []),
+    ...(Object.keys(extraVars).length > 0
+      ? ['--extra-vars', `@${extraVarsFile}`]
+      : []),
     playbook,
   ]
   writeFileSync(
@@ -362,8 +557,14 @@ export const runPlaybook = async (
 
   const installedAt = new Date().toISOString()
   const installed: Installed = readInstalled(TOOLS_DIR)
-  for (const { id, revision } of run) {
-    installed[id] = { revision, installedAt }
+  for (const role of run) {
+    // What it got: a value changed since makes it changed
+    const got = roleValues(role, extraVars)
+    installed[role.id] = {
+      revision: role.revision,
+      installedAt,
+      ...(Object.keys(got).length > 0 ? { values: got } : {}),
+    }
   }
   mkdirSync(TOOLS_DIR, { recursive: true })
   writeInstalled(TOOLS_DIR, installed)

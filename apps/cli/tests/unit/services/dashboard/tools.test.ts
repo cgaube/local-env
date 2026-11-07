@@ -3,12 +3,17 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import {
   isProfileChoice,
+  applyVariablesChange,
+  isVariablesChange,
+  listGalaxyRoles,
   listRoles,
   readInstalled,
   readProfile,
   readSelection,
+  readVariables,
   writeProfile,
   writeSelection,
+  writeVariables,
 } from '#services/dashboard/tools.js'
 
 // A home's volumes/ folder: sources/<source>/ansible/<role>/ and tools/
@@ -51,11 +56,13 @@ describe('listRoles', () => {
         description: 'Node.js and npm, from Homebrew',
         tags: ['javascript', 'runtime'],
         dependencies: ['homebrew', 'git'],
+        dependencyVars: [{}, {}],
         isProfile: false,
         stacks: [],
         revision: expect.stringMatching(/^[0-9a-f]{12}$/),
         needsSudo: false,
         galaxy: {},
+        inputs: [],
       },
     ])
   })
@@ -287,6 +294,294 @@ describe('listRoles', () => {
       ['dns', true],
       ['git', false],
     ])
+  })
+})
+
+const ARGUMENT_SPECS = [
+  'argument_specs:',
+  '  main:',
+  '    options:',
+  '      git_email:',
+  '        type: str',
+  '        required: true',
+  '        description: Your email, for commits',
+  '      git_editor:',
+  '        choices: [vim, nano, code]',
+  '        default: vim',
+  '        description:',
+  '          - The editor git opens.',
+  '          - For commit messages.',
+  '      git_sign:',
+  '        type: bool',
+  '      git_token:',
+  '        type: str',
+  '        required: true',
+  '        no_log: true',
+  '      git_name:',
+  '        required: true',
+  '        default: null',
+  '  other:',
+  '    options:',
+  '      ignored: {}',
+  '',
+].join('\n')
+
+describe('role inputs', () => {
+  test('reads the options of the main entry point of meta/argument_specs.yml', () => {
+    const { sources, write } = createVolumes()
+    write('acme/ansible/git/tasks/main.yml', '- ping:\n')
+    write('acme/ansible/git/meta/argument_specs.yml', ARGUMENT_SPECS)
+
+    expect(listRoles(sources)[0]?.inputs).toEqual([
+      {
+        name: 'git_email',
+        type: 'str',
+        required: true,
+        choices: null,
+        description: 'Your email, for commits',
+        secret: false,
+      },
+      {
+        name: 'git_editor',
+        type: 'str',
+        required: false,
+        default: 'vim',
+        choices: ['vim', 'nano', 'code'],
+        description: 'The editor git opens. For commit messages.',
+        secret: false,
+      },
+      {
+        name: 'git_sign',
+        type: 'bool',
+        required: false,
+        choices: null,
+        description: null,
+        secret: false,
+      },
+      {
+        name: 'git_token',
+        type: 'str',
+        required: true,
+        choices: null,
+        description: null,
+        secret: true,
+      },
+      // A null default is none, as for Ansible
+      {
+        name: 'git_name',
+        type: 'str',
+        required: true,
+        choices: null,
+        description: null,
+        secret: false,
+      },
+    ])
+  })
+
+  test('takes a value of defaults/main.yml as the default: not required then', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/git/meta/argument_specs.yml',
+      'argument_specs:\n  main:\n    options:\n      git_email: { required: true }\n      git_name: { required: true }\n',
+    )
+    write('acme/ansible/git/defaults/main.yml', 'git_email: me@acme.test\n')
+
+    expect(
+      listRoles(sources)[0]?.inputs.map(
+        ({ name, required, default: value }) => [name, required, value],
+      ),
+    ).toEqual([
+      ['git_email', false, 'me@acme.test'],
+      ['git_name', true, undefined],
+    ])
+  })
+
+  test('reads the variables each dependency entry passes', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/backend/meta/main.yml',
+      [
+        'dependencies:',
+        '  - git',
+        '  - role: node',
+        '    vars: { node_version: 22 }',
+        '  # A role parameter, the older way',
+        '  - role: zsh',
+        '    zsh_theme: robby',
+        '    when: true',
+        '',
+      ].join('\n'),
+    )
+
+    expect(listRoles(sources)[0]).toMatchObject({
+      dependencies: ['git', 'node', 'zsh'],
+      dependencyVars: [{}, { node_version: 22 }, { zsh_theme: 'robby' }],
+    })
+  })
+
+  test('reads argument_specs of meta/main.yml without a file of its own', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/git/meta/main.yml',
+      'argument_specs:\n  main:\n    options:\n      git_email: { required: true }\n',
+    )
+
+    expect(listRoles(sources)[0]?.inputs.map(({ name }) => name)).toEqual([
+      'git_email',
+    ])
+  })
+
+  test('has no inputs without the file, or with an invalid one', () => {
+    const { sources, write } = createVolumes()
+    write('acme/ansible/git/tasks/main.yml', '- ping:\n')
+    write('acme/ansible/node/meta/argument_specs.yml', 'argument_specs: [\n')
+    write(
+      'acme/ansible/jq/meta/argument_specs.yml',
+      'argument_specs:\n  main:\n    options: [a, b]\n',
+    )
+    write(
+      'acme/ansible/ruby/meta/argument_specs.yml',
+      // Not a name Ansible accepts, and not an option
+      'argument_specs:\n  main:\n    options:\n      "1x": {}\n      ok: 3\n',
+    )
+
+    expect(
+      listRoles(sources).map(({ name, inputs }) => [name, inputs]),
+    ).toEqual([
+      ['git', []],
+      ['jq', []],
+      ['node', []],
+      ['ruby', []],
+    ])
+  })
+
+  test('changes the revision when the spec changes', () => {
+    const { sources, write } = createVolumes()
+    write('acme/ansible/git/meta/argument_specs.yml', ARGUMENT_SPECS)
+    const before = listRoles(sources)[0]?.revision
+
+    write('acme/ansible/git/meta/argument_specs.yml', 'argument_specs: {}\n')
+
+    expect(listRoles(sources)[0]?.revision).not.toBe(before)
+  })
+
+  test('reads the inputs and dependencies of the installed Galaxy roles', () => {
+    const { tools } = createVolumes()
+    const mac = join(tools, 'collections/ansible_collections/geerlingguy/mac')
+    mkdirSync(join(mac, 'roles/dock/meta'), { recursive: true })
+    mkdirSync(join(mac, 'roles/homebrew'), { recursive: true })
+    writeFileSync(
+      join(mac, 'roles/dock/meta/main.yml'),
+      'dependencies: [homebrew, community.general.x]\n',
+    )
+    writeFileSync(
+      join(mac, 'roles/dock/meta/argument_specs.yml'),
+      'argument_specs:\n  main:\n    options:\n      dockitems_remove: { type: list, default: [] }\n',
+    )
+
+    expect(listGalaxyRoles(join(tools, 'collections'))).toEqual([
+      {
+        name: 'geerlingguy.mac.dock',
+        dependencies: ['geerlingguy.mac.homebrew', 'community.general.x'],
+        dependencyVars: [{}, {}],
+        inputs: [
+          {
+            name: 'dockitems_remove',
+            type: 'list',
+            required: false,
+            default: [],
+            choices: null,
+            description: null,
+            secret: false,
+          },
+        ],
+      },
+      {
+        name: 'geerlingguy.mac.homebrew',
+        dependencies: [],
+        dependencyVars: [],
+        inputs: [],
+      },
+    ])
+    expect(listGalaxyRoles(join(tools, 'none'))).toEqual([])
+  })
+})
+
+describe('the variables', () => {
+  test('are saved by name, in order', () => {
+    const { tools } = createVolumes()
+
+    writeVariables(tools, { git_email: 'me@acme.test', git_editor: 'vim' })
+
+    expect(readFileSync(join(tools, 'variables.json'), 'utf8')).toBe(
+      '{\n  "git_editor": "vim",\n  "git_email": "me@acme.test"\n}\n',
+    )
+    expect(readVariables(tools)).toEqual({
+      git_editor: 'vim',
+      git_email: 'me@acme.test',
+    })
+  })
+
+  test('are none without a file, and leave out bad names and nulls', () => {
+    const { tools } = createVolumes()
+    expect(readVariables(tools)).toEqual({})
+
+    writeFileSync(
+      join(tools, 'variables.json'),
+      '{ "ok": 1, "no-dash": 2, "gone": null }',
+    )
+
+    expect(readVariables(tools)).toEqual({ ok: 1 })
+  })
+
+  test('change by name: a value of an input of the roles, of its type, never a secret', () => {
+    const { sources, write } = createVolumes()
+    write('acme/ansible/git/meta/argument_specs.yml', ARGUMENT_SPECS)
+    const roles = listRoles(sources)
+    const galaxy = [
+      {
+        name: 'geerlingguy.mac.dock',
+        dependencies: [],
+        inputs: [
+          {
+            name: 'dock_items',
+            type: 'list',
+            required: false,
+            choices: null,
+            description: null,
+            secret: false,
+          },
+        ],
+      },
+    ]
+    const check = (value: unknown, saved = {}) =>
+      isVariablesChange(roles, galaxy, saved, value)
+
+    expect(check({ git_email: 'me@acme.test', git_sign: true })).toBe(true)
+    expect(check({ git_editor: 'nano' })).toBe(true)
+    expect(check({})).toBe(true)
+    expect(check({ git_editor: 'emacs' })).toBe(false)
+    expect(check({ git_sign: 'yes' })).toBe(false)
+    expect(check({ git_token: 'secret' })).toBe(false)
+    expect(check({ unknown: 'x' })).toBe(false)
+    // Kept as it was: its role left the sources
+    expect(check({ gone: 'x' }, { gone: 'x' })).toBe(true)
+    expect(check({ gone: 'y' }, { gone: 'x' })).toBe(false)
+    // No role includes this Galaxy role
+    expect(check({ dock_items: ['a', 'b'] })).toBe(false)
+    expect(check(['git_email'])).toBe(false)
+    // null removes it, a secret too
+    expect(check({ git_token: null, gone: null })).toBe(true)
+    expect(check({ 'no-dash': null })).toBe(false)
+  })
+
+  test('change only the names they name: the others stay', () => {
+    expect(
+      applyVariablesChange(
+        { git_email: 'me@acme.test', git_editor: 'vim', other: 1 },
+        { git_editor: 'nano', other: null, git_sign: true },
+      ),
+    ).toEqual({ git_email: 'me@acme.test', git_editor: 'nano', git_sign: true })
   })
 })
 

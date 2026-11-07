@@ -1,0 +1,17 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`local-env vars list lists the variables of your tools, then the saved ones they no longer use 1`] = `
+"│
+◇  Your tools
+│  git_email (Git): missing: install asks for it
+│  git_editor (Git): the role's default, "vim"
+│  git_sign (Git): true, saved
+│  git_jobs (Git): not set
+│  git_aliases (Git): not set
+│  git_token (Git): a secret, not passed
+│
+◇  Saved
+│  node_version: 22
+│
+│  Change one with \`local-env vars set <name> <value>\`, or in the dashboard (Variables)."
+`;

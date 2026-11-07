@@ -2,12 +2,14 @@ import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import {
   catalogRows,
   currentProfile,
+  toolInputs,
   waitingTools,
 } from '#ui/features/tools/tools.ts'
 
 // What the next `local-env install` changes: the tools it installs or
 // updates, and the unpicked ones it forgets (it never uninstalls them). The
-// Install button and the Tools item of the sidebar count them.
+// Install button and the Tools item of the sidebar count them. Also what it
+// lacks: the required values it asks for, and the secrets it can't give.
 export const useToolChanges = () => {
   const { tools } = useLiveData()
   if (!tools) {
@@ -18,8 +20,11 @@ export const useToolChanges = () => {
       sudo: [],
       profile: null,
       count: 0,
+      missing: [],
+      secrets: [],
     }
   }
+  const { missing, secrets } = toolInputs(tools)
   const waiting = waitingTools(tools)
   // The tools, without the profiles: what the user counts
   const pending = waiting.filter((tool) => !tool.isProfile)
@@ -36,5 +41,7 @@ export const useToolChanges = () => {
     profile: currentProfile(tools),
     // A profile whose own tasks changed counts as one
     count: Math.max(pending.length, waiting.length) + unpicked.length,
+    missing,
+    secrets,
   }
 }

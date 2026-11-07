@@ -1,13 +1,18 @@
 import {
   includedRoles,
+  missingInputs,
+  passedValues,
   titleize,
+  unsupportedSecrets,
+  valuesChanged,
+  wantedInputs,
   wantedRoles,
 } from '#services/dashboard/role-graph.ts'
 import type { Role, Tools } from '#ui/features/live-data/live-data.ts'
 
 // Where a tool stands on this Mac:
 // - to-install: wanted, never installed
-// - update: installed, its role changed since
+// - update: installed, its role or the values of its inputs changed since
 // - installed: installed, up to date
 // - unpicked: installed, then unpicked: local-env doesn't uninstall
 // - removed: installed, its role left the sources
@@ -19,14 +24,19 @@ export type ToolStatus =
   | 'removed'
 
 const statusOf = (
-  { installed }: Tools,
+  tools: Tools,
   wanted: Set<string>,
+  // The values the next install passes (passedValues)
+  passed: Record<string, unknown>,
   role: Role,
 ): ToolStatus | null => {
-  const install = installed[role.id]
+  const install = tools.installed[role.id]
   if (!install) return wanted.has(role.id) ? 'to-install' : null
   if (!wanted.has(role.id)) return 'unpicked'
-  return install.revision === role.revision ? 'installed' : 'update'
+  return install.revision === role.revision &&
+    !valuesChanged(role, passed, install.values)
+    ? 'installed'
+    : 'update'
 }
 
 // What the status filter and the badges say. available: in the catalog,
@@ -69,6 +79,10 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
   // Picked, in the profile, or included by those: `local-env install`
   // installs it
   const wanted = wantedRoles(tools.roles, roots)
+  const passed = passedValues(
+    wantedInputs(tools.roles, roots, tools.galaxyRoles),
+    tools.variables,
+  )
   const known = new Set(tools.roles.map((role) => role.id))
   return [
     ...tools.roles.map((role) => ({
@@ -76,7 +90,7 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
       picked: tools.picked.includes(role.id),
       includedBy: included.get(role.id) ?? [],
       inProfile: inProfile.has(role.id) ? (profile?.label ?? null) : null,
-      status: statusOf(tools, wanted, role),
+      status: statusOf(tools, wanted, passed, role),
     })),
     ...tools.picked
       .filter((id) => !known.has(id))
@@ -99,6 +113,7 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
           revision: '',
           needsSudo: false,
           galaxy: {},
+          inputs: [],
           picked: true,
           includedBy: [],
           inProfile: null,
@@ -106,6 +121,63 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
         }
       }),
   ]
+}
+
+// The roots `local-env install` runs: the profile and the picks
+const rootsOf = (tools: Tools) => {
+  const profile = currentProfile(tools)
+  return [...tools.picked, ...(profile ? [profile.id] : [])]
+}
+
+// The inputs of what the next install runs (the profile, the picks, what
+// they include, Galaxy roles too), each variable once: the Variables sheet and
+// the Install button. Required ones without a value, which the install asks
+// for, and required secrets, which local-env can't give yet. unused: the
+// saved values that none of them takes, kept for a later profile or pick.
+export const toolInputs = (tools: Tools) => {
+  const inputs = wantedInputs(tools.roles, rootsOf(tools), tools.galaxyRoles)
+  const names = new Set(inputs.map(({ name }) => name))
+  return {
+    // Not the secrets: local-env never shows one
+    inputs: inputs.filter((input) => !input.secret),
+    missing: missingInputs(inputs, tools.variables),
+    secrets: unsupportedSecrets(inputs),
+    unused: unusedValues(tools, names),
+  }
+}
+
+// The saved values that no wanted role takes, with the role of the catalog
+// that declares each, by label (null: none does any more)
+const unusedValues = (tools: Tools, used: Set<string>) => {
+  const declaredBy = new Map(
+    wantedInputs(
+      tools.roles,
+      tools.roles.map(({ id }) => id),
+      tools.galaxyRoles,
+    ).map((input) => [input.name, input.roles[0] ?? null]),
+  )
+  return Object.entries(tools.variables)
+    .filter(([name]) => !used.has(name))
+    .map(([name, value]) => ({
+      name,
+      value,
+      role: declaredBy.get(name) ?? null,
+    }))
+}
+
+// Saves the values that change to variables.json (null removes one), which
+// `local-env install` passes to Ansible. The server merges them into the
+// file as it is: a value the CLI saved meanwhile stays
+// (services/dashboard/server.ts).
+export const saveVariables = async (changes: Record<string, unknown>) => {
+  const response = await fetch('/api/tools/variables', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ variables: changes }),
+  })
+  if (!response.ok) {
+    throw new Error(`Saving the values failed (${response.status})`)
+  }
 }
 
 // What waits for `local-env install`: wanted and not installed, or changed

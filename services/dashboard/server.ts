@@ -12,6 +12,9 @@
 //                   picked.json, which `local-env install` reads (tools.ts)
 //   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
 //                   profile.json, which `local-env install` reads
+//   PATCH /api/tools/variables -> values of the roles' inputs to set, or
+//                   to remove (null): merged into variables.json, which
+//                   `local-env install` passes to Ansible
 //   /api/terminal -> a WebSocket to the dashboard agent, the process on the
 //                   Mac that runs `local-env install` and `update` in a pty
 //                   (apps/cli/src/agent/server.ts). Only this server has its
@@ -19,21 +22,28 @@
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
+  GALAXY_FOLDER,
   isProfileChoice,
+  applyVariablesChange,
+  isVariablesChange,
+  listGalaxyRoles,
   listRoleFolders,
   listRoles,
   readDeployedStacks,
   readInstalled,
   readProfile,
   readSelection,
+  readVariables,
   writeProfile,
   writeSelection,
+  writeVariables,
 } from './tools.js'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
 const SOURCES_DIR = '/sources'
 const TOOLS_DIR = '/tools'
+const GALAXY_DIR = join(TOOLS_DIR, GALAXY_FOLDER)
 // The agent's token, mounted read-only: written by the agent when it starts
 const AGENT_DIR = '/agent'
 const AGENT_URL = process.env.AGENT_URL ?? 'http://host.docker.internal:17081'
@@ -151,6 +161,10 @@ const readers = {
       profile: readProfile(TOOLS_DIR),
       // The stacks `local-env install` deployed for the roles
       stacks: readDeployedStacks(TOOLS_DIR),
+      // The values of the inputs, and the installed Galaxy roles, for the
+      // inputs of the roles they include
+      variables: readVariables(TOOLS_DIR),
+      galaxyRoles: listGalaxyRoles(GALAXY_DIR),
     })
   },
   agent: readAgent,
@@ -191,8 +205,8 @@ watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
   publish('tools')
 })
-// picked.json and profile.json, written below and by `local-env install`,
-// and installed.json, by `local-env install`
+// picked.json, profile.json and variables.json, written below and by
+// `local-env install`, and installed.json, by `local-env install`
 watch(TOOLS_DIR, () => publish('tools'))
 // The agent writes its token when it starts and removes it when it stops
 watch(AGENT_DIR, () => publish('agent'))
@@ -212,8 +226,9 @@ setInterval(async () => {
 // can't send it without a CORS preflight, which this server never allows.
 const readPut = async (
   request: Request,
+  method = 'PUT',
 ): Promise<{ body: Record<string, unknown> } | Response> => {
-  if (request.method !== 'PUT') {
+  if (request.method !== method) {
     return new Response('Method not allowed', { status: 405 })
   }
   if (request.headers.get('Content-Type') !== 'application/json') {
@@ -258,6 +273,30 @@ const chooseProfile = async (request: Request) => {
     return new Response('Unknown profile', { status: 400 })
   }
   writeProfile(TOOLS_DIR, profile)
+  return new Response(null, { status: 204 })
+}
+
+// The values of the inputs that change, checked against the roles
+// (isVariablesChange), merged into the file as it is now: a value that
+// `local-env install` saved meanwhile stays
+const saveVariables = async (request: Request) => {
+  const put = await readPut(request, 'PATCH')
+  if (put instanceof Response) return put
+  const { variables } = put.body
+  const saved = readVariables(TOOLS_DIR)
+  if (
+    !isVariablesChange(
+      listRoles(SOURCES_DIR),
+      listGalaxyRoles(GALAXY_DIR),
+      saved,
+      variables,
+    )
+  ) {
+    return new Response('Unknown variables, or values of another type', {
+      status: 400,
+    })
+  }
+  writeVariables(TOOLS_DIR, applyVariablesChange(saved, variables))
   return new Response(null, { status: 204 })
 }
 
@@ -351,6 +390,7 @@ Bun.serve<TerminalSocket>({
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
     if (pathname === '/api/tools/picked') return pickTools(request)
     if (pathname === '/api/tools/profile') return chooseProfile(request)
+    if (pathname === '/api/tools/variables') return saveVariables(request)
     if (pathname.startsWith('/api/')) {
       return new Response('Not found', { status: 404 })
     }

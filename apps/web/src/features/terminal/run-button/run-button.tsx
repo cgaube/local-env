@@ -17,13 +17,25 @@ const BUTTONS = {
 // Runs `local-env install` or `update` in the terminal sheet, through the
 // dashboard agent, whenever the user wants: with nothing waiting too. During
 // its run, it opens the terminal.
-export function RunButton({ command }: { command: AgentCommand }) {
+export function RunButton({
+  command,
+  blocked = null,
+}: {
+  command: AgentCommand
+  // Why it can't run yet (a value missing): disabled, with this as its tip
+  blocked?: string | null
+}) {
   const { agent } = useLiveData()
   const terminal = useTerminal()
   const { icon: Icon, label, running } = BUTTONS[command]
   const runs = agent?.run?.command === command && agent.run.status === 'running'
+  const reason = !agent?.available
+    ? `Run local-env start to ${command} from here, or local-env ${command} in your terminal`
+    : runs
+      ? null
+      : blocked
 
-  if (!agent?.available) {
+  if (reason) {
     return (
       <Tooltip>
         {/* A disabled button gets no pointer events: the span shows the tip */}
@@ -33,10 +45,7 @@ export function RunButton({ command }: { command: AgentCommand }) {
             {label}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>
-          Run local-env start to {command} from here, or local-env {command} in
-          your terminal
-        </TooltipContent>
+        <TooltipContent>{reason}</TooltipContent>
       </Tooltip>
     )
   }

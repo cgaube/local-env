@@ -11,6 +11,7 @@ import { stopCommand } from '#cli/commands/stop.js'
 import { sourcesCommand } from '#cli/commands/sources.js'
 import { uiCommand } from '#cli/commands/ui.js'
 import { updateCommand } from '#cli/commands/update.js'
+import { varsCommand } from '#cli/commands/vars.js'
 
 export const commands = [
   setupCommand,
@@ -21,6 +22,7 @@ export const commands = [
   updateCommand,
   sourcesCommand,
   installCommand,
+  varsCommand,
   proxyCommand,
   doctorCommand,
   resetCommand,

@@ -1,7 +1,7 @@
 # Tools and profiles
 
-Status: done. Tools, profiles, the Profiles page of the dashboard and the stacks
-that tools need.
+Status: done. Tools, profiles, the Profiles page of the dashboard, the stacks
+that tools need and the variables that tools need.
 
 ## What it does
 
@@ -62,6 +62,44 @@ profiles on the Mac with `local-env install`.
 - A role can need Docker stacks (`local-env.yml`). `local-env install` deploys
   the stacks that are missing, after one confirmation (`--yes` does not ask). It
   deploys each stack one time. If the user removes the stack, it stays removed.
+- A role can need values from the user: its **variables**, declared in
+  `meta/argument_specs.yml`, the format of Ansible. The code calls each declared
+  variable an input. The Tools and Profiles pages have a **Variables** button
+  beside **Install** (`features/tools/tool-actions/`). It opens one sheet with
+  the variables of all that the next install runs: the profile, the picks, what
+  they include, and Galaxy roles (`features/tools/variables-sheet/`).
+- `local-env vars` lists the variables of your tools and their state, then the
+  saved values that they no longer use. `local-env vars set <name> <value>`
+  saves a value, or asks for it without a value (a select for choices, a yes/no
+  for a bool, text else; without a name, it asks which variables, several at
+  once, then saves them together), and `local-env vars unset <name>` removes it
+  (`apps/cli/src/commands/vars.ts`). `local-env variables` is the same command.
+- A variable is one field, because Ansible's variables are global. The fields
+  are in panels that fold, one for each role, under the first role that declares
+  the variable (`features/tools/role-input-panel/`). The profile's panel is
+  always first. It holds all the values of the profile: the inputs it declares,
+  and the values it sets for its tools. A field says which other roles use it,
+  and when two roles declare it differently. A panel header counts the inputs
+  and the missing values. The first panel is open, and also each panel with a
+  missing value or a value that is not valid.
+- The sheet has two tabs. **Your tools** holds the inputs of the next install.
+  **Saved** holds the saved values that none of them takes, in panels by the
+  role of the catalog that declares them, the profiles first, with a button to
+  remove each.
+- A value that a role which runs sets for another (the profile, in the `vars:`
+  of its dependency) wins: its owner chose it. Its field is disabled, with that
+  value and "Set by …".
+- Picking a tool does not need its values. When a required input has no value,
+  the Variables button says how many are missing. The install dialog names them
+  and opens the sheet. The Install button counts only the changes. The dashboard
+  does not start an install until the values are set: its Install buttons are
+  disabled. `local-env install` asks in the terminal for a required input
+  without a value and without a default. It gives the values to Ansible as extra
+  vars.
+- The values stay in `variables.json` when the user unpicks a tool, changes the
+  profile, or when the role leaves the sources.
+- `local-env install --dry-run` shows what the install runs and the state of
+  each input. It runs, asks and writes nothing.
 
 A profile is a plain Ansible role. The tag `profile` in `galaxy_tags` marks it.
 Its dependencies are the tools and profiles that it contains:
@@ -86,6 +124,7 @@ flowchart LR
     galaxy["galaxy.yml<br/>namespace, name, Galaxy collections"]
     subgraph role["roles/#lt;role#gt;/"]
       meta["meta/main.yml<br/>description, tags, dependencies"]
+      specs["meta/argument_specs.yml<br/>inputs"]
       settings["local-env.yml<br/>label, the stacks it needs"]
       tasks["tasks/ and other files<br/>revision hash, become"]
     end
@@ -96,6 +135,8 @@ flowchart LR
     profile["profile.json<br/>the profile of the user"]
     installed["installed.json<br/>what the installs ran"]
     stacks["stacks.json<br/>the stacks install deployed"]
+    variables["variables.json<br/>the values of the inputs"]
+    collections["collections/<br/>the Galaxy collections"]
   end
 
   dashboard["dashboard<br/>services/dashboard/server.ts"]
@@ -105,6 +146,10 @@ flowchart LR
   source -- read --> cli
   dashboard -- "writes (PUT /api/tools/picked)" --> picked
   dashboard -- "writes (PUT /api/tools/profile)" --> profile
+  dashboard -- "writes (PATCH /api/tools/variables)" --> variables
+  cli -- "writes (the answers)" --> variables
+  variables -- read --> cli
+  collections -- "read (inputs)" --> dashboard
   playbook -- read --> cli
   profile -- read --> cli
   cli -- "writes (install #lt;profile#gt;)" --> profile
@@ -164,23 +209,32 @@ sequenceDiagram
   cli->>files: read profile.json, picked.json
   cli->>files: write profile.json (not with --no-save)
   cli->>files: forget the tools no longer wanted (installed.json)
-  opt a wanted tool, or a Galaxy role it includes, uses become
-    cli->>user: ask for the sudo password
-  end
   opt the collections of wanted tools need Galaxy collections
     cli->>tmp: write requirements.yml (every range, without the collections of the sources)
     cli->>ansible: ansible-galaxy collection install into volumes/tools/collections
   end
+  cli->>files: read the inputs of the wanted tools and their Galaxy roles, and variables.json
+  opt a required secret, or a missing value without a terminal
+    cli->>user: name the inputs, and stop
+  end
+  opt a wanted tool, or a Galaxy role it includes, uses become
+    cli->>user: ask for the sudo password
+  end
+  opt a required input has no value and no default
+    cli->>user: ask for the value
+    cli->>files: write variables.json (not with --no-save)
+  end
+  cli->>tmp: write extra-vars.json (0600): the values of the inputs of the wanted tools
   cli->>tmp: link each collection at ansible_collections/#lt;namespace#gt;/#lt;name#gt;
   cli->>tmp: write playbook.yml (the roots, by full name or absolute path)
-  cli->>ansible: run, ANSIBLE_COLLECTIONS_PATH = the links, ANSIBLE_ROLES_PATH = ansible/ of every source
+  cli->>ansible: run, --extra-vars @extra-vars.json, ANSIBLE_COLLECTIONS_PATH = the links, ANSIBLE_ROLES_PATH = ansible/ of every source
   opt there is a password
     cli->>ansible: the password on stdin (--become-password-file -), then close stdin
   end
   ansible-->>cli: events as JSON lines
   cli->>user: a group for each role, a line for each task
   cli->>tmp: remove the folder (also on Ctrl-C or a kill)
-  cli->>files: record the wanted tools and their revision (installed.json)
+  cli->>files: record the wanted tools, their revision and their values (installed.json)
 ```
 
 - `apps/cli/src/core/tools.ts` finds the profile, forgets the tools and runs the
@@ -208,6 +262,12 @@ sequenceDiagram
   runs it in its collection. It names a plain role by its absolute path.
 - `apps/cli/src/core/playbook-output.ts` shows the events of Ansible with clack.
   `install --verbose` shows the output of Ansible itself.
+- A task with a loop shows the count of its items, then a line for each item, as
+  the output of Ansible does: its label (`loop_control.label`, else the item),
+  its state and its short message. A failed item shows its error. The callback
+  sends no event for each item, only their results with the result of the task,
+  so the lines come when the task ends. A failed item has an `exception`
+  (ansible-core 2.19 and later) or `failed: true`.
 - A task with `become: true` (or `yes`) in a wanted tool makes the CLI ask for
   the password. The CLI runs `ansible-playbook --become-password-file -` and
   writes the password to its stdin, then closes stdin. Without a password, the
@@ -223,6 +283,88 @@ sequenceDiagram
   process is gone.
 - If a picked tool is no longer in a source, the CLI unpicks it. If the saved
   profile is no longer in a source, the CLI clears it.
+
+### The variables that tools need
+
+```mermaid
+flowchart LR
+  specs["meta/argument_specs.yml<br/>of each wanted role,<br/>and of its Galaxy roles"]
+  graph["wantedInputs<br/>role-graph.ts"]
+  form["Variables sheet<br/>one form for the next install"]
+  vars["local-env vars set / unset"]
+  variables["volumes/tools/variables.json<br/>a value per name"]
+  cli["local-env install"]
+  extra["extra-vars.json (0600)<br/>in the run folder"]
+  ansible["ansible-playbook<br/>--extra-vars @extra-vars.json"]
+
+  specs --> graph
+  graph --> form
+  graph --> cli
+  form -- "PATCH /api/tools/variables" --> variables
+  vars -- writes --> variables
+  variables --> cli
+  cli -- "asks for a missing value, saves it" --> variables
+  cli -- "only the inputs of the wanted roles" --> extra
+  extra --> ansible
+```
+
+- `services/dashboard/tools.ts` reads the options of the entry point `main` of
+  `meta/argument_specs.yml` (else of `argument_specs` in `meta/main.yml`): the
+  name, `type`, `required`, `default`, `choices`, `description` and `no_log`. A
+  missing or invalid file gives no inputs, and the role still installs. The file
+  is one of the files of the revision hash.
+- `listGalaxyRoles` reads the inputs and the dependencies of the roles in
+  `volumes/tools/collections/`. The dashboard mounts `volumes/tools/`, so it
+  reads them too. A Galaxy role counts only after its first install.
+- `wantedInputs` (`services/dashboard/role-graph.ts`) lists the inputs of the
+  wanted roles and of the Galaxy roles that they include. It merges an input
+  that two roles declare: the first declaration gives the type, the choices and
+  the description. The input is required if one declaration requires it, and
+  secret if one declaration is secret.
+- An input is required when `required: true` and there is no default. A default
+  is the `default` of the spec, or the value of the variable in the role's
+  `defaults/main.yml`: Ansible accepts both for a required option. Ansible does
+  not apply the `default` of a spec, so local-env does not give it either. The
+  role's `defaults/main.yml` gives it.
+- A role can pass a variable to a dependency: `vars:` in the entry of
+  `dependencies` in `meta/main.yml`, or a role parameter (an other key of the
+  entry). `tools.ts` reads the names and the values as written
+  (`dependencyVars`). An input is **provided** when a role that runs passes it
+  to the declaring role. local-env looks at the roots that the playbook names
+  (`playbookRoots`): a pick that the profile includes runs inside the profile. A
+  provided input is not required and not passed: extra vars win over `vars:`, so
+  a saved value would replace the value of the parent role. The sheet shows it
+  disabled, with that value and "Set by …". A template (`"{{ … }}"`), or a value
+  that does not fit the control, shows as written in a disabled text field.
+- `toolInputs` (`features/tools/tools.ts`) gives the inputs of the next install,
+  the missing ones, the required secrets and the unused saved values.
+  `wantedInputs` flags an input that two roles declare with another type or
+  other choices (`conflict`).
+- The sheet shows a select for `choices`, a switch for a `bool`, a number field
+  for an `int` or a `float`, and a text field for the other types. The default
+  is the placeholder. A select or a switch saves at once. The text of a text
+  field is a draft: it saves when the field loses the focus, on Enter, or when
+  the sheet closes. An empty text field removes the value. A missing required
+  value shows as an error.
+- The sheet has one button, **Save**. Save and Escape save all the drafts, then
+  close the sheet. A click outside the sheet does nothing. If a draft is not
+  valid (not a whole number, not a JSON object), the sheet stays open and the
+  field says why.
+- `PATCH /api/tools/variables` takes only the names that change: a value, or
+  `null` to remove it. The server merges them into the file as it is on the
+  disk. It refuses a name that no role declares, a value of the wrong type, and
+  a secret. A value that the file holds already, unchanged, stays: its role can
+  have left the sources.
+- `install` asks with `askSelect` for `choices`, `askConfirm` for a `bool` and
+  `askText` for the rest. `parseInputText` turns the text into a value of the
+  type: a number, a list from `a, b`, or a dict from a JSON object. The sheet
+  uses the same function.
+- After the answers, `install` says which values it saved, and that
+  `local-env vars set` or the Variables sheet changes them, with the URL of the
+  Tools page. With `--no-save`, it says that it used them for this run only.
+- An install records in `installed.json` the values that each role got
+  (`values`, of `passedValues`). When a value changes, the role shows as
+  **Update available**, and the Install button counts it.
 
 ### The stacks that tools need
 
@@ -378,6 +520,89 @@ sequenceDiagram
   The keys of `installed.json` are role ids, and the CLI forgets the keys of
   roles that are no longer wanted.
 
+- **One form for all the variables, not a sheet for each role.** Ansible's
+  variables are global: one value goes to every role that uses the name. One
+  field for each name says so, and shows when two tools declare a name
+  differently. A sheet for each role showed the same variable in several places,
+  with notes about which value wins.
+- **The form covers what the next install runs.** Whether a profile gives a
+  value has one answer there. The fields are in panels by role, so a profile
+  with many tools stays readable.
+- **The value of a profile always wins.** Its owner chose it. A pick that the
+  profile includes runs inside the profile, so the user's value would only
+  replace the owner's.
+- **Picking a tool does not need its values.** The install needs them: the
+  Variables button counts what is missing, the install dialog opens the form,
+  and Install from the dashboard waits for them: a form is better than questions
+  in the terminal sheet. The CLI in a terminal asks for them. A rule on the pick
+  was hard to follow and blocked picks for values that a profile gives.
+- **Saved values have their own tab.** They are kept for a later profile or
+  pick, but they are not what the user sets now.
+- **The values are per variable name, not per pick.** An unpick, a profile
+  change or a role that leaves the sources does not remove a value. When the
+  user picks the tool again, the values are there.
+- **They are called variables.** That is what they are in Ansible, and the word
+  says that a value is shared by name. "Settings" and "options" are taken by
+  local-env's own settings and by command-line options.
+- **`local-env vars` is its own command, not part of `install`.** `install`
+  takes a profile name as its argument, and changing a value is not an install.
+  `vars set` checks the value against the spec, as the sheet does.
+- **Inputs come from `meta/argument_specs.yml`.** It is the format of Ansible.
+  Ansible checks the values before the role runs, so a wrong value stops the
+  role with a clear message. Galaxy roles have the same file. A role does not
+  need local-env to declare its inputs, like a template.
+- **A role cannot ask a question during the run.** Ansible runs without a
+  terminal, so `pause` and `vars_prompt` do not wait. The CLI asks every
+  question before Ansible starts: the sudo password, the stack variables and the
+  inputs.
+- **A value is per variable name, not per role.** The extra vars of Ansible are
+  global: a value for `git_email` goes to every role that reads it. A value per
+  role is not possible without a change of the roles.
+- **The values are in `volumes/tools/variables.json`.** The dashboard can write
+  only to `volumes/tools/`.
+- **The CLI gives only the inputs of the wanted roles.** Extra vars win over
+  every other variable of every role. A value of a role that is not wanted can
+  change a role that does not declare it.
+- **local-env saves a list as a list, not as text.** Ansible checks that the
+  text `a,b` can be a list, but it does not change the variable: the role gets
+  the text, and a `loop` on it fails. local-env splits the text at the commas
+  before it saves it, and parses a dict from JSON.
+- **A value that a parent role gives is not asked or passed.** A profile can
+  configure its tools with `vars:` in its dependencies. Ansible accepts this for
+  a required option. To ask the user would block a pick for no reason. To pass a
+  saved value would replace the value of the profile, because extra vars win
+  over `vars:`.
+- **That value shows disabled, not hidden.** A hidden field looks like a bug,
+  and the count of the panel does not match the spec. A disabled control shows
+  the value of the profile where the user looks for it, and that it cannot be
+  changed there.
+- **A value of `defaults/main.yml` is a default.** Ansible accepts it for a
+  required option, so local-env does not ask for it.
+- **The dashboard sends only the values that change.** `local-env install` can
+  save an answer while the page is open. A save of the whole map from the page
+  would erase this answer. The server merges each change into the file as it is.
+- **A click outside the sheet does not close it.** A text field saves when it
+  loses the focus. A sheet that closes by a stray click can lose the text, and a
+  value that is not valid disappears without a word. Save and Escape save the
+  drafts first, and stop on a value that is not valid.
+- **The CLI does not give a default.** Ansible does not apply the `default` of a
+  spec. As an extra var, the default wins over the `vars/` of the role and over
+  `set_fact`. The role gives its default itself.
+- **The values go in a file, not on the command line.** `-e name=value` shows in
+  `ps` for every process of the user. The file is in the run folder, mode 0600,
+  and the run folder goes when the run ends.
+- **A changed value makes the roles that use it changed.** A role applies a
+  value only when it runs: a new git email changes nothing on the Mac until the
+  next install. The Install button turns primary, as for a new revision, so the
+  user does not think that the value applies already. `installed.json` records
+  the values that each role got, so the dashboard compares them.
+- **A missing value without a terminal stops the install before Ansible.** If
+  the install starts, the role fails in the middle of the run. The message names
+  each input and the roles that use it.
+- **Secrets are not supported yet.** A secret must not be on the disk, in an
+  environment variable or on a command line. local-env has no store for it yet.
+  A required secret stops the install before Ansible: the role fails without it.
+
 ## Limits
 
 - local-env does not uninstall tools.
@@ -408,3 +633,25 @@ sequenceDiagram
 - The CLI does not use the `env` entries of a template in `templates.json`. It
   asks only for the required variables of the compose file.
 - The dashboard does not show the stacks that `local-env install` deployed.
+- local-env does not support secrets (`no_log: true`) yet. It never shows, asks
+  for or saves them, and it does not give a secret from `variables.json` to
+  Ansible. If a wanted role requires one without a default, `local-env install`
+  stops and names it. The dashboard shows it as not supported.
+- The dashboard reads the inputs of a Galaxy role only after the first install
+  of its collection. Before, the sheet does not show them, and the install
+  installs the collection, then asks.
+- A changed value of an input of a Galaxy role does not make a tool changed:
+  `installed.json` records only the roles of the sources.
+- The sheet shows a `list` or a `dict` as a text field. An item of a list cannot
+  contain a comma. A list of dicts is not possible in the sheet: write it in
+  `variables.json`.
+- When two roles declare the same input with different types or choices, the
+  sheet and the CLI use the first declaration.
+- A required `bool` without a value shows its switch off. To save `false`, the
+  user turns it on, then off.
+- When a role that runs sets a variable for a dependency, no user value goes to
+  any role for this name: extra vars are global. Another role that includes the
+  same dependency without the value gets the role's default.
+- local-env reads `defaults/main.yml` (or `.yaml`) only, not a `defaults/main/`
+  folder. It does not evaluate Jinja: a `when:` on a dependency entry, or a
+  value that is `"{{ … }}"`, counts as given.

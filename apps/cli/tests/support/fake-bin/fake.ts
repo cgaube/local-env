@@ -58,11 +58,12 @@ const env = Object.fromEntries(
       entry[1] !== undefined,
   ),
 )
-// The YAML files it was given (a playbook), read now: the CLI may remove
-// them once the call ends
+// The YAML and JSON files it was given (a playbook, `--extra-vars @file`),
+// by path, read now: the CLI may remove them once the call ends
 const inputs = Object.fromEntries(
   args
-    .filter((arg) => /\.ya?ml$/.test(arg) && existsSync(arg))
+    .map((arg) => arg.replace(/^@/, ''))
+    .filter((arg) => /\.(ya?ml|json)$/.test(arg) && existsSync(arg))
     .map((arg) => [arg, readFileSync(arg, 'utf8')]),
 )
 // The collections in the first folder of ANSIBLE_COLLECTIONS_PATH, by

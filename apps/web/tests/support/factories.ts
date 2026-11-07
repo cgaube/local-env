@@ -1,5 +1,6 @@
 import type {
   Role,
+  RoleInput,
   Route,
   Service,
   Source,
@@ -53,9 +54,23 @@ export const buildRole = (overrides: Partial<Role> = {}): Role => {
     revision: 'a1b2c3d4e5f6',
     needsSudo: false,
     galaxy: {},
+    inputs: [],
     ...overrides,
   }
 }
+
+export const buildInput = (
+  name: string,
+  overrides: Partial<RoleInput> = {},
+): RoleInput => ({
+  name,
+  type: 'str',
+  required: false,
+  choices: null,
+  description: null,
+  secret: false,
+  ...overrides,
+})
 
 export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   roles: [buildRole()],
@@ -63,5 +78,7 @@ export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   installed: {},
   profile: null,
   stacks: {},
+  variables: {},
+  galaxyRoles: [],
   ...overrides,
 })
