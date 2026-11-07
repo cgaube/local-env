@@ -60,6 +60,114 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* The broken logo of the error page (features/error-page/broken-logo).
+     Each piece sets its broken pose in its own transform: the keyframes
+     start from the whole logo, or move with rotate and translate around it. */
+  --animate-broken-float: broken-float 4s ease-in-out infinite;
+  --animate-broken-crack: broken-crack 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) 0.2s
+    both;
+  --animate-broken-pulse: broken-pulse 2.4s linear infinite;
+  --animate-broken-dangle: broken-dangle 2.2s ease-in-out infinite;
+  --animate-broken-spark: broken-spark 1.6s steps(1, end) infinite;
+  --animate-broken-glitch-a: broken-glitch-a 2.6s linear infinite;
+  --animate-broken-glitch-b: broken-glitch-b 2.6s linear infinite;
+  --animate-broken-slice: broken-slice 2.6s linear infinite;
+  --animate-broken-drip: broken-drip 3.6s ease-in-out infinite;
+
+  @keyframes broken-float {
+    50% {
+      translate: 0 -6px;
+    }
+  }
+  @keyframes broken-crack {
+    from {
+      transform: none;
+    }
+  }
+  @keyframes broken-pulse {
+    from {
+      stroke-dashoffset: 100;
+    }
+    to {
+      stroke-dashoffset: -100;
+    }
+  }
+  @keyframes broken-dangle {
+    50% {
+      rotate: 7deg;
+    }
+  }
+  @keyframes broken-spark {
+    0%,
+    45% {
+      opacity: 1;
+      scale: 1;
+    }
+    15%,
+    60% {
+      opacity: 0.3;
+      scale: 0.6;
+    }
+    70% {
+      opacity: 0;
+    }
+  }
+  @keyframes broken-glitch-a {
+    0%,
+    80%,
+    100% {
+      translate: 0 0;
+    }
+    83% {
+      translate: -4px 1px;
+    }
+    87% {
+      translate: 3px -1px;
+    }
+    91% {
+      translate: -2px 0;
+    }
+  }
+  @keyframes broken-glitch-b {
+    0%,
+    80%,
+    100% {
+      translate: 0 0;
+    }
+    83% {
+      translate: 4px -1px;
+    }
+    87% {
+      translate: -3px 1px;
+    }
+    91% {
+      translate: 2px 0;
+    }
+  }
+  @keyframes broken-slice {
+    0%,
+    80%,
+    94%,
+    100% {
+      transform: none;
+    }
+    84% {
+      transform: translateX(6px);
+    }
+    89% {
+      transform: translateX(-5px);
+    }
+  }
+  @keyframes broken-drip {
+    0%,
+    100% {
+      scale: 1 0.6;
+    }
+    50% {
+      scale: 1 1;
+    }
+  }
 }
 
 :root {
