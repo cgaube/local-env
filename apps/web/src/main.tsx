@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -19,6 +20,9 @@ createRoot(document.getElementById('root')!).render(
             <RouterProvider router={router} />
           </TooltipProvider>
         </LiveDataProvider>
+        {/* The queries' cache, in `bun run dev` only: the package renders
+            nothing in a production build, which drops it */}
+        <ReactQueryDevtools buttonPosition="bottom-right" />
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,
