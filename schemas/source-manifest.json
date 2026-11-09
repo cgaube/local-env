@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-manifest.json",
+  "title": "local-env source manifest",
+  "description": "local-env.yml at the root of a source repo: its name, its label and the accounts it needs (https://cgaube.github.io/local-env/write-a-source/source-repo).",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The URL of this schema, for editors. local-env ignores it."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The name of the source on every Mac: lowercase letters, digits and dashes. Unique: local-env skips a repo whose name is already added. Other sources name yours by it (acme-platform/postgres)."
+    },
+    "label": {
+      "type": "string",
+      "description": "What the dashboard and the CLI show for the source, in place of its name. Free text."
+    },
+    "logins": {
+      "type": "object",
+      "description": "The accounts that the templates and the tools of the source need, by login name.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/login"
+      }
+    }
+  },
+  "definitions": {
+    "login": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["registry"],
+          "description": "registry: a registry of private images, for the templates."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "registry"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/registry"
+          }
+        }
+      ]
+    },
+    "registry": {
+      "type": "object",
+      "description": "A registry of private images. local-env asks the user for a username and a token, which Dockhand keeps.",
+      "required": ["type", "host"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "registry"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The registry host: ghcr.io. A path (ghcr.io/team) is the same login: Docker keeps one login for each host."
+        },
+        "usernameHelp": {
+          "type": "string",
+          "description": "Shown when local-env asks for the username: what to give."
+        },
+        "tokenHelp": {
+          "type": "string",
+          "description": "Shown when local-env asks for the token: what to give, and where to get it."
+        }
+      }
+    }
+  }
+}

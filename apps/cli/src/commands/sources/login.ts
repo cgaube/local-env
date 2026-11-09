@@ -1,5 +1,4 @@
 import { Command } from 'commander'
-import { styleText } from 'node:util'
 import { dockhandApi } from '#cli/providers/docker/api.js'
 import {
   type DockhandRegistry,
@@ -8,14 +7,13 @@ import {
   getRegistries,
   listDeclaredRegistries,
   logInToRegistry,
-  loginState,
   readSourceRegistries,
-  registryHost,
   sourcesNeedingLogin,
   tokenQuestion,
   usernameQuestion,
-} from '#cli/providers/docker/registries.js'
-import { listSources } from '#cli/sources/sources.js'
+} from '#cli/logins/registry.js'
+import { describeSource, listSources } from '#cli/sources/sources.js'
+import { sourceLoginLines, sourcesWithAnyLogin } from '#cli/logins/listing.js'
 import { logger } from '#cli/utils/index.js'
 import {
   askConfirm,
@@ -42,23 +40,15 @@ const readStdin = async () => {
   return Buffer.concat(chunks).toString('utf8').trim()
 }
 
-// One line per source: its registries and the state of their login
-const printLoginStates = (
+// A group per source: a line per login, with its state
+const printLoginStates = async (
   sources: string[],
   registries: DockhandRegistry[],
 ) => {
-  const width = Math.max(...sources.map((source) => source.length))
-  logger.log(
-    sources
-      .map((source) => {
-        const states = readSourceRegistries(source).map(
-          ({ host }) =>
-            `${host} ${styleText('dim', loginState(registries, host))}`,
-        )
-        return `${source.padEnd(width)}  ${states.join(', ')}`
-      })
-      .join('\n'),
-  )
+  for (const source of sources) {
+    logger.group(describeSource(source))
+    logger.log((await sourceLoginLines(source, registries)).join('\n'))
+  }
 }
 
 const pickSource = (message: string, sources: string[]) =>
@@ -67,28 +57,27 @@ const pickSource = (message: string, sources: string[]) =>
     sources.map((value) => ({ value, label: value })),
   )
 
-// The registries the source lists, or only the one --registry names
-const sourceRegistries = (source: string, registry?: string) => {
+// The registries of the source, or only the one --login names
+const sourceLogins = (source: string, login?: string) => {
   if (!listSources().includes(source)) {
     throw new Error(
       `No source named "${source}". See \`local-env sources list\`.`,
     )
   }
-  const declared = readSourceRegistries(source)
-  if (!registry) return declared
-  const host = registryHost(registry)
-  const match = declared.filter((entry) => entry.host === host)
+  const registries = readSourceRegistries(source)
+  if (!login) return registries
+  const match = registries.filter((entry) => entry.name === login)
   if (match.length === 0) {
-    const hosts = declared.map((entry) => entry.host).join(', ')
+    const names = registries.map(({ name }) => name).join(', ')
     throw new Error(
-      `${source} needs no login for ${host}${hosts ? `, only for ${hosts}` : ''}.`,
+      `${source} has no login named "${login}"${names ? `, only ${names}` : ''}.`,
     )
   }
   return match
 }
 
 type LoginOptions = {
-  registry?: string
+  login?: string
   username?: string
   passwordStdin: boolean
 }
@@ -107,7 +96,7 @@ const logInWithoutPrompts = async (
   if (declared.length > 1) {
     const hosts = declared.map((entry) => entry.host).join(', ')
     throw new Error(
-      `${source} needs several registries (${hosts}): give --registry.`,
+      `${source} needs several registries (${hosts}): give --login.`,
     )
   }
   const { host } = declared[0]!
@@ -121,13 +110,16 @@ const logInWithoutPrompts = async (
 
 export const loginCommand = new Command('login')
   .description(
-    'Log in to the registries of the private images of a source, saved in Dockhand',
+    'Log in to the registries of a source: the logins are saved in Dockhand',
   )
   .argument(
     '[name]',
     'Source name (default: list the sources that need a login, and pick one)',
   )
-  .option('-r, --registry <host>', 'Only this registry of the source')
+  .option(
+    '-l, --login <name>',
+    'Only this login of the source (its name in local-env.yml)',
+  )
   .option('-u, --username <username>', 'Username on the registry')
   .option(
     '--password-stdin',
@@ -138,12 +130,15 @@ export const loginCommand = new Command('login')
     withErrors(async (given: string | undefined, options: LoginOptions) => {
       let source = given
       if (!source) {
-        const sources = sourcesNeedingLogin()
+        const sources = sourcesWithAnyLogin()
         if (sources.length === 0) {
-          logger.info('No source needs a registry login')
+          logger.info('No source needs a login')
           return
         }
-        printLoginStates(sources, await getRegistries())
+        await printLoginStates(
+          sources,
+          sourcesNeedingLogin().length > 0 ? await getRegistries() : [],
+        )
         if (!canAsk() || options.passwordStdin) {
           logger.info(
             'Name the source to log in to: `local-env sources login <name>`',
@@ -156,9 +151,9 @@ export const loginCommand = new Command('login')
         )
       }
 
-      const declared = sourceRegistries(source, options.registry)
+      const declared = sourceLogins(source, options.login)
       if (declared.length === 0) {
-        logger.info(`${source} needs no registry login`)
+        logger.info(`${source} needs no login`)
         return
       }
       if (options.passwordStdin || !canAsk()) {
@@ -169,10 +164,10 @@ export const loginCommand = new Command('login')
       const registries = await getRegistries()
       for (const { host, usernameHelp, tokenHelp } of declared) {
         const login = findLogin(registries, host)
-        // Asked again only when the user names the registry or agrees
+        // Asked again only when the user names the login or agrees
         if (
           login &&
-          !options.registry &&
+          !options.login &&
           !(await askConfirm(
             `${host}: logged in as ${login.username}. Log in again?`,
             false,
@@ -198,28 +193,36 @@ export const loginCommand = new Command('login')
   )
 
 export const logoutCommand = new Command('logout')
-  .description('Remove the registry logins of a source from Dockhand')
+  .description(
+    'Log out of the registries of a source: removes their logins from Dockhand',
+  )
   .argument(
     '[name]',
     'Source name (default: pick from the sources with a login)',
   )
-  .option('-r, --registry <host>', 'Only this registry of the source')
+  .option(
+    '-l, --login <name>',
+    'Only this login of the source (its name in local-env.yml)',
+  )
   .action(
     withErrors(
-      async (given: string | undefined, options: { registry?: string }) => {
-        const registries = await getRegistries()
+      async (given: string | undefined, options: { login?: string }) => {
+        // Dockhand only when a source has a registry
+        const registries =
+          sourcesNeedingLogin().length > 0 ? await getRegistries() : []
         let source = given
         if (!source) {
-          const sources = sourcesNeedingLogin().filter((name) =>
+          // A registry login in Dockhand
+          const sources = sourcesWithAnyLogin().filter((name) =>
             readSourceRegistries(name).some(
               ({ host }) => findHostRegistry(registries, host) !== undefined,
             ),
           )
           if (sources.length === 0) {
-            logger.info('No source has a registry login')
+            logger.info('No source has a login')
             return
           }
-          printLoginStates(sources, registries)
+          await printLoginStates(sources, registries)
           if (!canAsk()) {
             throw new Error(
               'Name the source to log out of: `local-env sources logout <name>`',
@@ -231,9 +234,9 @@ export const logoutCommand = new Command('logout')
           )
         }
 
-        const declared = sourceRegistries(source, options.registry)
+        const declared = sourceLogins(source, options.login)
         if (declared.length === 0) {
-          logger.info(`${source} needs no registry login`)
+          logger.info(`${source} needs no login`)
           return
         }
         logger.group('Registries')

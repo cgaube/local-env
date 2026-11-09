@@ -647,9 +647,10 @@ describe.concurrent('local-env install', () => {
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain(
-      'acme/node is no longer in your sources: unpicked.',
-    )
+    expect(result.output).toContain('No longer wanted, still on this Mac')
+    expect(result.output).toContain('node (no longer in your sources)')
+    // Once, in the list of the end
+    expect(result.output.split('node').length - 1).toBe(1)
     expect(cli.home.readJson('volumes/tools/picked.json')).toEqual({
       picked: ['acme/git'],
     })
@@ -970,14 +971,22 @@ describe.concurrent('local-env install', () => {
       cli.home.writeJson('volumes/tools/profile.json', {
         profile: 'acme/mobile',
       })
+      cli.home.writeJson('volumes/tools/installed.json', {
+        'acme/mobile': {
+          revision: 'old',
+          installedAt: '2026-11-01T10:00:00.000Z',
+        },
+      })
 
       const result = await cli.run(['install'], {
         answers: [{ ask: 'Pick your profile', answer: 'acme/frontend' }],
       })
 
       expect(result.output).toContain(
-        'Your profile, acme/mobile, is no longer in your sources',
+        'Your profile, mobile, is no longer in your sources',
       )
+      // Said once, at the start: not a tool in the list of the end
+      expect(result.output).not.toContain('mobile (no longer in your sources)')
       expect(cli.home.readJson('volumes/tools/profile.json')).toEqual({
         profile: 'acme/frontend',
       })

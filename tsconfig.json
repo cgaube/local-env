@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
-  // The core stack's services and the repo's scripts: each package has its
-  // tsconfig
-  "include": ["services/**/*", ".github/scripts/**/*"]
+  // The core stack's services, the repo's scripts and the docs site: each
+  // package has its tsconfig
+  "include": ["services/**/*", ".github/scripts/**/*", "docs/.vitepress/**/*"],
+  "exclude": ["docs/.vitepress/dist", "docs/.vitepress/cache"]
 }

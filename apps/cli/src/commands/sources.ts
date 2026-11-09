@@ -1,16 +1,9 @@
-import { S_WARN } from '@clack/prompts'
 import { Command } from 'commander'
-import { styleText } from 'node:util'
 import { homedir } from 'os'
 import { provisionProviders } from '#cli/providers/index.js'
 import { refreshTemplateSources } from '#cli/providers/docker/index.js'
-import {
-  type DockhandRegistry,
-  findLogin,
-  getRegistries,
-  readSourceRegistries,
-  sourcesNeedingLogin,
-} from '#cli/providers/docker/registries.js'
+import { getRegistries, sourcesNeedingLogin } from '#cli/logins/registry.js'
+import { sourceLoginLines } from '#cli/logins/listing.js'
 import {
   printStackLinks,
   syncStacks,
@@ -18,17 +11,18 @@ import {
 import { forgetLink } from '#cli/providers/docker/template-sync.js'
 import {
   addSource,
+  describeSource,
   getSourceUrl,
   listSources,
   pullSources,
   readSourceContent,
   removeSource,
-  sourceNameFromUrl,
   summarizeSourceContent,
 } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/index.js'
 import { askSelect } from '#cli/utils/prompt.js'
 import { loginCommand, logoutCommand } from '#cli/commands/sources/login.js'
+import { checkManifestLogins } from '#cli/logins/index.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>
@@ -44,28 +38,15 @@ const withErrors =
 const addCommand = new Command('add')
   .description('Clone a git repo of docker templates and ansible roles')
   .argument('<repo>', 'Git URL or path of a local git repo')
-  .option('-n, --name <name>', 'Source name (default: repo name)')
   .action(
-    withErrors(async (repo: string, options: { name?: string }) => {
+    withErrors(async (repo: string) => {
       logger.group('Sources')
-      await addSource(repo, options.name ?? sourceNameFromUrl(repo))
-      await provisionProviders()
+      const added = await addSource(repo, {
+        checkManifest: ({ logins }) => checkManifestLogins(logins),
+      })
+      if (added) await provisionProviders()
     }),
   )
-
-// Whether Dockhand has a login for every registry of the source. Empty when
-// the source lists none; unknown when Dockhand can't be reached.
-const loginStatus = (
-  source: string,
-  registries: DockhandRegistry[] | undefined,
-) => {
-  const hosts = readSourceRegistries(source).map(({ host }) => host)
-  if (hosts.length === 0) return ''
-  if (!registries) return styleText('dim', '? login unknown')
-  return hosts.every((host) => findLogin(registries, host))
-    ? styleText('green', '✔ logged in')
-    : styleText('yellow', `${S_WARN} login needed`)
-}
 
 const listCommand = new Command('list').description('List sources').action(
   withErrors(async () => {
@@ -82,11 +63,11 @@ const listCommand = new Command('list').description('List sources').action(
     // A group per source, like the other commands' output
     for (const name of names) {
       const url = await getSourceUrl(name).catch(() => 'no remote')
-      const login = loginStatus(name, registries)
-      logger.group(name)
+      const logins = await sourceLoginLines(name, registries)
+      logger.group(describeSource(name))
       logger.info(url.replace(homedir(), '~'))
       logger.log(summarizeSourceContent(readSourceContent(name)))
-      if (login) logger.log(login)
+      if (logins.length > 0) logger.log(logins.join('\n'))
     }
   }),
 )
@@ -113,7 +94,7 @@ const removeCommand = new Command('remove')
           'Which source do you want to remove?',
           names.map((value) => ({
             value,
-            label: value,
+            label: describeSource(value),
             hint: summarizeSourceContent(readSourceContent(value)),
           })),
         ))

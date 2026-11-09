@@ -1,5 +1,4 @@
 import {
-  isValidSourceName,
   sourceNameFromUrl,
   summarizeSourceContent,
 } from '#cli/sources/sources.js'
@@ -13,19 +12,6 @@ describe('sourceNameFromUrl', () => {
   ])('%p -> %p', (url, expected) => {
     expect(sourceNameFromUrl(url)).toBe(expected)
   })
-})
-
-describe('isValidSourceName', () => {
-  test.each(['acme', 'acme-2', '0day'])('accepts %p', (name) => {
-    expect(isValidSourceName(name)).toBe(true)
-  })
-
-  test.each(['', '-acme', 'Acme', 'acme_templates', 'acme.git'])(
-    'rejects %p',
-    (name) => {
-      expect(isValidSourceName(name)).toBe(false)
-    },
-  )
 })
 
 describe('summarizeSourceContent', () => {

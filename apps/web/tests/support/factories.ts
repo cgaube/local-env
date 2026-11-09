@@ -30,6 +30,7 @@ export const buildService = (overrides: Partial<Service> = {}): Service => ({
 
 export const buildSource = (overrides: Partial<Source> = {}): Source => ({
   name: 'acme',
+  label: null,
   origin: 'https://github.com/acme/local-env-templates',
   docker: 3,
   ansible: 0,

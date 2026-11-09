@@ -1,19 +1,21 @@
-# Features
+# How local-env works
 
-One file for each feature of local-env. Each file tells what the feature does,
-how it works, and why it works that way. The guides for users and template
-authors are elsewhere (`README.md`, `docs/templates.md`). These files are for
-the people who change local-env.
+One page for each feature of local-env. Each page tells what the feature does,
+how it works, and why it works that way. These pages are for the people who
+change local-env. The guides for users and source authors are the other sections
+of this site.
 
 | Feature                                     | What it does                                                     |
 | ------------------------------------------- | ---------------------------------------------------------------- |
 | [Tools and profiles](tools-and-profiles.md) | Installs the Ansible roles of the sources on the Mac, by profile |
 | [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install` and `update` from the dashboard         |
+| [Source manifest](source-manifest.md)       | `local-env.yml` at a source's root: its name, label and logins   |
+| [Logins](logins.md)                         | The registries of private images that the sources need           |
 
-## Write a feature file
+## Write a feature page
 
-Every new feature gets a file here, in the same pull request as its code. A
-change to how a feature works updates its file.
+Every new feature gets a file in `docs/3-how-it-works/`, in the same pull
+request as its code. A change to how a feature works updates its file.
 
 Use these sections, in this order:
 

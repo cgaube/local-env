@@ -10,6 +10,20 @@ import {
 const APPLY = 'Apply template changes to "mail" and redeploy?'
 
 describe.concurrent('local-env sources sync', () => {
+  test('warns when the manifest renames a source, and keeps it', async () => {
+    const { cli, repo } = await createLinkedStack()
+    await using _ = cli
+    repo.commit({ 'local-env.yml': 'name: acme-platform\n' }, 'name it')
+
+    const result = await cli.run(['sources', 'sync'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain(
+      'acme is now named "acme-platform" in its local-env.yml',
+    )
+    expect(cli.home.exists('volumes/sources/acme')).toBe(true)
+  })
+
   test('links a stack to the template with the same name', async () => {
     const { cli, link } = await createLinkedStack()
     await using _ = cli

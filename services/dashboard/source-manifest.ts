@@ -1,0 +1,78 @@
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+
+// The manifest of a source: local-env.yml at the root of its repo. It says
+// what the source is, for every Mac that adds it: its name (unique, the
+// folder in volumes/sources), its label (what people read) and its logins
+// (docs/3-how-it-works/source-manifest.md). Shared by the dashboard and
+// the CLI: no imports of the CLI.
+
+export const SOURCE_MANIFEST_FILE = 'local-env.yml'
+
+export const isValidSourceName = (name: string) =>
+  /^[a-z0-9][a-z0-9-]*$/.test(name)
+
+export type SourceManifest = {
+  name: string
+  label: string | null
+  // By login name, as written: the CLI checks each entry by its type
+  logins: Record<string, unknown>
+}
+
+// A manifest that is there but wrong. The message names the field.
+export class SourceManifestError extends Error {}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// null when the source has no manifest. Throws a SourceManifestError when it
+// has one that is not valid.
+export const readSourceManifest = (dir: string): SourceManifest | null => {
+  const path = join(dir, SOURCE_MANIFEST_FILE)
+  if (!existsSync(path)) return null
+
+  let content: unknown
+  try {
+    content = Bun.YAML.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE} is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  if (!isRecord(content)) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE} must be a mapping with a name`,
+    )
+  }
+
+  const { name, label, logins } = content
+  if (typeof name !== 'string' || !isValidSourceName(name)) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE}: name must be lowercase letters, digits and dashes (${name === undefined ? 'missing' : JSON.stringify(name)})`,
+    )
+  }
+  if (label !== undefined && label !== null && typeof label !== 'string') {
+    throw new SourceManifestError(`${SOURCE_MANIFEST_FILE}: label must be text`)
+  }
+  if (logins !== undefined && logins !== null && !isRecord(logins)) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE}: logins must be a mapping of login names`,
+    )
+  }
+
+  return {
+    name,
+    label: label?.trim() || null,
+    logins: logins ?? {},
+  }
+}
+
+// The manifest, or null when there is none or it is not valid: for what only
+// shows it (the dashboard, lists)
+export const tryReadSourceManifest = (dir: string) => {
+  try {
+    return readSourceManifest(dir)
+  } catch {
+    return null
+  }
+}

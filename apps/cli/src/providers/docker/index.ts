@@ -8,7 +8,7 @@ import {
   updateContainers,
 } from '#cli/providers/docker/container-updates.js'
 import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
-import { registryLoginsStep } from '#cli/providers/docker/registries.js'
+import { registryLoginsStep } from '#cli/logins/registry.js'
 import { offerStackSync } from '#cli/providers/docker/stack-sync.js'
 import { autoUpdateStep } from '#cli/providers/docker/steps/auto-update.js'
 import { exposureWarningStep } from '#cli/providers/docker/steps/exposure-warning.js'

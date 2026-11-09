@@ -7,7 +7,7 @@ networks:
 
 # The core services don't restart on their own (`restart: 'no'`): after a
 # reboot, `local-env start` brings them back with the dashboard agent, a
-# process on the Mac that nothing else starts (docs/features/dashboard-terminal.md)
+# process on the Mac that nothing else starts (docs/3-how-it-works/dashboard-terminal.md)
 services:
   nginx-proxy:
     build: services/proxy

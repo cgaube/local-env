@@ -20,7 +20,9 @@ A local development environment for macOS:
 
 ## Install
 
-Requires a Mac with Apple Silicon, Docker Desktop and Homebrew.
+Requires a Mac with Apple Silicon, Homebrew and a Docker engine with Docker
+Compose v2 (see
+[the requirements](https://cgaube.github.io/local-env/user-guide/install)).
 
 ```sh
 brew install cgaube/tap/local-env
@@ -55,43 +57,18 @@ bun install          # also builds ./local-env
 ./local-env setup
 ```
 
-## Commands
+## Documentation
 
-| Command                            | What it does                                                |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `setup`                            | Wizard: domain, HTTPS certificate and DNS                   |
-| `start` / `stop` / `status`        | Manage the core services                                    |
-| `update`                           | Update local-env, core services, sources, stacks and images |
-| `sources add <repo>`               | Clone a source from a git URL or a local git repo           |
-| `sources list` / `remove`          | Manage sources                                              |
-| `sources sync [source]`            | Pull sources, then sync installed stacks with them          |
-| `sources links`                    | List installed stacks and the template of each              |
-| `install`                          | Install the tools picked in the dashboard                   |
-| `proxy routes`                     | List the hosts the proxy serves                             |
-| `config get` / `set <key> <value>` | Read or change a setting, and apply it                      |
-| `doctor`                           | Check DNS, certificates and the proxy                       |
-| `reset`                            | Remove everything local-env created                         |
+The [docs site](https://cgaube.github.io/local-env) has everything:
 
-## Sources
+- [User guide](https://cgaube.github.io/local-env/user-guide/install): every
+  command, tools, logins, troubleshooting
+- [Write a source](https://cgaube.github.io/local-env/write-a-source/source-repo):
+  Docker templates, tools, profiles and variables
+- [How local-env works](https://cgaube.github.io/local-env/how-it-works/): each
+  feature, and why it works that way
 
-A source is a git repo of templates: a `docker/templates.json` list (Portainer
-format) and a folder with a `compose.yaml` for each stack, and of tools: an
-Ansible role per folder of `ansible/`.
-
-```
-<repo>/
-├── docker/
-│   ├── templates.json            # Portainer template list (version 3)
-│   └── mailpit/compose.yaml      # one folder per stack
-└── ansible/git/                  # one Ansible role per tool
-```
-
-Add one with `local-env sources add <repo>`. After you commit a change to it,
-`local-env sources sync` pulls it and offers the change to the stacks deployed
-from its templates, keeping your own edits.
-
-To write templates, see [Writing templates](docs/templates.md): the template
-list, routes, building images, files from your Mac, and how updates reach users.
+The site is built from [`docs/`](docs): change it there, with a pull request.
 
 ## License
 

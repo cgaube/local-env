@@ -16,6 +16,19 @@ describe('Sources on the overview', () => {
     expect(within(row).getByText('8 roles')).toBeInTheDocument()
   })
 
+  test('shows the label of the manifest, with the name under it', async () => {
+    const { events } = await renderApp('/')
+
+    act(() =>
+      events.emit('sources', [
+        buildSource({ name: 'acme-platform', label: 'Acme Platform' }),
+      ]),
+    )
+
+    const row = screen.getByRole('row', { name: /Acme Platform/ })
+    expect(within(row).getByText('acme-platform')).toBeInTheDocument()
+  })
+
   test('says how to add one', async () => {
     const { events } = await renderApp('/')
 

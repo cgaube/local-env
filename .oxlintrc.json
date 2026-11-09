@@ -5,7 +5,11 @@
     "correctness": "error"
   },
   "rules": {},
-  "ignorePatterns": ["apps/web/src/routeTree.gen.ts"],
+  "ignorePatterns": [
+    "apps/web/src/routeTree.gen.ts",
+    "docs/.vitepress/dist",
+    "docs/.vitepress/cache"
+  ],
   "env": {
     "builtin": true
   }
