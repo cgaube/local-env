@@ -208,10 +208,13 @@ Before committing, check that every compose file is valid:
 docker compose -f docker/mailpit/compose.yaml config -q
 ```
 
-The [local-env-templates](https://github.com/cgaube/local-env-templates) repo
-does this in a git hook: before each commit, it formats the files and checks
-that every `stackfile` exists, every compose file is valid and every `name:` is
-unique (`scripts/check-templates.ts`). Copy it into your source.
+Also check that every `stackfile` of `templates.json` exists and that every
+`name:` is unique across your templates.
+
+::: info Work in progress
+A GitHub template repo for sources is planned: a new source will start from it,
+with these checks in a git hook.
+:::
 
 ## Other catalogs
 
