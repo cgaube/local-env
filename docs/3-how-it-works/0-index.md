@@ -10,7 +10,7 @@ of this site.
 | [Tools and profiles](tools-and-profiles.md) | Installs the Ansible roles of the sources on the Mac, by profile |
 | [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install` and `update` from the dashboard         |
 | [Source manifest](source-manifest.md)       | `local-env.yml` at a source's root: its name, label and logins   |
-| [Logins](logins.md)                         | The registries of private images that the sources need           |
+| [Logins](logins.md)                         | Registries and secret managers that the sources need             |
 
 ## Write a feature page
 

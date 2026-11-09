@@ -24,6 +24,37 @@ export type DeclaredLogin<Config> = LoginPlace & {
   config: Config
 }
 
+export type LoginStatus =
+  | { state: 'logged-in'; detail: string }
+  | { state: 'logged-out'; detail: string }
+  // The vendor's CLI is not installed: the install installs it
+  | { state: 'no-cli' }
+
+// A login whose session the vendor's CLI keeps (aws, vault): local-env
+// installs the CLI, writes its config, checks the session and runs its
+// login, with the terminal. It never sees a secret. A role names it, and
+// its tasks get `env`.
+export type SessionLoginType<Config> = LoginType<Config> & {
+  // The binary, and what `brew install` takes to install it
+  cli: { binary: string; formula: string }
+  // The environment of every call of the CLI, and of the role's tasks
+  // (local_env_logins.<name>.env)
+  env: (login: DeclaredLogin<Config>) => Record<string, string>
+  // Writes the config the CLI reads, that is no secret. Idempotent.
+  configure?: (login: DeclaredLogin<Config>) => void
+  // Exits 0 when logged in. Its stdout gives the detail: who you are.
+  statusCommand: (login: DeclaredLogin<Config>) => string[]
+  describeSession: (stdout: string) => string
+  // Run with the terminal. null when local-env cannot log in (the user's
+  // own profile): it shows the help of the source.
+  loginCommand: (login: DeclaredLogin<Config>) => string[] | null
+  logoutCommand: (login: DeclaredLogin<Config>) => string[] | null
+  // The help of the source: who to ask for access
+  help: (config: Config) => string | undefined
+  // What a role gets in local_env_logins.<name>, beside `env`
+  facts: (login: DeclaredLogin<Config>) => Record<string, string>
+}
+
 // Text that a manifest entry may give, trimmed; undefined when empty
 export const optionalText = (
   entry: Record<string, unknown>,

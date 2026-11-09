@@ -63,7 +63,21 @@ describe('listRoles', () => {
         needsSudo: false,
         galaxy: {},
         inputs: [],
+        logins: [],
       },
+    ])
+  })
+
+  test('reads the logins a role names, and leaves out what is not a name', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/github/local-env.yml',
+      'logins: [acme-dev, platform/data-vault, Bad Name, 3, acme-dev]\n',
+    )
+
+    expect(listRoles(sources)[0]?.logins).toEqual([
+      'acme-dev',
+      'platform/data-vault',
     ])
   })
 

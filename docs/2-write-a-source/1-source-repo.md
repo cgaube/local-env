@@ -62,8 +62,9 @@ $schema: https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-
   `sources add` uses it as the name of the source, and skips a repo whose name
   is already added. Pick a name that no other team uses.
 - `label` is optional, free text. Without it, local-env shows the name.
-- `logins` lists the accounts that your templates need: registries of private
-  images (see [Private images](2-docker-templates.md#private-images)).
+- `logins` lists the accounts that your templates and tools need: registries of
+  private images (see [Private images](2-docker-templates.md#private-images))
+  and secret managers (see [Tool secrets](5-secrets.md)).
 - Without a manifest, the source is named after the repo, and has no label and
   no logins.
 - Other sources name yours by its `name`: `acme-platform/postgres` in `stacks:`.

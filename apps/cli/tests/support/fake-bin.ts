@@ -14,6 +14,8 @@ import { dirname, join } from 'path'
 export const FAKED_COMMANDS = [
   'ansible-playbook',
   'ansible-galaxy',
+  // The CLIs of the aws and vault logins
+  'aws',
   'brew',
   'curl',
   'dig',
@@ -26,6 +28,7 @@ export const FAKED_COMMANDS = [
   'open',
   'security',
   'sudo',
+  'vault',
   'which',
 ] as const
 
@@ -41,6 +44,9 @@ export type FakeReply = {
   // Keeps running this long before it replies: a long Ansible run, to stop
   // halfway
   runMs?: number
+  // Creates this file: what the call changes for the next ones (a login
+  // that opens a session)
+  touch?: string
 }
 
 export type FakeRule = FakeReply & {
@@ -48,6 +54,8 @@ export type FakeRule = FakeReply & {
   match: string[]
   // Only calls with these variables set to these values
   env?: Record<string, string>
+  // Only while this file exists (see `touch`)
+  ifFile?: string
 }
 
 export type FakeCall = {
@@ -114,7 +122,7 @@ export const createFakeBin = (root: string) => {
     on(
       command: FakedCommand,
       match: string[],
-      reply: FakeReply & Pick<FakeRule, 'env'> = {},
+      reply: FakeReply & Pick<FakeRule, 'env' | 'ifFile'> = {},
     ) {
       rules.push({ command, match, ...reply })
       writeFileSync(rulesFile, JSON.stringify(rules, null, 2))

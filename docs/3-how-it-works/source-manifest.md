@@ -12,9 +12,9 @@ says what the source is, for every machine that adds it.
 name: acme-platform # unique: the name of the source on every Mac
 label: Acme Platform # free text: what the dashboard and the CLI show
 logins: # see Logins
-  ghcr:
-    type: registry
-    host: ghcr.io
+  acme-dev:
+    type: aws
+    # …
 ```
 
 - `name` is required in a manifest. It is lowercase letters, digits and `-`,
@@ -83,8 +83,9 @@ flowchart TD
 
 - **A name from the author, not from the user.** A source's name was the name
   that the user gave it. Two people could add one repo as `acme` and as
-  `acme-templates`. References between sources (`shared/postgres`) and the
-  support of a team need the same name on every Mac.
+  `acme-templates`. References between sources (`shared/postgres`), the AWS
+  profiles of the logins and the support of a team all need the same name on
+  every Mac.
 - **No `--name`.** A name that the user picks differs from Mac to Mac: that is
   what the manifest fixes. Sources are repos that a team writes for local-env
   (other Portainer catalogs go into Dockhand), so the author can always add a
@@ -95,10 +96,11 @@ flowchart TD
   keeps it.
 - **A label beside the name.** The name is an id: short, lowercase, typed in
   commands. The label is for people: `Acme Platform`.
-- **One file at the root, for the source.** The logins (registries) are about
-  the whole source, not about `docker/` or `ansible/`. The manifest is YAML and
-  has the same file name as the manifest of a role (`local-env.yml`): the root
-  one is the source's, the one beside `meta/` is the role's.
+- **One file at the root, for the source.** The logins (registries, secret
+  managers) are about the whole source, not about `docker/` or `ansible/`. The
+  manifest is YAML and has the same file name as the manifest of a role
+  (`local-env.yml`): the root one is the source's, the one beside `meta/` is the
+  role's.
 - **Optional.** A repo of plain Portainer templates from elsewhere must still
   work without a file of local-env.
 

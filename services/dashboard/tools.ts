@@ -55,6 +55,9 @@ export type Role = GraphRole & {
   galaxy: Record<string, string>
   // The values it takes: meta/argument_specs.yml, entry point `main`
   inputs: RoleInput[]
+  // The logins of the source manifests it needs (local-env.yml), as written:
+  // <login>, or <source>/<login>
+  logins: string[]
 }
 
 export type InstalledRole = {
@@ -117,20 +120,34 @@ const readYaml = (path: string): unknown => {
   }
 }
 
-// What local-env.yml says: its label, and its stacks as <source>/<folder>. A
-// stack that names no folder (a path, not a string) is left out.
+// A login a role names: <login>, or <source>/<login>
+const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
+
+// What local-env.yml says: its label, its stacks as <source>/<folder> and
+// the logins it needs. A stack that names no folder (a path, not a string),
+// or a login that is not a name, is left out.
 const readSettings = (dir: string, source: string) => {
   const settings = readYaml(join(dir, ROLE_SETTINGS_FILE)) as {
     label?: unknown
     stacks?: unknown
+    logins?: unknown
   } | null
   const label =
     typeof settings?.label === 'string' && settings.label.trim()
       ? settings.label.trim()
       : null
   const stacks = Array.isArray(settings?.stacks) ? settings.stacks : []
+  const logins = Array.isArray(settings?.logins) ? settings.logins : []
   return {
     label,
+    logins: [
+      ...new Set(
+        logins.filter(
+          (entry): entry is string =>
+            typeof entry === 'string' && LOGIN_REF.test(entry),
+        ),
+      ),
+    ],
     stacks: [
       ...new Set(
         stacks.flatMap((entry) => {
@@ -424,6 +441,7 @@ const readRole = (
     isProfile: tags.includes(PROFILE_TAG),
     ...readDependencyEntries(meta),
     stacks: settings.stacks,
+    logins: settings.logins,
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
     // A collection of a source is linked, not installed: ansible-galaxy

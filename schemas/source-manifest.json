@@ -36,8 +36,8 @@
       "required": ["type"],
       "properties": {
         "type": {
-          "enum": ["registry"],
-          "description": "registry: a registry of private images, for the templates."
+          "enum": ["registry", "aws", "vault"],
+          "description": "registry: a registry of private images, for the templates. aws: an AWS account, for the AWS CLI in roles (Secrets Manager). vault: a HashiCorp Vault, for the vault CLI in roles."
         }
       },
       "allOf": [
@@ -51,6 +51,30 @@
           },
           "then": {
             "$ref": "#/definitions/registry"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "aws"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/aws"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "vault"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/vault"
           }
         }
       ]
@@ -76,6 +100,108 @@
         "tokenHelp": {
           "type": "string",
           "description": "Shown when local-env asks for the token: what to give, and where to get it."
+        }
+      }
+    },
+    "aws": {
+      "type": "object",
+      "description": "An AWS account. With sso, local-env writes the profile local-env-<source>-<login> in ~/.aws/config and runs `aws sso login`. Roles get its environment in local_env_logins.<login>.env.",
+      "required": ["type"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": ["sso"]
+        },
+        {
+          "required": ["profile"]
+        }
+      ],
+      "properties": {
+        "type": {
+          "const": "aws"
+        },
+        "sso": {
+          "type": "object",
+          "description": "The IAM Identity Center account and role. One browser login covers every account of a start URL.",
+          "required": ["startUrl", "region", "accountId", "roleName"],
+          "additionalProperties": false,
+          "properties": {
+            "startUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "The AWS access portal: https://acme.awsapps.com/start"
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The region of the Identity Center"
+            },
+            "accountId": {
+              "type": ["string", "integer"],
+              "pattern": "^\\d{12}$",
+              "description": "The 12 digits of the account. Quote it: '012345678901'."
+            },
+            "roleName": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The permission set: DevSecretsRead"
+            }
+          }
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Without sso: a profile the user set up (credential_process, aws-vault). local-env writes nothing and cannot log in to it."
+        },
+        "region": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The region of the calls (AWS_REGION). Default: the region of sso."
+        },
+        "help": {
+          "type": "string",
+          "description": "Shown when the user is not logged in: who to ask for access."
+        }
+      }
+    },
+    "vault": {
+      "type": "object",
+      "description": "A HashiCorp Vault. local-env runs `vault login` and gives VAULT_ADDR (and VAULT_NAMESPACE) to the CLI and to the roles, in local_env_logins.<login>.env.",
+      "required": ["type", "address"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "vault"
+        },
+        "address": {
+          "type": "string",
+          "pattern": "^https?://[^/\\s]+",
+          "description": "The URL of the Vault: https://vault.acme.io"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The namespace (Vault Enterprise, HCP)"
+        },
+        "method": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$",
+          "default": "oidc",
+          "description": "The auth method of `vault login`: oidc by default"
+        },
+        "mount": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The path of the auth method, when it is not the default one"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The role of the auth method (oidc, jwt)"
+        },
+        "help": {
+          "type": "string",
+          "description": "Shown when the user is not logged in: who to ask for access."
         }
       }
     }

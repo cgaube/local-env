@@ -73,3 +73,33 @@ export const listAccounts = <Config>(
 // The sources that declare a login of this type
 export const sourcesWithLogins = <Config>(type: LoginType<Config>) =>
   listSources().filter((source) => readSourceLogins(source, type).length > 0)
+
+// The login of this name in the source, when it is valid and of one of these
+// types, with its type. By name, not by account: two names can be one
+// account.
+export const findSourceLogin = (
+  source: string,
+  name: string,
+  // Any config: each type parses its own
+  types: LoginType<any>[],
+): { type: LoginType<any>; login: DeclaredLogin<unknown> } | null => {
+  const manifest = tryReadSourceManifest(resolveInside(SOURCES_DIR, source))
+  const entry = manifest?.logins[name]
+  if (!isRecord(entry)) return null
+  const type = types.find((candidate) => candidate.type === entry.type)
+  if (!type) return null
+  try {
+    const config = type.parse(entry)
+    return {
+      type,
+      login: {
+        source,
+        name,
+        identity: type.identity(config, { source, name }),
+        config,
+      },
+    }
+  } catch {
+    return null
+  }
+}

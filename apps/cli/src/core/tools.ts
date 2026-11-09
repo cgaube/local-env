@@ -42,6 +42,7 @@ import {
 import { hasCommand } from '#cli/utils/brew.js'
 import { HOME_DIR } from '#cli/core/paths.js'
 import { createRunFolder } from '#cli/core/run-folder.js'
+import { prepareLogins } from '#cli/logins/wanted.js'
 import { readConfig } from '#cli/core/config.js'
 import {
   GALAXY_DIR,
@@ -420,6 +421,9 @@ export const runPlaybook = async (
   // a run that can't start asks nothing.
   const inputs = readWantedInputs(catalog, roots)
   const missing = checkInputs(inputs)
+  // The accounts the roles read secrets from: logged in before the sudo
+  // password, so a login that fails wastes no typing (logins/wanted.ts)
+  const logins = await prepareLogins(run)
   const sudo = [
     ...run.filter((role) => role.needsSudo).map(({ label }) => label),
     ...galaxyRolesNeedingSudo(
@@ -448,7 +452,11 @@ export const runPlaybook = async (
   // Only the inputs the wanted roles declare, never a secret, and not one
   // that the roles including it give: extra vars win over every other
   // variable of every role, the `vars:` of a dependency too
-  const extraVars = passedValues(inputs, values)
+  const extraVars = {
+    ...passedValues(inputs, values),
+    // How the roles reach their accounts: no secret in it
+    ...(Object.keys(logins).length > 0 ? { local_env_logins: logins } : {}),
+  }
   const extraVarsFile = join(folder.path, 'extra-vars.json')
   if (Object.keys(extraVars).length > 0) {
     writeFileSync(extraVarsFile, `${JSON.stringify(extraVars, null, 2)}\n`, {

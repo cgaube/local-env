@@ -266,6 +266,23 @@ holds what we build:
   only changes the Dockhand registry of a full host (`ghcr.io`, not
   `ghcr.io/team`), and never shows, stores or passes the token on a command
   line.
+- `aws` and `vault` logins are for the secrets of roles: local-env keeps no
+  secret, the vendor's CLI keeps the session. A `SessionLoginType` describes its
+  CLI as data (`types.ts`; `aws.ts`, `vault.ts`), and `session.ts` runs it: the
+  status, and the login and logout with the terminal handed over. A role names
+  the logins it needs in its `local-env.yml` (`logins: [acme-dev]` or
+  `[<source>/acme-dev]`). Before the sudo password, `install` resolves them
+  (`src/logins/wanted.ts`: own source first, then any source; a missing one, a
+  registry or one name for two logins stops it), installs the CLI with Homebrew,
+  writes `~/.aws/config` (`[profile local-env-<source>-<login>]`, an
+  `sso-session` for each start URL; never a section it did not write, which
+  `volumes/logins.json` records) and checks the session. Logged out, it offers
+  to log in, except without a terminal or from the dashboard: the agent sets
+  `LOCAL_ENV_FROM_DASHBOARD=1`. Then it passes `local_env_logins` (by the name
+  the roles use: `env`, `profile`/`region` or `address`/`namespace`) in the
+  extra vars: tasks use `environment: "{{ local_env_logins['acme-dev'].env }}"`
+  and call the CLI. `sources list`, `login`, `logout` and `doctor` show and
+  manage every type (`listing.ts`).
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.
@@ -341,9 +358,10 @@ the files the tests import, so its total says little.
 - External binaries are faked (`tests/support/fake-bin.ts`): `cli.bin.on()` sets
   a reply, `cli.bin.calls()` lists the calls. A call without a reply fails. PATH
   holds only the stubs and the real git, so tests never reach the real Docker,
-  Homebrew or sudo. A new binary goes in `FAKED_COMMANDS`.
-  `tests/support/machine.ts` sets up common states (`machineReady`,
-  `dockerStopped`).
+  Homebrew or sudo. A new binary goes in `FAKED_COMMANDS`. A rule can `touch` a
+  file, and another match only `ifFile` it exists: a call that changes the next
+  ones (a login that opens a session). `tests/support/machine.ts` sets up common
+  states (`machineReady`, `dockerStopped`).
 - Dockhand is a stateful fake (`tests/support/fake-dockhand.ts`) that the CLI
   reaches through `LOCAL_ENV_DOCKHAND_URL`. Add the routes a test needs there.
 - Factories in `tests/support/factories/` build test data: config, certificates

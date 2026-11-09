@@ -111,6 +111,9 @@ export const startAgentServer = ({
       env: {
         ...process.env,
         ...env,
+        // The run is in the dashboard, not in your terminal: it logs in to
+        // nothing (logins/session.ts)
+        LOCAL_ENV_FROM_DASHBOARD: '1',
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
       },

@@ -74,6 +74,7 @@ git_sign_commits: false
   before Ansible and names the inputs.
 - local-env never shows, asks for or saves an option with `no_log: true`. If a
   wanted role requires one without a default, `local-env install` stops and
-  names it (see below).
+  names it. Read secrets from your company's secret manager in the role (see
+  below).
 - When a value changes, the dashboard shows the roles that use it as **Update
   available**. A change of `argument_specs.yml` is a new revision of the role.

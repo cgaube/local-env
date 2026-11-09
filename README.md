@@ -64,7 +64,7 @@ The [docs site](https://cgaube.github.io/local-env) has everything:
 - [User guide](https://cgaube.github.io/local-env/user-guide/install): every
   command, tools, logins, troubleshooting
 - [Write a source](https://cgaube.github.io/local-env/write-a-source/source-repo):
-  Docker templates, tools, profiles and variables
+  Docker templates, tools, profiles, variables and secrets
 - [How local-env works](https://cgaube.github.io/local-env/how-it-works/): each
   feature, and why it works that way
 
