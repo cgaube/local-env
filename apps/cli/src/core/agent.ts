@@ -2,7 +2,7 @@
 // `local-env update` for the dashboard (src/agent/server.ts). `local-env start`
 // spawns it, detached, beside the core services; `stop` and `reset` end it.
 // Nothing restarts it, like the core services: after a reboot, `start` brings
-// both back. docs/wiki/3-how-it-works/dashboard-terminal.md explains why.
+// both back. docs/3-how-it-works/dashboard-terminal.md explains why.
 //   volumes/agent/agent.json -> { pid, port, version } of the running agent
 //   volumes/agent/token      -> what the dashboard sends it (mounted there)
 //   volumes/agent/agent.log  -> its output

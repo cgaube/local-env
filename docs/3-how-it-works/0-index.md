@@ -3,7 +3,7 @@
 One page for each feature of local-env. Each page tells what the feature does,
 how it works, and why it works that way. These pages are for the people who
 change local-env. The guides for users and source authors are the other sections
-of this wiki.
+of this site.
 
 | Feature                                     | What it does                                                     |
 | ------------------------------------------- | ---------------------------------------------------------------- |
@@ -14,9 +14,8 @@ of this wiki.
 
 ## Write a feature page
 
-Every new feature gets a file in `docs/wiki/3-how-it-works/`, in the same pull
-request as its code. A change to how a feature works updates its file. The wiki
-is rebuilt from `docs/wiki/` on every merge: never edit it on GitHub.
+Every new feature gets a file in `docs/3-how-it-works/`, in the same pull
+request as its code. A change to how a feature works updates its file.
 
 Use these sections, in this order:
 

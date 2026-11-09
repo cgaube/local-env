@@ -1,4 +1,16 @@
-# local-env
+---
+layout: home
+hero:
+  name: local-env
+  tagline: A local development environment for macOS
+  actions:
+    - theme: brand
+      text: Install local-env
+      link: /user-guide/install
+    - theme: alt
+      text: Write a source
+      link: /write-a-source/source-repo
+---
 
 local-env is a local development environment for macOS. It gives your Mac:
 

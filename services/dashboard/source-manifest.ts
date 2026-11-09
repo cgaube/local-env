@@ -4,7 +4,7 @@ import { join } from 'path'
 // The manifest of a source: local-env.yml at the root of its repo. It says
 // what the source is, for every Mac that adds it: its name (unique, the
 // folder in volumes/sources), its label (what people read) and its logins
-// (docs/wiki/3-how-it-works/source-manifest.md). Shared by the dashboard and
+// (docs/3-how-it-works/source-manifest.md). Shared by the dashboard and
 // the CLI: no imports of the CLI.
 
 export const SOURCE_MANIFEST_FILE = 'local-env.yml'

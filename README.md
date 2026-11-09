@@ -22,7 +22,7 @@ A local development environment for macOS:
 
 Requires a Mac with Apple Silicon, Homebrew and a Docker engine with Docker
 Compose v2 (see
-[the requirements](https://github.com/cgaube/local-env/wiki/Install-local-env)).
+[the requirements](https://cgaube.github.io/local-env/user-guide/install)).
 
 ```sh
 brew install cgaube/tap/local-env
@@ -59,17 +59,16 @@ bun install          # also builds ./local-env
 
 ## Documentation
 
-The [wiki](https://github.com/cgaube/local-env/wiki) has everything:
+The [docs site](https://cgaube.github.io/local-env) has everything:
 
-- [User guide](https://github.com/cgaube/local-env/wiki/Everyday-use): every
+- [User guide](https://cgaube.github.io/local-env/user-guide/install): every
   command, tools, logins, troubleshooting
-- [Write a source](https://github.com/cgaube/local-env/wiki/Create-a-source):
+- [Write a source](https://cgaube.github.io/local-env/write-a-source/source-repo):
   Docker templates, tools, profiles and variables
-- [How local-env works](https://github.com/cgaube/local-env/wiki/How-local-env-works):
-  each feature, and why it works that way
+- [How local-env works](https://cgaube.github.io/local-env/how-it-works/): each
+  feature, and why it works that way
 
-The wiki is built from [`docs/wiki`](docs/wiki): change it there, with a pull
-request.
+The site is built from [`docs/`](docs): change it there, with a pull request.
 
 ## License
 

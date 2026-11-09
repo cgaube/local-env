@@ -7,5 +7,9 @@
   "singleQuote": true,
   "trailingComma": "all",
   "sortPackageJson": false,
-  "ignorePatterns": ["apps/web/src/routeTree.gen.ts"]
+  "ignorePatterns": [
+    "apps/web/src/routeTree.gen.ts",
+    "docs/.vitepress/dist",
+    "docs/.vitepress/cache"
+  ]
 }

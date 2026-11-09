@@ -1,6 +1,6 @@
 // A kind of account that a source can need the user to be signed in to,
 // declared in the `logins` of its manifest with a `type`
-// (docs/wiki/3-how-it-works/logins.md). Each type checks its own fields; the
+// (docs/3-how-it-works/logins.md). Each type checks its own fields; the
 // commands only use these interfaces.
 
 // Where a login is declared: its source, and its key in the manifest

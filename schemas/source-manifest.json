@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-manifest.json",
   "title": "local-env source manifest",
-  "description": "local-env.yml at the root of a source repo: its name, its label and the accounts it needs (https://github.com/cgaube/local-env/wiki/Create-a-source).",
+  "description": "local-env.yml at the root of a source repo: its name, its label and the accounts it needs (https://cgaube.github.io/local-env/write-a-source/source-repo).",
   "type": "object",
   "required": ["name"],
   "properties": {
