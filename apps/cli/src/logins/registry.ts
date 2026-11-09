@@ -1,7 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
-import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
+import { S_WARN } from '@clack/prompts'
+import { styleText } from 'node:util'
 import { logger } from '#cli/utils/logger.js'
 import { askPassword, askSelect, askText, canAsk } from '#cli/utils/prompt.js'
 import {
@@ -13,13 +11,30 @@ import type {
   DockhandStep,
   DockhandStepResult,
 } from '#cli/providers/docker/types.js'
+import {
+  listAccounts,
+  readSourceLogins,
+  sourcesWithLogins,
+} from '#cli/logins/declared.js'
+import {
+  isIgnored as isIgnoredLogin,
+  setIgnored as setIgnoredLogin,
+} from '#cli/logins/state.js'
+import {
+  type LoginType,
+  optionalText,
+  requiredText,
+} from '#cli/logins/types.js'
 
-// A source lists the registries of its private images in this file:
-// [{ "host": "ghcr.io", "usernameHelp": "your GitHub username",
-//    "tokenHelp": "a classic token with read:packages" }]
-export const REGISTRIES_FILE = 'docker/registries.json'
-// The hosts the user does not want to be asked about again
-const PROMPTS_FILE = join(HOME_DIR, 'volumes/registries.json')
+// A registry of private images that the templates of a source pull from, in
+// the `logins` of its manifest:
+//   ghcr:
+//     type: registry
+//     host: ghcr.io
+//     usernameHelp: your GitHub username
+//     tokenHelp: a classic token with read:packages
+// The user types a username and a token; Dockhand keeps them and logs in to
+// the registry before each deploy.
 
 // Dockhand counts all these names as Docker Hub
 const DOCKER_HUB_HOSTS = new Set([
@@ -31,6 +46,38 @@ const DOCKER_HUB_HOSTS = new Set([
   'registry.docker.io',
   'docker.com',
 ])
+
+// "https://GHCR.io/team/" -> "ghcr.io", "index.docker.io" -> "docker.io"
+export const registryHost = (url: string) => {
+  const host = url
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]!
+  return DOCKER_HUB_HOSTS.has(host) ? 'docker.io' : host
+}
+
+export type RegistryConfig = {
+  // The full host: ghcr.io/team-a and ghcr.io/team-b are the same login
+  host: string
+  usernameHelp?: string
+  tokenHelp?: string
+}
+
+export const registryLogin: LoginType<RegistryConfig> = {
+  type: 'registry',
+  parse: (entry) => {
+    const host = registryHost(requiredText(entry, 'host'))
+    if (!host) throw new Error('host is required')
+    return {
+      host,
+      usernameHelp: optionalText(entry, 'usernameHelp'),
+      tokenHelp: optionalText(entry, 'tokenHelp'),
+    }
+  },
+  identity: ({ host }) => host,
+  title: ({ host }) => host,
+}
 
 // The prompts show the help of the source: what to give, and where to get
 // it
@@ -54,28 +101,13 @@ export type DockhandRegistry = {
 }
 
 // A registry that one or more sources need
-export type DeclaredRegistry = {
-  host: string
-  usernameHelp?: string
-  tokenHelp?: string
-  sources: string[]
-}
+export type DeclaredRegistry = RegistryConfig & { sources: string[] }
 
 type RegistryTest = {
   success: boolean
   connectivity: boolean
   authenticated?: boolean | null
   message: string
-}
-
-// "https://GHCR.io/team/" -> "ghcr.io", "index.docker.io" -> "docker.io"
-export const registryHost = (url: string) => {
-  const host = url
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .split('/')[0]!
-  return DOCKER_HUB_HOSTS.has(host) ? 'docker.io' : host
 }
 
 // Dockhand can scope a registry to a path (ghcr.io/team). The CLI only
@@ -87,60 +119,28 @@ const hasPath = (url: string) =>
     .replace(/\/+$/, '')
     .includes('/')
 
-// The registries one source lists, once per host, empty when it lists none
-export const readSourceRegistries = (
-  source: string,
-): Omit<DeclaredRegistry, 'sources'>[] => {
-  try {
-    const list = JSON.parse(
-      readFileSync(resolveInside(SOURCES_DIR, source, REGISTRIES_FILE), 'utf8'),
-    )
-    if (!Array.isArray(list)) return []
-    const text = (value: unknown) =>
-      typeof value === 'string' && value.trim() ? value.trim() : undefined
-    // ghcr.io/team-a and ghcr.io/team-b are the same login
-    const byHost = new Map<string, Omit<DeclaredRegistry, 'sources'>>()
-    for (const entry of list as {
-      host?: unknown
-      usernameHelp?: unknown
-      tokenHelp?: unknown
-    }[]) {
-      const value = text(entry?.host)
-      if (!value) continue
-      const host = registryHost(value)
-      const declared = byHost.get(host) ?? { host }
-      // The first entry that gives a help wins
-      declared.usernameHelp ??= text(entry.usernameHelp)
-      declared.tokenHelp ??= text(entry.tokenHelp)
-      byHost.set(host, declared)
-    }
-    return [...byHost.values()]
-  } catch {
-    return []
-  }
-}
+// The registries one source needs, once per host, with their login name
+export const readSourceRegistries = (source: string) =>
+  readSourceLogins(source, registryLogin).map(({ name, config }) => ({
+    name,
+    ...config,
+  }))
 
-// The sources that list registries
-export const sourcesNeedingLogin = () =>
-  listSources().filter((source) => readSourceRegistries(source).length > 0)
+// The sources that need a registry login
+export const sourcesNeedingLogin = () => sourcesWithLogins(registryLogin)
 
 // The registries all sources need, by host, in the order of the sources
-export const listDeclaredRegistries = (): DeclaredRegistry[] => {
-  const byHost = new Map<string, DeclaredRegistry>()
-  for (const source of listSources()) {
-    for (const { host, usernameHelp, tokenHelp } of readSourceRegistries(
-      source,
-    )) {
-      const declared = byHost.get(host) ?? { host, sources: [] }
-      // The first source that gives a help wins
-      declared.usernameHelp ??= usernameHelp
-      declared.tokenHelp ??= tokenHelp
-      if (!declared.sources.includes(source)) declared.sources.push(source)
-      byHost.set(host, declared)
-    }
-  }
-  return [...byHost.values()]
-}
+export const listDeclaredRegistries = (): DeclaredRegistry[] =>
+  listAccounts(registryLogin).map(({ config, sources }) => ({
+    ...config,
+    sources,
+  }))
+
+export const isIgnored = (host: string) =>
+  isIgnoredLogin(registryLogin.type, host)
+
+export const setIgnored = (host: string, ignored: boolean) =>
+  setIgnoredLogin(registryLogin.type, host, ignored)
 
 export const getRegistries = () =>
   dockhandApi<DockhandRegistry[]>('/registries')
@@ -163,28 +163,6 @@ export const findLogin = (registries: DockhandRegistry[], host: string) =>
 
 const hasLogin = (registries: DockhandRegistry[], host: string) =>
   findLogin(registries, host) !== undefined
-
-const readIgnored = (): string[] => {
-  if (!existsSync(PROMPTS_FILE)) return []
-  try {
-    const { ignored } = JSON.parse(readFileSync(PROMPTS_FILE, 'utf8'))
-    return Array.isArray(ignored) ? ignored : []
-  } catch {
-    return []
-  }
-}
-
-export const isIgnored = (host: string) => readIgnored().includes(host)
-
-export const setIgnored = (host: string, ignored: boolean) => {
-  const hosts = readIgnored().filter((value) => value !== host)
-  if (ignored) hosts.push(host)
-  mkdirSync(dirname(PROMPTS_FILE), { recursive: true })
-  writeFileSync(
-    PROMPTS_FILE,
-    `${JSON.stringify({ ignored: hosts }, null, 2)}\n`,
-  )
-}
 
 // Dockhand tries the login against the registry. With a registry id, it uses
 // the stored login.
@@ -239,10 +217,24 @@ export const logInToRegistry = async (
   return saveRegistryLogin(host, username, password)
 }
 
-export const loginState = (registries: DockhandRegistry[], host: string) => {
+// One line for a registry login of a source: its name, the host, the state
+// and, without a login, the command to log in. `registries` is undefined
+// when Dockhand can't be reached.
+export const registryLoginLine = (
+  source: string,
+  { name, host }: { name: string; host: string },
+  registries: DockhandRegistry[] | undefined,
+) => {
+  const what = `${name}  ${styleText('dim', host)}`
+  if (!registries) {
+    return `${styleText('dim', '?')} ${what}  ${styleText('dim', "can't reach Dockhand")}`
+  }
   const login = findLogin(registries, host)
-  if (login) return `logged in as ${login.username}`
-  return isIgnored(host) ? 'no login, not asked' : 'no login'
+  if (login) {
+    return `${styleText('green', '✔')} ${what}  logged in as ${login.username}`
+  }
+  const state = isIgnored(host) ? 'no login, not asked' : 'no login'
+  return `${styleText('yellow', S_WARN)} ${what}  ${state}: ${styleText('dim', `${loginCommandFor(source)} --login ${name}`)}`
 }
 
 // The command that logs in to the registries of a source

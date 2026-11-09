@@ -11,7 +11,7 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
-import { isValidSourceName } from '#cli/sources/sources.js'
+import { isValidSourceName } from '#services/dashboard/source-manifest.js'
 import { logger } from '#cli/utils/logger.js'
 
 // Links Dockhand stacks to the template they were deployed from, without

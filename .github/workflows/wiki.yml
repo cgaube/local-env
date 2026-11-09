@@ -1,0 +1,51 @@
+# Publishes docs/wiki to the repo's wiki on every merge to main
+# (.github/scripts/wiki-sync.ts). The wiki is the output of the docs: never
+# edit it on GitHub, the next merge replaces it. Its git repo exists once the
+# wiki has one page: create it once on GitHub.
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/wiki/**
+      - .github/scripts/wiki*.ts
+      - .github/workflows/wiki.yml
+  workflow_dispatch:
+
+permissions:
+  # Pushes to the wiki's repo
+  contents: write
+
+# One publish at a time: the last merge wins
+concurrency: wiki
+
+jobs:
+  publish:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Bun, as pinned in mise.toml
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Write the pages
+        run: bun .github/scripts/wiki-sync.ts wiki
+
+      - name: Push them
+        working-directory: wiki
+        run: |
+          git add --all
+          if git diff --cached --quiet; then
+            echo 'The wiki is up to date'
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --quiet -m "docs: ${GITHUB_SHA::7}"
+          git push

@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs'
 import { dirname, join } from 'path'
 import type { Config } from '#cli/core/config.js'
 import { writeSelection } from '#services/dashboard/tools.js'
@@ -23,6 +29,9 @@ export const createHome = (dir: string) => {
     dir,
     path,
     exists: (relative: string) => existsSync(path(relative)),
+    // The entries of a folder, hidden ones included; empty without the folder
+    list: (relative: string) =>
+      existsSync(path(relative)) ? readdirSync(path(relative)).sort() : [],
     read: (relative: string) => readFileSync(path(relative), 'utf8'),
     readJson: <T = unknown>(relative: string) =>
       JSON.parse(readFileSync(path(relative), 'utf8')) as T,

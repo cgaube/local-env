@@ -1,9 +1,24 @@
 import { execa } from 'execa'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from 'fs'
+import { homedir } from 'os'
 import { basename, isAbsolute, join, resolve } from 'path'
 import { HOME_DIR, resolveInside } from '#cli/core/paths.js'
 import { BUILD_CONTEXTS_BRANCH } from '#services/catalog-server/template-compose.js'
 import { listRoleFolders } from '#services/dashboard/tools.js'
+import {
+  isValidSourceName,
+  readSourceManifest,
+  SOURCE_MANIFEST_FILE,
+  type SourceManifest,
+  tryReadSourceManifest,
+} from '#services/dashboard/source-manifest.js'
 import { logger } from '#cli/utils/logger.js'
 import { runTask } from '#cli/utils/task.js'
 
@@ -25,39 +40,11 @@ export const COMPOSE_FILES = [
   'docker-compose.yml',
 ]
 
-export const isValidSourceName = (name: string) =>
-  /^[a-z0-9][a-z0-9-]*$/.test(name)
-
 export const sourceNameFromUrl = (url: string) =>
   basename(url.replace(/\/+$/, ''))
     .replace(/\.git$/, '')
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
-
-// A name that tells two repos of the same name apart: the owner (or parent
-// folder) and the repo, e.g. acme-local-env-templates
-const suggestSourceName = (location: string) => {
-  const parts = location
-    .replace(/\/+$/, '')
-    .replace(/\.git$/, '')
-    .split(/[/:]/)
-    .filter(Boolean)
-  return parts
-    .slice(-2)
-    .join('-')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-}
-
-// The same repo, whatever the spelling: a trailing .git or slash, ~ in a path
-const sameRepo = (a: string, b: string) => {
-  const normalize = (location: string) =>
-    (isLocalPath(location) ? resolve(expandHome(location)) : location)
-      .replace(/\/+$/, '')
-      .replace(/\.git$/, '')
-      .toLowerCase()
-  return normalize(a) === normalize(b)
-}
 
 const isLocalPath = (location: string) =>
   isAbsolute(location) || location.startsWith('.') || location.startsWith('~')
@@ -94,25 +81,17 @@ export const getSourceUrl = async (name: string) => {
 }
 
 // Accepts a git URL or the path of a local git repo. Both are cloned, so a
-// local repo's commits arrive with the next `local-env update`.
-export const addSource = async (location: string, name: string) => {
-  if (!isValidSourceName(name)) {
-    throw new Error(
-      `Invalid source name "${name}". Use lowercase letters, digits and dashes.`,
-    )
-  }
-
-  const dir = resolveInside(SOURCES_DIR, name)
-  if (existsSync(dir)) {
-    const existing = await getSourceUrl(name).catch(() => null)
-    if (existing && sameRepo(existing, location)) {
-      throw new Error(`${location} is already added, as "${name}"`)
-    }
-    throw new Error(
-      `A source is already named "${name}"${existing ? ` (${existing})` : ''}. Add this one under another name: --name ${suggestSourceName(location)}`,
-    )
-  }
-
+// local repo's commits arrive with the next `local-env update`. The name is
+// the one of the source's manifest (local-env.yml), else the repo's. Returns
+// it, or null when a source of that name is already added: the repo is
+// skipped, whatever it is. `checkManifest` throws when the manifest has
+// something the caller refuses (its logins).
+export const addSource = async (
+  location: string,
+  {
+    checkManifest,
+  }: { checkManifest?: (manifest: SourceManifest) => void } = {},
+) => {
   let origin = location
   if (isLocalPath(location)) {
     const path = resolve(expandHome(location))
@@ -124,16 +103,75 @@ export const addSource = async (location: string, name: string) => {
   }
 
   ensureSourcesDir()
-  // Only the latest commit: sources can hold hundreds of templates and years
-  // of history we never read. Uses the developer's own git credentials, so
-  // private repos work.
-  await runTask(
-    `Cloning ${name}`,
-    'git',
-    ['clone', '--depth', '1', origin, dir],
-    { done: `Cloned ${name}` },
-  )
-  await syncBuildContext(name)
+  // The name is in the repo: clone first, into a hidden folder that
+  // listSources and the dashboard skip
+  const repoName = sourceNameFromUrl(location)
+  const cloned = resolveInside(SOURCES_DIR, `.adding-${process.pid}`)
+  rmSync(cloned, { recursive: true, force: true })
+  try {
+    // Only the latest commit: sources can hold hundreds of templates and
+    // years of history we never read. Uses the developer's own git
+    // credentials, so private repos work.
+    await runTask(
+      `Cloning ${repoName}`,
+      'git',
+      ['clone', '--depth', '1', origin, cloned],
+      { done: `Cloned ${repoName}` },
+    )
+
+    let manifest
+    try {
+      manifest = readSourceManifest(cloned)
+      if (manifest) checkManifest?.(manifest)
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`${location}: ${error.message}`)
+      }
+      throw error
+    }
+    const name = manifest?.name ?? repoName
+    if (!isValidSourceName(name)) {
+      throw new Error(
+        `"${name}" is not a valid source name. Give the repo a ${SOURCE_MANIFEST_FILE} at its root with a name (lowercase letters, digits and dashes).`,
+      )
+    }
+
+    const dir = resolveInside(SOURCES_DIR, name)
+    if (existsSync(dir)) {
+      const existing = await getSourceUrl(name).catch(() => null)
+      logger.warn(
+        `A source named "${name}" is already added${existing ? ` (${existing.replace(homedir(), '~')})` : ''}: skipped`,
+      )
+      return null
+    }
+    renameSync(cloned, dir)
+    if (name !== repoName) logger.info(`Added as ${name}`)
+    await syncBuildContext(name)
+    return name
+  } finally {
+    rmSync(cloned, { recursive: true, force: true })
+  }
+}
+
+// The label of the source's manifest: what people read. null without one.
+export const sourceLabel = (name: string) =>
+  tryReadSourceManifest(resolveInside(SOURCES_DIR, name))?.label ?? null
+
+// "Acme Platform (acme-platform)", or the name alone
+export const describeSource = (name: string) => {
+  const label = sourceLabel(name)
+  return label ? `${label} (${name})` : name
+}
+
+// The name in the manifest of an added source, when it is not the name of
+// its folder: the author renamed it after the user added it
+export const renamedInManifest = (name: string) => {
+  try {
+    const manifest = readSourceManifest(resolveInside(SOURCES_DIR, name))
+    return manifest && manifest.name !== name ? manifest.name : null
+  } catch {
+    return null
+  }
 }
 
 export const removeSource = (name: string) => {
@@ -227,6 +265,13 @@ export const pullSources = async (names = listSources()) => {
       await syncBuildContext(name)
     } catch {
       logger.warn(`Could not pull ${name}, keeping current copy`)
+      continue
+    }
+    const renamed = renamedInManifest(name)
+    if (renamed) {
+      logger.warn(
+        `${name} is now named "${renamed}" in its ${SOURCE_MANIFEST_FILE}. It keeps working as ${name}; to use the new name: local-env sources remove ${name}, then add it again.`,
+      )
     }
   }
 }

@@ -12,7 +12,7 @@ import { runStep } from '#cli/utils/task.js'
 import { askConfirm, askPassword, askText, canAsk } from '#cli/utils/prompt.js'
 import { dockhandApi, dockhandPost } from '#cli/providers/docker/api.js'
 import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
-import { registryLoginsStep } from '#cli/providers/docker/registries.js'
+import { registryLoginsStep } from '#cli/logins/registry.js'
 import { readBuildTree } from '#cli/providers/docker/stack-builds.js'
 import {
   composeName,

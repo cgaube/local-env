@@ -25,16 +25,31 @@ import { hasCommand, logger } from '#cli/utils/index.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { askConfirm, askSelect, canAsk } from '#cli/utils/prompt.js'
 
-// At the end of the output, where it is seen: just before the summary
-// Tools only: a profile is a set of tools, not one more, and switching
-// profiles is no news. By label, as the dashboard shows them; one gone from
-// the sources by its name.
-const showForgotten = (forgotten: string[], catalog: Role[]) => {
+// "acme/cgaube.dev.git" -> "cgaube.dev.git": a role gone from the sources
+// has only its id left
+const shortName = (id: string) => id.split('/').slice(1).join('/') || id
+
+// What left the sources since the last install: the saved profile, and picks
+export type LeftSources = { profile: string | null; picks: string[] }
+
+// At the end of the output, where it is seen: just before the summary. One
+// list for the tools no longer wanted, unpicked or gone from the sources.
+// Tools only: a profile is a set of tools, not one more, switching profiles
+// is no news, and a profile that left is said at the start. By label, as the
+// dashboard shows them; one gone from the sources by its name.
+const showForgotten = (
+  forgotten: string[],
+  catalog: Role[],
+  left: LeftSources = { profile: null, picks: [] },
+) => {
   const byId = new Map(catalog.map((role) => [role.id, role]))
-  const tools = forgotten.flatMap((id) => {
+  const ids = [...new Set([...forgotten, ...left.picks])].filter(
+    (id) => id !== left.profile,
+  )
+  const tools = ids.flatMap((id) => {
     const role = byId.get(id)
     if (role?.isProfile) return []
-    return [role?.label ?? id.split('/').slice(1).join('/')]
+    return [role ? role.label : `${shortName(id)} (no longer in your sources)`]
   })
   if (tools.length === 0) return
   const one = tools.length === 1
@@ -208,20 +223,22 @@ export const installCommand = new Command('install')
       const write = !options.dryRun
       let forgotten: string[] = []
       let catalog: Role[] = []
+      const left: LeftSources = { profile: null, picks: [] }
       try {
         catalog = listCatalog()
         const saved = readSavedProfile(catalog)
+        // Said now: it changes what this install runs. The picks that left
+        // are in the list of the end, with the tools no longer wanted.
         if (saved.gone) {
+          left.profile = saved.gone
           logger.warn(
-            `Your profile, ${saved.gone}, is no longer in your sources: local-env no longer installs it.`,
+            `Your profile, ${shortName(saved.gone)}, is no longer in your sources: local-env no longer installs it.`,
           )
         }
         const { roles: picked, missing } = readPickedTools(catalog)
         if (missing.length > 0 && write) {
           unpickTools(catalog, missing)
-          logger.warn(
-            `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} no longer in your sources: unpicked. local-env doesn't uninstall: ${missing.length === 1 ? 'it stays' : 'they stay'} on this Mac.`,
-          )
+          left.picks = missing
         }
 
         // Named here, or picked in the select when there is nothing else
@@ -271,7 +288,7 @@ export const installCommand = new Command('install')
         }
         if (roots.length === 0) {
           showNothingPicked(catalog)
-          showForgotten(forgotten, catalog)
+          showForgotten(forgotten, catalog, left)
           return
         }
         if (options.dryRun) {
@@ -292,7 +309,7 @@ export const installCommand = new Command('install')
           // Each stack says how it went, in its own group
           await deployRequiredStacks(stacks)
         }
-        showForgotten(forgotten, catalog)
+        showForgotten(forgotten, catalog, left)
         // Last, in green, its counts dimmed: what the install did, in place
         // of "Done". Without a summary (--verbose), Ansible's recap says it.
         closeFrameWithCallout(
@@ -305,7 +322,7 @@ export const installCommand = new Command('install')
         )
       } catch (error) {
         logger.error('Error installing tools:', error)
-        showForgotten(forgotten, catalog)
+        showForgotten(forgotten, catalog, left)
         process.exit(1)
       }
     },

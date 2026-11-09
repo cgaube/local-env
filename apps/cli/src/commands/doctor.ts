@@ -16,8 +16,10 @@ import {
   listDeclaredRegistries,
   loginCommandFor,
   testRegistryLogin,
-} from '#cli/providers/docker/registries.js'
+} from '#cli/logins/registry.js'
 import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
+import { checkManifestLogins } from '#cli/logins/index.js'
+import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
 import {
   BUILD_CONTEXTS_DIR,
   listSources,
@@ -131,6 +133,30 @@ const checkRegistries = async (): Promise<CheckResult[]> => {
         message: `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(sources[0]!)}\`.`,
       })
     }
+  }
+  return results
+}
+
+// The logins of the manifests are valid: a source pulled since `sources add`
+// checked them
+const checkLogins = async (): Promise<CheckResult[]> => {
+  const results: CheckResult[] = []
+  for (const source of listSources()) {
+    const manifest = tryReadSourceManifest(join(SOURCES_DIR, source))
+    try {
+      checkManifestLogins(manifest?.logins ?? {})
+    } catch (error) {
+      results.push({
+        level: 'fail',
+        message: `${source}: ${error instanceof Error ? error.message : String(error)}. local-env leaves that login out.`,
+      })
+    }
+  }
+  if (results.length === 0) {
+    results.push({
+      level: 'pass',
+      message: 'The logins of every manifest are valid',
+    })
   }
   return results
 }
@@ -510,6 +536,9 @@ export const doctorCommand = new Command('doctor')
 
       logger.group('Registries')
       for (const result of await checkRegistries()) addResult(result)
+
+      logger.group('Logins')
+      for (const result of await checkLogins()) addResult(result)
 
       logger.group('Summary')
       logger.success(

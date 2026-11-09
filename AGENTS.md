@@ -74,7 +74,7 @@ holds what we build:
   dashboard pipes `/api/terminal` (WebSocket, its own Origin only) to it; the
   page shows it with xterm.js (`features/terminal/`).
   `services/dashboard/agent-protocol.ts` holds the messages.
-  `docs/features/dashboard-terminal.md` explains why.
+  `docs/wiki/3-how-it-works/dashboard-terminal.md` explains why.
 - `services/proxy/` builds the nginx proxy (plain `nginx:alpine`). It includes
   the routes that `proxy-connector` generates into `volumes/proxy/routes.conf`.
   Certificates are generated into `services/proxy/certs/` in the home folder by
@@ -106,7 +106,11 @@ holds what we build:
   the domain to short hosts, writes `routes.conf` and `routes.json`, and reloads
   nginx.
 - `src/sources/` clones, pulls and removes sources: git repos (URL or local
-  path) cloned into `volumes/sources/<name>` in the home folder.
+  path) cloned into `volumes/sources/<name>` in the home folder. A source's
+  manifest, `local-env.yml` at its root, gives its `name` (unique: the folder,
+  the same on every Mac; else the repo's name), its `label` and its `logins`
+  (`services/dashboard/source-manifest.ts`, shared with the dashboard;
+  `docs/wiki/3-how-it-works/source-manifest.md`).
 - `src/providers/<name>/` installs one kind of source content through its app:
   `docker` (Dockhand, reads `docker/`; `steps/` are idempotent provisioning
   steps run on every `start`). Each provider implements `Provider` from
@@ -163,15 +167,29 @@ holds what we build:
   with Dockhand's `POST /stacks`, linked to their template, once: `stacks.json`
   keeps them from coming back (`src/providers/docker/required-stacks.ts`). The
   dashboard runs nothing on the Mac itself: it asks the dashboard agent.
-  `docs/features/tools-and-profiles.md` explains why.
+  `docs/wiki/3-how-it-works/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources, the tools (`volumes/tools/`) and the dashboard agent's files
   (`volumes/agent/`).
 
+## Docs (the wiki)
+
+- `docs/wiki/` is the source of the repo's GitHub wiki, in three sections:
+  `1-user-guide/` (the guide for users), `2-write-a-source/` (the guide for
+  source authors) and `3-how-it-works/` (one file for each feature). On every
+  merge to `main`, `.github/workflows/wiki.yml` publishes it
+  (`.github/scripts/wiki-sync.ts`, `wiki.ts`): never edit the wiki on GitHub. A
+  page is named by its `# ` title, which must be unique; a number before a dash
+  orders the folders and files; links between the files become links between the
+  pages. `bun run wiki:check` (in `check` and CI) fails on a duplicate title or
+  a link to a file that does not exist.
+- A change that users or source authors see updates their guide in the same pull
+  request.
+
 ## Feature docs
 
-- `docs/features/` holds one file for each feature: what it does, how it works
-  (Mermaid diagrams) and why, then its limits. `docs/features/README.md` gives
+- `docs/wiki/3-how-it-works/` holds one file for each feature: what it does, how
+  it works (Mermaid diagrams) and why, then its limits. Its `0-index.md` gives
   the sections and the rules for the diagrams, and lists the files.
 - A new feature adds its file in the same pull request as its code. A change to
   how a feature works updates its file, diagrams included. Read the file of a
@@ -179,8 +197,8 @@ holds what we build:
 
 ## Sources
 
-- `docs/templates.md` is the guide for template authors. Update it with any
-  change to how templates are written, linked or updated.
+- `docs/wiki/2-write-a-source/` is the guide for source authors. Update it with
+  any change to how templates and tools are written, linked or updated.
 - The CLI ships no templates. Sources hold them: `docker/templates.json` is a
   Portainer template list whose stack entries point to
   `docker/<folder>/compose.yaml`; `ansible/<name>/` will hold roles.
@@ -224,14 +242,19 @@ holds what we build:
   nginx every routed host as an alias: containers can call
   `https://<host>.<domain>`, which otherwise resolves to themselves. They trust
   the certificate once the mkcert CA is mounted (`SSL_CERT_FILE`).
-- A source lists the registries of its private images in
-  `docker/registries.json` (`host`, optional `usernameHelp` and `tokenHelp`,
-  shown in the prompts). The `registryLoginsStep`
-  (`src/providers/docker/registries.ts`) asks for a login for each host that
-  Dockhand has no login for, on every provisioning and `sources sync` (only a
-  hint without a terminal), and saves it in Dockhand with its registry API.
-  "Don't ask again" goes in `volumes/registries.json`.
-  `local-env sources login [name]` and `logout [name]`
+- A source lists the accounts it needs in the `logins` of its manifest, each
+  with a `type` (`docs/wiki/3-how-it-works/logins.md`). `src/logins/` reads
+  them: a `LoginType` per file (`types.ts`), `declared.ts` (the logins of one
+  type in every source, grouped by identity), `state.ts` ("don't ask again", in
+  `volumes/logins.json`), `index.ts` (the types, and the check of a manifest's
+  logins that `sources add` runs). `schemas/source-manifest.json` is the JSON
+  schema of the manifest, for editors: a new login type or field goes there too
+  (a unit test compares the types). A `registry` login (`host`, optional
+  `usernameHelp` and `tokenHelp`, shown in the prompts) is for private images.
+  The `registryLoginsStep` (`src/logins/registry.ts`) asks for a login for each
+  host that Dockhand has no login for, on every provisioning and `sources sync`
+  (only a hint without a terminal), and saves it in Dockhand with its registry
+  API. `local-env sources login [name] [--login <login>]` and `logout`
   (`src/commands/sources/login.ts`) manage the logins of a source's registries;
   without a name, they list the sources and the state of their logins. A login
   stays per host in Dockhand, shared by the sources that use that host. The CLI

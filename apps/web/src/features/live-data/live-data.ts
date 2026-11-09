@@ -29,6 +29,8 @@ export type Service = {
 
 export type Source = {
   name: string
+  // The label of its manifest (local-env.yml), else null
+  label: string | null
   origin: string | null
   docker: number
   ansible: number

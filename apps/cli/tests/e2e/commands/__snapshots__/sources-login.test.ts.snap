@@ -1,7 +1,12 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`local-env sources login, without a name lists the sources that need a login, and their login 1`] = `
-"│  acme  ghcr.io logged in as octocat, quay.io no login
-│  beta  quay.io no login
+"│
+◇  acme
+│  ✔ ghcr-io  ghcr.io  logged in as octocat
+│  ▲ quay-io  quay.io  no login: local-env sources login acme --login quay-io
+│
+◇  beta
+│  ▲ quay-io  quay.io  no login: local-env sources login beta --login quay-io
 │  Name the source to log in to: \`local-env sources login <name>\`"
 `;

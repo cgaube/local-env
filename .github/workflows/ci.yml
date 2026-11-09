@@ -37,6 +37,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: bun run fmt:check
 
+      # docs/wiki builds into the wiki: page names, links
+      - name: Wiki
+        if: ${{ !cancelled() }}
+        run: bun run wiki:check
+
       # A change to the files in changedFilePatterns (.changeset/config.json)
       # needs a changeset
       - name: Changeset

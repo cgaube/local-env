@@ -38,6 +38,7 @@ import {
   writeSelection,
   writeVariables,
 } from './tools.js'
+import { tryReadSourceManifest } from './source-manifest.js'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
@@ -103,6 +104,7 @@ const listSources = () =>
       const dir = join(SOURCES_DIR, name)
       return {
         name,
+        label: tryReadSourceManifest(dir)?.label ?? null,
         origin: readOrigin(dir),
         docker: countTemplates(dir),
         ansible: listRoleFolders(join(dir, 'ansible')).length,

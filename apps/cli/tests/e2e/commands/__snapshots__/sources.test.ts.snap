@@ -16,12 +16,13 @@ exports[`local-env sources list shows whether the sources that need a registry l
 ◇  acme
 │  <TMP>/repos/acme
 │  1 docker template
-│  ✔ logged in
+│  ✔ ghcr-io  ghcr.io  logged in as octocat
 │
 ◇  beta
 │  <TMP>/repos/beta
 │  1 docker template
-│  ▲ login needed
+│  ✔ ghcr-io  ghcr.io  logged in as octocat
+│  ▲ quay-io  quay.io  no login: local-env sources login beta --login quay-io
 │
 ◇  plain
 │  <TMP>/repos/plain

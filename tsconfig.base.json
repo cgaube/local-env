@@ -17,6 +17,7 @@
       "#ui/*": ["./apps/web/src/*"],
       "#cli-tests/*": ["./apps/cli/tests/*"],
       "#ui-tests/*": ["./apps/web/tests/*"],
+      "#scripts/*": ["./.github/scripts/*"],
       "#package.json": ["./package.json"]
     }
   }

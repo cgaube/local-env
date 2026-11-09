@@ -1,0 +1,71 @@
+# Create a source
+
+A template is an app that people install from Dockhand's Templates page with one
+click: a database, a mail catcher, an internal tool. You write templates in a
+git repo, a **source**, and everyone who adds that source gets them, then gets
+your later changes too.
+
+## A source repo
+
+```
+<repo>/
+├── local-env.yml             # optional: the manifest (name, label, logins)
+├── docker/
+│   ├── templates.json        # the list of templates (Portainer format)
+│   ├── mailpit/
+│   │   └── compose.yaml      # one folder per stack template
+│   └── hello/
+│       ├── compose.yaml
+│       └── site/Dockerfile   # files a template builds from
+└── ansible/
+    └── dev_tools/            # an Ansible collection (see Tools)
+        ├── galaxy.yml        # its namespace and name: acme.dev_tools
+        └── roles/
+            └── git/          # one Ansible role per tool
+```
+
+Add it once, then sync it after each change:
+
+```sh
+local-env sources add https://github.com/acme/my-templates   # a git URL
+local-env sources add ~/Projects/my-templates               # or a local repo
+# edit, commit, then:
+local-env sources sync   # pulls and offers the changes
+```
+
+local-env only sees **committed** changes: a source is a clone of the repo, even
+when the repo is on your Mac. `sources sync` pulls it, refreshes Dockhand's
+Templates page and offers the changes to the stacks deployed from your
+templates. `sources sync <source>` does it for one source only.
+
+### The manifest
+
+`local-env.yml` at the root of the repo says what the source is, for everyone
+who adds it:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-manifest.json
+name: acme-platform # unique: the name of the source on every Mac
+label: Acme Platform # what the dashboard and the CLI show
+```
+
+The first line points your editor to the JSON schema of the manifest: it
+completes the fields, shows their help and marks the mistakes. VS Code needs the
+YAML extension (Red Hat). JetBrains IDEs read a `$schema:` key instead, which
+local-env ignores too:
+
+```yaml
+$schema: https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-manifest.json
+```
+
+- `name` is required in a manifest: lowercase letters, digits and `-`.
+  `sources add` uses it as the name of the source, and skips a repo whose name
+  is already added. Pick a name that no other team uses.
+- `label` is optional, free text. Without it, local-env shows the name.
+- `logins` lists the accounts that your templates need: registries of private
+  images (see [Private images](2-docker-templates.md#private-images)).
+- Without a manifest, the source is named after the repo, and has no label and
+  no logins.
+- Other sources name yours by its `name`: `acme-platform/postgres` in `stacks:`.
+  Changing the name later breaks them, and users must remove and add the source
+  again.

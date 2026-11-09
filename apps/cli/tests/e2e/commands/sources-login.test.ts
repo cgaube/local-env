@@ -4,6 +4,7 @@ import {
   provisionedDockhand,
 } from '#cli-tests/support/factories/dockhand.js'
 import { dockerRunning, machineReady } from '#cli-tests/support/machine.js'
+import { manifestFiles } from '#cli-tests/support/factories/manifest.js'
 import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 const TOKEN = 'ghp_secret_token_1234'
@@ -18,7 +19,7 @@ const GHCR = {
 // A provisioned Dockhand, and a source that needs these registries. Added
 // without a terminal: the test asks the questions it wants afterwards.
 const createCliWithSource = async (
-  registries: unknown[] = [GHCR],
+  registries: Record<string, unknown>[] = [GHCR],
   dockhand: Partial<DockhandState> = {},
 ) => {
   const cli = await createCli({
@@ -28,9 +29,7 @@ const createCliWithSource = async (
   cli.home.seedCertificate()
   machineReady(cli)
   const repo = cli.createSource('acme')
-  repo.commit({
-    'docker/registries.json': `${JSON.stringify(registries, null, 2)}\n`,
-  })
+  repo.commit(manifestFiles('acme', registries))
   const added = await cli.run(['sources', 'add', repo.dir], { env: NO_TTY })
   expect(added.exitCode).toBe(0)
   return cli
@@ -61,7 +60,7 @@ describe.concurrent('local-env sources add, registry logins', () => {
       cli.home.seedConfig()
       dockerRunning(cli.bin)
       const repo = cli.createSource('acme')
-      repo.commit({ 'docker/registries.json': JSON.stringify([GHCR]) })
+      repo.commit(manifestFiles('acme', [GHCR]))
 
       const result = await cli.run(['sources', 'add', repo.dir], {
         answers: logIn,
@@ -122,15 +121,15 @@ describe.concurrent('local-env start, registry logins', () => {
       const quiet = await cli.run(['start'])
 
       expect(quiet.exitCode).toBe(0)
-      expect(cli.home.readJson('volumes/registries.json')).toEqual({
-        ignored: ['ghcr.io'],
+      expect(cli.home.readJson('volumes/logins.json')).toMatchObject({
+        ignored: ['registry:ghcr.io'],
       })
 
       await cli.run(
         ['sources', 'login', 'acme', '-u', 'octocat', '--password-stdin'],
         { stdin: TOKEN },
       )
-      expect(cli.home.readJson('volumes/registries.json')).toEqual({
+      expect(cli.home.readJson('volumes/logins.json')).toMatchObject({
         ignored: [],
       })
     },
@@ -171,9 +170,13 @@ describe.concurrent('local-env start, registry logins', () => {
 const QUAY = { host: 'quay.io' }
 
 // Adds one more source that needs these registries
-const addSource = async (cli: Cli, name: string, registries: unknown[]) => {
+const addSource = async (
+  cli: Cli,
+  name: string,
+  registries: Record<string, unknown>[],
+) => {
   const repo = cli.createSource(name)
-  repo.commit({ 'docker/registries.json': JSON.stringify(registries) })
+  repo.commit(manifestFiles(name, registries))
   const added = await cli.run(['sources', 'add', repo.dir], { env: NO_TTY })
   expect(added.exitCode).toBe(0)
 }
@@ -228,8 +231,12 @@ describe.concurrent('local-env sources login', () => {
       })
 
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('acme  ghcr.io no login')
-      expect(result.output).toContain('beta  quay.io no login')
+      expect(result.output).toContain(
+        'ghcr-io  ghcr.io  no login: local-env sources login acme --login ghcr-io',
+      )
+      expect(result.output).toContain(
+        'quay-io  quay.io  no login: local-env sources login beta --login quay-io',
+      )
       // No hint when the source gives none
       expect(result.questions).toEqual([
         'Which source do you want to log in to?',
@@ -283,18 +290,17 @@ describe.concurrent('local-env sources login', () => {
     ])
   })
 
-  test('needs --registry with the token from stdin, for several registries', async () => {
+  test('needs --login with the token from stdin, for several registries', async () => {
     await using cli = await createCliWithSource([GHCR, QUAY])
 
     const missing = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
-    const given = await cli.run(
-      stdinLogin('acme', '--registry', 'https://Quay.io/'),
-      { stdin: TOKEN },
-    )
+    const given = await cli.run(stdinLogin('acme', '--login', 'quay-io'), {
+      stdin: TOKEN,
+    })
 
     expect(missing.exitCode).toBe(1)
     expect(missing.output).toContain(
-      'acme needs several registries (ghcr.io, quay.io): give --registry.',
+      'acme needs several registries (ghcr.io, quay.io): give --login.',
     )
     expect(given.exitCode).toBe(0)
     expect(cli.dockhand.state.registries).toEqual([
@@ -317,16 +323,16 @@ describe.concurrent('local-env sources login', () => {
     ])
   })
 
-  test('refuses a registry the source does not list', async () => {
+  test('refuses a login the source does not declare', async () => {
     await using cli = await createCliWithSource()
 
-    const result = await cli.run(stdinLogin('acme', '--registry', 'quay.io'), {
+    const result = await cli.run(stdinLogin('acme', '--login', 'quay'), {
       stdin: TOKEN,
     })
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'acme needs no login for quay.io, only for ghcr.io.',
+      'acme has no login named "quay", only ghcr-io.',
     )
   })
 

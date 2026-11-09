@@ -47,7 +47,10 @@ profiles on the Mac with `local-env install`.
   `Git Extras`. A brand name (`TablePlus`) needs a label.
 - local-env never uninstalls. When a tool is no longer wanted, it stays on the
   Mac. local-env removes it from the list of installed tools and shows a message
-  ("No longer wanted, still on this Mac").
+  at the end ("No longer wanted, still on this Mac"). The message has one list:
+  the tools unpicked, and the picks that left the sources ("(no longer in your
+  sources)"), which `install` unpicks. A profile that left the sources is said
+  once, at the start: it changes what the install runs.
 - The Profiles page of the dashboard (`/profiles`) lists every profile, with a
   search, a source filter and pages for hundreds of them. A card at the top
   shows the current profile: its tools to install and its stacks to deploy. A

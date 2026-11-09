@@ -30,7 +30,14 @@ export function SourcesTable({ sources }: { sources: Source[] }) {
           <TableRow key={source.name}>
             <TableCell>
               <div className="flex flex-col gap-0.5">
-                <span className="font-medium">{source.name}</span>
+                <span className="font-medium">
+                  {source.label ?? source.name}
+                </span>
+                {source.label ? (
+                  <span className="text-muted-foreground text-xs">
+                    {source.name}
+                  </span>
+                ) : null}
                 {source.origin ? (
                   <span className="text-muted-foreground text-xs">
                     {source.origin}
