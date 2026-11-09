@@ -300,7 +300,10 @@ holds what we build:
   secret wins over a saved value). The fake `ansible-playbook` reads the pipe
   like Ansible, and skips it when it checks the files of the run folder.
   `sources list`, `login`, `logout` and `doctor` show and manage every type
-  (`listing.ts`).
+  (`listing.ts`). The dashboard's Overview has a Logins card
+  (`apps/web/src/features/logins/`): `/api/logins` asks the dashboard agent's
+  `GET /logins`, which builds the list on the Mac (`report.ts`), on page open
+  and on Refresh, never on a timer.
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.

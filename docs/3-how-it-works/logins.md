@@ -94,6 +94,13 @@ logins:
   They do not ask for AWS or Vault logins: they read no secret.
 - `local-env sources remove` removes the AWS profiles that only this source
   used.
+- The Overview of the dashboard has a **Logins** card, beside the Sources card
+  (`features/logins/`): one row for each account, with its type, the sources
+  that need it and its state (logged in as …, logged out, CLI not installed, not
+  asked). A logged-out row shows the command to copy
+  (`local-env sources login acme --login acme-dev`) and the `help` of the
+  source. It checks them when the page opens, and again with **Refresh**. A card
+  without any login is not shown.
 - The dashboard never logs in and never takes a credential.
 
 ## How it works
@@ -263,6 +270,40 @@ flowchart TD
 - Each install removes the sections of `~/.aws/config` that local-env wrote for
   a login that no source declares any more. `sources remove` does it too.
 
+### The state in the dashboard
+
+```mermaid
+sequenceDiagram
+  participant Page as Overview (browser)
+  participant Dash as dashboard (container)
+  participant Agent as dashboard agent (Mac)
+  participant CLI as aws / vault
+  participant DH as Dockhand
+  Page->>Dash: GET /api/logins (on open, on Refresh)
+  Dash->>Agent: GET /logins (Bearer token)
+  Agent->>DH: GET /registries
+  Agent->>CLI: status of each aws / vault account, in parallel
+  Agent-->>Dash: { logins: [...] }
+  Dash-->>Page: { available: true, logins: [...] }
+```
+
+- The container has no AWS or Vault session, and cannot read the sources' logins
+  with the CLI's code. The agent runs that code on the Mac, as the user: it
+  builds the whole list (`apps/cli/src/logins/report.ts`, `buildLoginsReport`),
+  registries included. The dashboard server only passes it on
+  (`services/dashboard/server.ts`, `/api/logins`).
+- A row has the name, the type, the title, the sources, the state (`logged-in`,
+  `logged-out`, `no-cli`, `not-asked`, `unknown` when Dockhand cannot be
+  reached), a detail without a secret (as whom, or the CLI's error), the command
+  to run and the help (`LoginRow` in `services/dashboard/agent-protocol.ts`).
+- The page asks when it opens and on **Refresh**, never on a timer, and not on
+  window focus: each check is a call to AWS, Vault or Dockhand
+  (`apps/web/src/features/logins/logins.ts`). The states are not in
+  `/api/events`, which sends every change at once. The agent keeps no cache: a
+  refresh checks again.
+- Without the agent, `/api/logins` answers `{ available: false }`, and the card
+  shows `local-env start`.
+
 ### The `aws` type
 
 - `cli`: `aws` (`brew install awscli`).
@@ -415,6 +456,15 @@ filled.
   keys do not.
 - **The dashboard never logs in.** It runs in a container. A login opens a
   browser or asks for a password: it belongs to a terminal on the Mac.
+- **A card on the Overview, not a page.** Logins belong to sources, and the
+  Sources card is on the Overview. A page is for when the list grows.
+- **The agent builds the list, not the container.** Mounting `~/.aws` and
+  `~/.vault-token` into the dashboard gives a container the user's sessions. The
+  agent already runs on the Mac as the user, behind a token, with the CLI's
+  code: the dashboard needs no copy of it.
+- **On open and on Refresh, no polling.** A login changes when the user logs in
+  in a terminal: they come back and refresh. A timer would call AWS and Vault
+  every minute for nothing.
 
 ## Limits
 
@@ -450,5 +500,7 @@ filled.
   `aws --profile` commands must use the new name.
 - On the first install from the dashboard, the CLI installs, but the login stops
   the run: the user logs in in a terminal, then installs again.
+- The dashboard shows the logins only when the dashboard agent runs, the
+  registries too.
 - The install dialog does not list the logins that the next install needs: the
   install says it, and stops before anything runs.

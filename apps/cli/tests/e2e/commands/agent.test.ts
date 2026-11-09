@@ -1,6 +1,10 @@
 import { readFileSync } from 'fs'
 import packageJson from '#package.json' with { type: 'json' }
-import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import {
+  buildDockhandRegistry,
+  provisionedDockhand,
+} from '#cli-tests/support/factories/dockhand.js'
+import { buildManifest } from '#cli-tests/support/factories/manifest.js'
 import { machineReady } from '#cli-tests/support/machine.js'
 import { type Cli, createCli } from '#cli-tests/support/run-cli.js'
 
@@ -56,6 +60,71 @@ describe.concurrent('local-env agent', () => {
     expect(await status.json()).toEqual({
       version: packageJson.version,
       run: null,
+    })
+  })
+
+  test('gives the logins of the sources and their state', async () => {
+    await using cli = await startedCli()
+    cli.dockhand.state.registries.push(buildDockhandRegistry())
+    cli.bin.on('which', ['aws'])
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+      exitCode: 255,
+      stderr:
+        'aws: [ERROR]: Error loading SSO Token: Token for acme does not exist',
+    })
+    const repo = cli.createSource('acme')
+    repo.commit({
+      'local-env.yml': buildManifest({
+        name: 'acme',
+        logins: {
+          ghcr: { type: 'registry', host: 'ghcr.io' },
+          'acme-dev': {
+            type: 'aws',
+            sso: {
+              startUrl: 'https://acme.awsapps.com/start',
+              region: 'eu-west-1',
+              accountId: '123456789012',
+              roleName: 'Dev',
+            },
+            help: 'Ask #platform',
+          },
+        },
+      }),
+    })
+    await cli.run(['sources', 'add', repo.dir], {
+      env: { FAKE_PROMPTS_NO_TTY: '1' },
+    })
+    await cli.run(['start'])
+    const token = readFileSync(cli.home.path('volumes/agent/token'), 'utf8')
+
+    const response = await fetch(`http://127.0.0.1:${cli.agentPort}/logins`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    expect(await response.json()).toEqual({
+      logins: [
+        {
+          type: 'registry',
+          name: 'ghcr',
+          title: 'ghcr.io',
+          sources: ['acme'],
+          state: 'logged-in',
+          detail: 'as octocat',
+          command: null,
+          help: null,
+        },
+        {
+          type: 'aws',
+          name: 'acme-dev',
+          title: 'AWS 123456789012 (Dev)',
+          sources: ['acme'],
+          state: 'logged-out',
+          detail:
+            'aws: [ERROR]: Error loading SSO Token: Token for acme does not exist',
+          command: 'local-env sources login acme --login acme-dev',
+          help: 'Ask #platform',
+        },
+      ],
     })
   })
 

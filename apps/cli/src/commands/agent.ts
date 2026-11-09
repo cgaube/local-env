@@ -4,6 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { execa } from 'execa'
 import packageJson from '#package.json' with { type: 'json' }
 import { startAgentServer } from '#cli/agent/server.js'
+import { buildLoginsReport } from '#cli/logins/report.js'
 import {
   AGENT_DIR,
   AGENT_INFO,
@@ -48,6 +49,7 @@ export const agentCommand = new Command('agent')
         token,
         version: packageJson.version,
         argv: (command) => [...selfArgv(), command],
+        logins: buildLoginsReport,
         // Not when it is idle: a run that just ended is what upgraded it
         onRunExit: async (run) => {
           log(`local-env ${run.command} exited with ${run.exitCode}`)

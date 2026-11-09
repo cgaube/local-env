@@ -16,6 +16,7 @@ import {
   AGENT_COMMANDS,
   type AgentCommand,
   type AgentStatus,
+  type LoginsReport,
   type RunState,
   type ServerMessage,
 } from '#services/dashboard/agent-protocol.js'
@@ -45,6 +46,7 @@ export const startAgentServer = ({
   argv,
   env = {},
   onRunExit,
+  logins,
 }: {
   port: number
   hostname?: string
@@ -54,6 +56,9 @@ export const startAgentServer = ({
   argv: (command: AgentCommand) => string[]
   env?: Record<string, string>
   onRunExit?: (run: RunState) => void
+  // GET /logins: the logins of the sources and their state
+  // (logins/report.ts), checked on each request
+  logins?: () => Promise<LoginsReport>
 }) => {
   let run: RunState | null = null
   let output: Uint8Array[] = []
@@ -165,6 +170,16 @@ export const startAgentServer = ({
       const { pathname } = new URL(request.url)
       if (pathname === '/status') {
         return Response.json({ version, run } satisfies AgentStatus)
+      }
+      if (pathname === '/logins' && logins) {
+        return logins().then(
+          (report) => Response.json(report),
+          (error: unknown) =>
+            Response.json(
+              { error: error instanceof Error ? error.message : String(error) },
+              { status: 500 },
+            ),
+        )
       }
       if (pathname === '/terminal') {
         if (server.upgrade(request, { data: null })) return undefined

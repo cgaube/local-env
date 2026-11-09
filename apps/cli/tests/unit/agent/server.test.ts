@@ -94,6 +94,33 @@ describe('agent server', () => {
     }
   })
 
+  test('gives the logins, checked on each request', async () => {
+    let checks = 0
+    const server = startAgentServer({
+      port: 0,
+      token: TOKEN,
+      version: '1.2.3',
+      argv: (command) => ['sh', '-c', SCRIPTS[command]],
+      logins: async () => {
+        checks++
+        return { logins: [] }
+      },
+    })
+    try {
+      const get = () =>
+        fetch(`http://127.0.0.1:${server.port}/logins`, {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        })
+      expect(await (await get()).json()).toEqual({ logins: [] })
+      await get()
+      expect(checks).toBe(2)
+      const anonymous = await fetch(`http://127.0.0.1:${server.port}/logins`)
+      expect(anonymous.status).toBe(401)
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('runs a command in a pty, with input, and reports its exit', async () => {
     let exited = 0
     const server = startServer(() => exited++)
