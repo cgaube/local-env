@@ -376,8 +376,15 @@ const showAnswers = (answered: WantedInput[], saved: boolean) => {
 // Ansible finds a collection only at ansible_collections/<namespace>/<name>,
 // and a source has it at ansible/<folder>: links each collection of the
 // sources there, in this folder. Of two sources with the same collection, the
-// first one is linked. The folder, for ANSIBLE_COLLECTIONS_PATH.
+// first one is linked. local-env's own, local_env.core (the lookup of the
+// secrets), comes first: shipped in the binary, written to the home folder.
+// The folder, for ANSIBLE_COLLECTIONS_PATH.
 const linkCollections = (catalog: Role[], dir: string) => {
+  mkdirSync(join(dir, 'ansible_collections', 'local_env'), { recursive: true })
+  symlinkSync(
+    join(HOME_DIR, 'ansible', 'local_env', 'core'),
+    join(dir, 'ansible_collections', 'local_env', 'core'),
+  )
   for (const source of new Set(catalog.map((role) => role.source))) {
     const ansible = join(SOURCES_DIR, source, 'ansible')
     for (const { folder, name } of listCollections(ansible)) {
@@ -423,7 +430,7 @@ export const runPlaybook = async (
   const missing = checkInputs(inputs)
   // The accounts the roles read secrets from: logged in before the sudo
   // password, so a login that fails wastes no typing (logins/wanted.ts)
-  const logins = await prepareLogins(run)
+  const { logins, secrets } = await prepareLogins(run)
   const sudo = [
     ...run.filter((role) => role.needsSudo).map(({ label }) => label),
     ...galaxyRolesNeedingSudo(
@@ -454,8 +461,10 @@ export const runPlaybook = async (
   // variable of every role, the `vars:` of a dependency too
   const extraVars = {
     ...passedValues(inputs, values),
-    // How the roles reach their accounts: no secret in it
+    // How the roles reach their accounts and read their secrets: no secret
+    // in it, the lookup local_env.core.secret reads them during the run
     ...(Object.keys(logins).length > 0 ? { local_env_logins: logins } : {}),
+    ...(Object.keys(secrets).length > 0 ? { local_env_secrets: secrets } : {}),
   }
   const extraVarsFile = join(folder.path, 'extra-vars.json')
   if (Object.keys(extraVars).length > 0) {

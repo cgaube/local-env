@@ -49,6 +49,37 @@ describe('the aws login', () => {
     ).toBeNull()
   })
 
+  test('reads a secret as text, and a field of its JSON', () => {
+    const login = {
+      source: 'acme',
+      name: 'acme-dev',
+      identity: 'acme/acme-dev',
+      config: { sso: SSO },
+    }
+    const argv = [
+      'aws',
+      'secretsmanager',
+      'get-secret-value',
+      '--secret-id',
+      'billing/dev',
+      '--query',
+      'SecretString',
+      '--output',
+      'text',
+    ]
+
+    expect(
+      awsLogin.secretCommand(login, { login: 'acme-dev', ref: 'billing/dev' }),
+    ).toEqual({ argv, keys: [] })
+    expect(
+      awsLogin.secretCommand(login, {
+        login: 'acme-dev',
+        ref: 'billing/dev',
+        field: 'db',
+      }),
+    ).toEqual({ argv, keys: ['db'] })
+  })
+
   test('shares one sso-session for each Identity Center', () => {
     expect(ssoSessionName(SSO)).toBe(
       ssoSessionName({ ...SSO, accountId: '210987654321' }),
@@ -88,5 +119,24 @@ describe('the vault login', () => {
     ],
   ])('rejects %p', (entry, message) => {
     expect(() => vaultLogin.parse(entry)).toThrow(message)
+  })
+
+  test('reads a key of a KV entry, and needs it', () => {
+    const config = vaultLogin.parse({ type: 'vault', address: 'https://v.io' })
+    const login = { source: 'acme', name: 'data', identity: '', config }
+
+    expect(
+      vaultLogin.secretCommand(login, {
+        login: 'data',
+        ref: 'secret/billing',
+        field: 'password',
+      }),
+    ).toEqual({
+      argv: ['vault', 'kv', 'get', '-field=password', 'secret/billing'],
+      keys: [],
+    })
+    expect(() =>
+      vaultLogin.secretCommand(login, { login: 'data', ref: 'secret/billing' }),
+    ).toThrow('field is required for a Vault secret')
   })
 })

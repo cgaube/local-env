@@ -7,6 +7,7 @@
     "apps/web/index.html",
     "apps/web/vite.config.ts",
     "services/**",
+    "ansible/**",
     "compose.yaml",
     "bun.lock"
   ],

@@ -56,8 +56,11 @@ export type Role = GraphRole & {
   // The values it takes: meta/argument_specs.yml, entry point `main`
   inputs: RoleInput[]
   // The logins of the source manifests it needs (local-env.yml), as written:
-  // <login>, or <source>/<login>
+  // <login>, or <source>/<login>. For a role that runs the vendor's CLI.
   logins: string[]
+  // The secrets it reads (local-env.yml), by name, as written: the CLI checks
+  // each entry (apps/cli/src/logins/secrets.ts)
+  secrets: Record<string, unknown>
 }
 
 export type InstalledRole = {
@@ -123,14 +126,15 @@ const readYaml = (path: string): unknown => {
 // A login a role names: <login>, or <source>/<login>
 const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
 
-// What local-env.yml says: its label, its stacks as <source>/<folder> and
-// the logins it needs. A stack that names no folder (a path, not a string),
-// or a login that is not a name, is left out.
+// What local-env.yml says: its label, its stacks as <source>/<folder>, the
+// logins it needs and its secrets. A stack that names no folder (a path, not
+// a string), or a login that is not a name, is left out.
 const readSettings = (dir: string, source: string) => {
   const settings = readYaml(join(dir, ROLE_SETTINGS_FILE)) as {
     label?: unknown
     stacks?: unknown
     logins?: unknown
+    secrets?: unknown
   } | null
   const label =
     typeof settings?.label === 'string' && settings.label.trim()
@@ -138,8 +142,13 @@ const readSettings = (dir: string, source: string) => {
       : null
   const stacks = Array.isArray(settings?.stacks) ? settings.stacks : []
   const logins = Array.isArray(settings?.logins) ? settings.logins : []
+  const secrets = settings?.secrets
   return {
     label,
+    secrets:
+      typeof secrets === 'object' && secrets !== null && !Array.isArray(secrets)
+        ? (secrets as Record<string, unknown>)
+        : {},
     logins: [
       ...new Set(
         logins.filter(
@@ -442,6 +451,7 @@ const readRole = (
     ...readDependencyEntries(meta),
     stacks: settings.stacks,
     logins: settings.logins,
+    secrets: settings.secrets,
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
     // A collection of a source is linked, not installed: ansible-galaxy

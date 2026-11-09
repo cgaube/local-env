@@ -64,6 +64,7 @@ describe('listRoles', () => {
         galaxy: {},
         inputs: [],
         logins: [],
+        secrets: {},
       },
     ])
   })
@@ -79,6 +80,21 @@ describe('listRoles', () => {
       'acme-dev',
       'platform/data-vault',
     ])
+  })
+
+  test('keeps the secrets a role declares as written, for the CLI to check', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/github/local-env.yml',
+      'secrets:\n  token: { login: acme-dev, ref: github/dev }\n',
+    )
+    write('acme/ansible/node/local-env.yml', 'secrets: [token]\n')
+
+    const [github, node] = listRoles(sources)
+    expect(github?.secrets).toEqual({
+      token: { login: 'acme-dev', ref: 'github/dev' },
+    })
+    expect(node?.secrets).toEqual({})
   })
 
   test('reads the roles of a collection, named by its galaxy.yml', () => {

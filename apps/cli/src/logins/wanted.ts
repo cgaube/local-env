@@ -17,13 +17,16 @@ import {
   loginCommandFor,
   sessionStatus,
 } from '#cli/logins/session.js'
+import { parseSecretRefs, type SecretRef } from '#cli/logins/secrets.js'
 import type { DeclaredLogin, SessionLoginType } from '#cli/logins/types.js'
 
-// The logins that the roles of an install name (`logins:` of their
-// local-env.yml), made ready before the playbook: the CLI installed and
-// configured, the session checked, the login run with the terminal. Then
-// given to Ansible in the extra var local_env_logins, by the name the roles
-// use (docs/3-how-it-works/logins.md).
+// The logins that the roles of an install need, made ready before the
+// playbook: the CLI installed and configured, the session checked, the login
+// run with the terminal. A role needs a login when it reads a secret of it
+// (`secrets:` of its local-env.yml), or names it to run the CLI itself
+// (`logins:`). Then given to Ansible: local_env_secrets, how the lookup
+// local_env.core.secret reads each secret of each role, and local_env_logins,
+// the environment of each login the roles name (docs/3-how-it-works/logins.md).
 
 export type WantedLogin = {
   // As the roles name it: <login>, or <source>/<login>
@@ -33,6 +36,17 @@ export type WantedLogin = {
   // The labels of the roles that name it
   roles: string[]
 }
+
+export type WantedSecret = {
+  role: Role
+  name: string
+  secret: SecretRef
+  type: SessionLoginType<any>
+  login: DeclaredLogin<unknown>
+  command: { argv: string[]; keys: string[] }
+}
+
+type Found = { type: SessionLoginType<any>; login: DeclaredLogin<unknown> }
 
 const TYPES = [...SESSION_TYPES, registryLogin]
 
@@ -52,30 +66,45 @@ const findLogin = (role: Role, ref: string) => {
   return null
 }
 
-// The logins the roles name, once each. Throws an Error that lists every
-// login that is missing, a registry, or a clash of names.
-export const resolveRoleLogins = (roles: Role[]): WantedLogin[] => {
+// A login of an aws or vault type, or a problem
+const findSessionLogin = (
+  role: Role,
+  ref: string,
+  problems: string[],
+): Found | null => {
+  const found = findLogin(role, ref)
+  if (!found) {
+    problems.push(
+      `${role.label} needs the login ${ref}, which no source declares.`,
+    )
+    return null
+  }
+  if (found.type === registryLogin) {
+    problems.push(
+      `${role.label} names ${ref}, a registry login: a role can use aws and vault logins only.`,
+    )
+    return null
+  }
+  return found as Found
+}
+
+// The logins the roles name and the secrets they read. Throws an Error that
+// lists every problem: a login missing or of the wrong type, a secret that is
+// not valid, a clash of names.
+export const resolveRoleLogins = (
+  roles: Role[],
+): { logins: WantedLogin[]; secrets: WantedSecret[] } => {
   const byRef = new Map<string, WantedLogin>()
+  const secrets: WantedSecret[] = []
   const problems: string[] = []
+  const byName = new Map<string, Role>()
   for (const role of roles) {
     for (const ref of role.logins) {
-      const found = findLogin(role, ref)
-      if (!found) {
-        problems.push(
-          `${role.label} needs the login ${ref}, which no source declares.`,
-        )
-        continue
-      }
-      if (found.type === registryLogin) {
-        problems.push(
-          `${role.label} names ${ref}, a registry login: a role can name aws and vault logins only.`,
-        )
-        continue
-      }
-      const type = found.type as SessionLoginType<unknown>
+      const found = findSessionLogin(role, ref, problems)
+      if (!found) continue
       const existing = byRef.get(ref)
       if (!existing) {
-        byRef.set(ref, { ref, type, login: found.login, roles: [role.label] })
+        byRef.set(ref, { ref, ...found, roles: [role.label] })
         continue
       }
       // Extra vars are global: one name, one login for the whole run
@@ -87,13 +116,39 @@ export const resolveRoleLogins = (roles: Role[]): WantedLogin[] => {
       }
       if (!existing.roles.includes(role.label)) existing.roles.push(role.label)
     }
+
+    const declared = parseSecretRefs(role.secrets)
+    for (const problem of declared.problems) {
+      problems.push(`${role.label}: local-env.yml: ${problem}`)
+    }
+    if (Object.keys(declared.secrets).length === 0) continue
+    // The lookup finds a role's secrets by the role's name
+    const other = byName.get(role.name)
+    if (other && other.id !== role.id) {
+      problems.push(
+        `${other.label} (${other.source}) and ${role.label} (${role.source}) are both the role ${role.name}, and one reads secrets: rename one of them.`,
+      )
+      continue
+    }
+    byName.set(role.name, role)
+    for (const [name, secret] of Object.entries(declared.secrets)) {
+      const found = findSessionLogin(role, secret.login, problems)
+      if (!found) continue
+      try {
+        const command = found.type.secretCommand(found.login, secret)
+        secrets.push({ role, name, secret, ...found, command })
+      } catch (error) {
+        problems.push(
+          `${role.label}: local-env.yml: secrets.${name}.${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
   }
   if (problems.length > 0) throw new Error(problems.join('\n'))
-  return [...byRef.values()]
+  return { logins: [...byRef.values()], secrets }
 }
 
-const sessionKey = ({ type, login }: WantedLogin) =>
-  `${type.type}:${login.identity}`
+const sessionKey = ({ type, login }: Found) => `${type.type}:${login.identity}`
 
 // The CLIs of these types, installed with Homebrew when missing
 export const installClis = async (types: SessionLoginType<unknown>[]) => {
@@ -108,7 +163,7 @@ export const installClis = async (types: SessionLoginType<unknown>[]) => {
 }
 
 // Logged in to the account, or throws before anything runs
-const ensureSession = async (wanted: WantedLogin) => {
+const ensureSession = async (wanted: Found & { roles: string[] }) => {
   const { type, login, roles } = wanted
   const title = `${login.name} (${type.title(login.config)})`
   const status = await sessionStatus(type, login)
@@ -157,24 +212,63 @@ export const pruneUnusedLogins = () =>
     listSources().flatMap((source) => readSourceLogins(source, awsLogin)),
   )
 
-// Makes the logins of these roles ready, then gives local_env_logins: empty
-// when no role names a login
+// What a role's secret is, for the lookup: the command that prints it and
+// its environment, never the value. `title` and `hint` are for its errors.
+const secretSpec = ({ secret, type, login, command }: WantedSecret) => ({
+  title: `${secret.ref}${secret.field ? ` ${secret.field}` : ''}, ${login.name}`,
+  argv: command.argv,
+  keys: command.keys,
+  env: type.env(login),
+  hint: `If your session ended: ${loginCommandFor(login.source, login.name)}`,
+})
+
+// Makes the logins of these roles ready, then gives what Ansible gets:
+// local_env_logins and local_env_secrets, each empty when no role needs one
 export const prepareLogins = async (roles: Role[]) => {
-  const wanted = resolveRoleLogins(roles)
+  const { logins, secrets } = resolveRoleLogins(roles)
   pruneUnusedLogins()
-  if (wanted.length === 0) return {}
+  if (logins.length === 0 && secrets.length === 0) {
+    return { logins: {}, secrets: {} }
+  }
 
   logger.group('Logins')
-  await installClis(wanted.map(({ type }) => type))
-  const sessions = new Map(wanted.map((login) => [sessionKey(login), login]))
-  for (const login of sessions.values()) {
-    login.type.configure?.(login.login)
-    await ensureSession(login)
+  // Each account once, with the roles that need it
+  const sessions = new Map<string, Found & { roles: string[] }>()
+  for (const { type, login, roles: names } of logins) {
+    const key = sessionKey({ type, login })
+    const session = sessions.get(key) ?? { type, login, roles: [] }
+    session.roles.push(...names.filter((name) => !session.roles.includes(name)))
+    sessions.set(key, session)
   }
-  return Object.fromEntries(
-    wanted.map(({ ref, type, login }) => [
-      ref,
-      { type: type.type, ...type.facts(login), env: type.env(login) },
-    ]),
-  )
+  for (const { type, login, role } of secrets) {
+    const key = sessionKey({ type, login })
+    const session = sessions.get(key) ?? { type, login, roles: [] }
+    if (!session.roles.includes(role.label)) session.roles.push(role.label)
+    sessions.set(key, session)
+  }
+  await installClis([...sessions.values()].map(({ type }) => type))
+  for (const session of sessions.values()) {
+    session.type.configure?.(session.login)
+    await ensureSession(session)
+  }
+
+  const byRole: Record<
+    string,
+    Record<string, ReturnType<typeof secretSpec>>
+  > = {}
+  for (const wanted of secrets) {
+    byRole[wanted.role.name] = {
+      ...byRole[wanted.role.name],
+      [wanted.name]: secretSpec(wanted),
+    }
+  }
+  return {
+    logins: Object.fromEntries(
+      logins.map(({ ref, type, login }) => [
+        ref,
+        { type: type.type, ...type.facts(login), env: type.env(login) },
+      ]),
+    ),
+    secrets: byRole,
+  }
 }

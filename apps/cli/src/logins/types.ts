@@ -1,3 +1,5 @@
+import type { SecretRef } from '#cli/logins/secrets.js'
+
 // A kind of account that a source can need the user to be signed in to,
 // declared in the `logins` of its manifest with a `type`
 // (docs/3-how-it-works/logins.md). Each type checks its own fields; the
@@ -53,6 +55,15 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   help: (config: Config) => string | undefined
   // What a role gets in local_env_logins.<name>, beside `env`
   facts: (login: DeclaredLogin<Config>) => Record<string, string>
+  // The command that prints one secret, run with `env`, and the keys to
+  // take from its JSON output (none: the output as it is). Data, so that
+  // whatever reads the secret runs the same command: the lookup of the roles
+  // (ansible/local_env/core), and local-env for the stacks. Throws an Error
+  // that names the field when the reference does not fit the type.
+  secretCommand: (
+    login: DeclaredLogin<Config>,
+    secret: SecretRef,
+  ) => { argv: string[]; keys: string[] }
 }
 
 // Text that a manifest entry may give, trimmed; undefined when empty

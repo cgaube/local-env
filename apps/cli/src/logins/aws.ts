@@ -221,6 +221,21 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
       ? ['aws', 'sso', 'logout', '--profile', awsProfile(login)]
       : null,
   help: ({ help }) => help,
+  // The secret's text (SecretString); a field is a key of its JSON
+  secretCommand: (_login, { ref, field }) => ({
+    argv: [
+      'aws',
+      'secretsmanager',
+      'get-secret-value',
+      '--secret-id',
+      ref,
+      '--query',
+      'SecretString',
+      '--output',
+      'text',
+    ],
+    keys: field ? [field] : [],
+  }),
   facts: (login) => ({
     profile: awsProfile(login),
     ...(login.config.region || login.config.sso

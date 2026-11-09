@@ -47,12 +47,12 @@ const createLoginsCli = async () => {
 }
 
 // A source whose manifest declares these logins, with a role for each list
-// of names it needs (picked)
+// of names it needs, or for each local-env.yml as written
 const addSource = async (
   cli: Cli,
   name: string,
   logins: Record<string, unknown>,
-  roles: Record<string, string[]>,
+  roles: Record<string, string[] | string>,
 ) => {
   const repo = cli.createSource(name, { roles: Object.keys(roles) })
   repo.commit({
@@ -60,7 +60,7 @@ const addSource = async (
     ...Object.fromEntries(
       Object.entries(roles).map(([role, names]) => [
         `ansible/${role}/local-env.yml`,
-        `logins: [${names.join(', ')}]\n`,
+        typeof names === 'string' ? names : `logins: [${names.join(', ')}]\n`,
       ]),
     ),
   })
@@ -138,6 +138,109 @@ describe.concurrent('local-env install, logins', () => {
         },
       },
     })
+  })
+
+  test('gives the lookup how to read each secret of a role, never the value', async () => {
+    await using cli = await createLoginsCli()
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
+    cli.bin.on('vault', ['token', 'lookup'], {
+      stdout: JSON.stringify({ data: { display_name: 'oidc-octocat' } }),
+    })
+    await addSource(
+      cli,
+      'acme',
+      { 'acme-dev': AWS_DEV, data: VAULT_DATA },
+      {
+        billing: [
+          'secrets:',
+          '  stripe_key: { login: acme-dev, ref: billing/dev, field: stripe_key }',
+          '  db_password: { login: data, ref: secret/billing, field: password }',
+          '',
+        ].join('\n'),
+      },
+    )
+    cli.home.seedPickedTools(['acme/billing'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
+    // Only the secrets: no local_env_logins without `logins:`
+    expect(extraVars(cli)).toEqual({
+      local_env_secrets: {
+        billing: {
+          stripe_key: {
+            title: 'billing/dev stripe_key, acme-dev',
+            argv: [
+              'aws',
+              'secretsmanager',
+              'get-secret-value',
+              '--secret-id',
+              'billing/dev',
+              '--query',
+              'SecretString',
+              '--output',
+              'text',
+            ],
+            keys: ['stripe_key'],
+            env: { AWS_PROFILE: PROFILE, AWS_REGION: 'eu-west-1' },
+            hint: 'If your session ended: local-env sources login acme --login acme-dev',
+          },
+          db_password: {
+            title: 'secret/billing password, data',
+            argv: ['vault', 'kv', 'get', '-field=password', 'secret/billing'],
+            keys: [],
+            env: {
+              VAULT_ADDR: 'https://vault.acme.test',
+              VAULT_NAMESPACE: 'dev',
+            },
+            hint: 'If your session ended: local-env sources login acme --login data',
+          },
+        },
+      },
+    })
+    // The collection of the lookup: written with the core stack, linked
+    // into the run
+    expect(
+      cli.home.exists('ansible/local_env/core/plugins/lookup/secret.py'),
+    ).toBe(true)
+    expect(cli.bin.calls('ansible-playbook').at(-1)?.collections).toEqual({
+      'local_env.core': cli.home.path('ansible/local_env/core'),
+    })
+  })
+
+  test('stops before anything runs on a secret that is not valid', async () => {
+    await using cli = await createLoginsCli()
+    await addSource(
+      cli,
+      'acme',
+      { data: VAULT_DATA },
+      {
+        billing: [
+          'secrets:',
+          '  db_password: { login: data, ref: secret/billing }',
+          '  2fa: { login: data, ref: x, field: y }',
+          '  token: { login: missing, ref: x }',
+          '  key: { ref: x }',
+          '',
+        ].join('\n'),
+      },
+    )
+    cli.home.seedPickedTools(['acme/billing'])
+
+    const result = await cli.run(['install'], { env: NO_TTY })
+
+    expect(result.exitCode).toBe(1)
+    for (const problem of [
+      'Billing: local-env.yml: secrets.2fa: a secret name is letters, digits and _, not first a digit',
+      'Billing: local-env.yml: secrets.key.login is required',
+      'Billing needs the login missing, which no source declares.',
+      'Billing: local-env.yml: secrets.db_password.field is required for a Vault secret: the key of the KV entry',
+    ]) {
+      expect(result.output).toContain(problem)
+    }
+    expect(cli.bin.calls('vault')).toEqual([])
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 
   test('stops before Ansible when not logged in, without a terminal', async () => {
@@ -256,7 +359,7 @@ describe.concurrent('local-env install, logins', () => {
       'Github needs the login nope, which no source declares.',
     )
     expect(result.output).toContain(
-      'Github names ghcr, a registry login: a role can name aws and vault logins only.',
+      'Github names ghcr, a registry login: a role can use aws and vault logins only.',
     )
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
@@ -334,30 +437,34 @@ describe.concurrent('local-env sources remove, logins', () => {
 })
 
 describe.concurrent('local-env sources login, aws and vault', () => {
-  test('logs in to the login it names, with its CLI', async () => {
-    await using cli = await createLoginsCli()
-    const session = join(cli.root, 'session')
-    cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
-    cli.bin.on('aws', ['sts', 'get-caller-identity'], {
-      ...LOGGED_IN,
-      ifFile: session,
-    })
-    cli.bin.on('aws', ['sso', 'login'], { touch: session })
-    await addSource(cli, 'acme', { 'acme-dev': AWS_DEV }, {})
+  // A terminal: the fake prompts give one, not the compiled binary
+  test.skipIf(COMPILED)(
+    'logs in to the login it names, with its CLI',
+    async () => {
+      await using cli = await createLoginsCli()
+      const session = join(cli.root, 'session')
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+        ...LOGGED_IN,
+        ifFile: session,
+      })
+      cli.bin.on('aws', ['sso', 'login'], { touch: session })
+      await addSource(cli, 'acme', { 'acme-dev': AWS_DEV }, {})
 
-    const result = await cli.run([
-      'sources',
-      'login',
-      'acme',
-      '--login',
-      'acme-dev',
-    ])
+      const result = await cli.run([
+        'sources',
+        'login',
+        'acme',
+        '--login',
+        'acme-dev',
+      ])
 
-    expect(result.exitCode).toBe(0)
-    expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
-    // Configured first: the profile must exist for `aws sso login`
-    expect(awsConfig(cli)).toContain(`[profile ${PROFILE}]`)
-  })
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
+      // Configured first: the profile must exist for `aws sso login`
+      expect(awsConfig(cli)).toContain(`[profile ${PROFILE}]`)
+    },
+  )
 
   test('needs your own terminal', async () => {
     await using cli = await createLoginsCli()
