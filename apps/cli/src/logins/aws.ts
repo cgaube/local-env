@@ -212,6 +212,7 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
       return 'logged in'
     }
   },
+  loginHint: () => 'the AWS CLI opens your browser to log in',
   loginCommand: (login) =>
     login.config.sso
       ? ['aws', 'sso', 'login', '--profile', awsProfile(login)]

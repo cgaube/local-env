@@ -86,6 +86,17 @@ export const uiCommand = new Command('ui')
 
     logger.step('logger.step: a step of its own that went well')
 
+    logger.group('Another program takes the terminal (session.ts: a login)')
+    logger.handOver(
+      'logger.handOver: acme-dev: the AWS CLI opens your browser to log in',
+      'aws sso login --profile local-env-acme-acme-dev',
+    )
+    process.stdout.write('(the vendor CLI writes here, outside the frame)\n')
+    logger.takeBack()
+    logger.success(
+      'logger.takeBack, then: acme-dev (AWS 123456789012 (Dev)): logged in as …',
+    )
+
     logger.group('Task lines (playbook-output.ts, galaxy-collections.ts)')
     logger.info('A group per role, its label as the title:')
     await renderPlaybook(

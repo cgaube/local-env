@@ -3,6 +3,7 @@ import { execa } from 'execa'
 import { styleText } from 'node:util'
 import { hasCommand } from '#cli/utils/brew.js'
 import { canAsk } from '#cli/utils/prompt.js'
+import { logger } from '#cli/utils/logger.js'
 import type {
   DeclaredLogin,
   LoginStatus,
@@ -114,6 +115,8 @@ const runWithTerminal = async (
 }
 
 // True once the CLI logged in. Throws when local-env cannot log in to it.
+// Says what the CLI does before it takes the terminal: its own lines (a
+// prompt, a URL and a code) are outside local-env's frame.
 export const logInToSession = async <Config>(
   type: SessionLoginType<Config>,
   login: DeclaredLogin<Config>,
@@ -125,16 +128,28 @@ export const logInToSession = async <Config>(
       `local-env cannot log in to ${type.title(login.config)} for you: it is your own profile.${help ? ` ${help}` : ''}`,
     )
   }
-  return runWithTerminal(command, type.env(login))
+  logger.handOver(`${login.name}: ${type.loginHint(login)}`, command.join(' '))
+  const done = await runWithTerminal(command, type.env(login))
+  logger.takeBack()
+  return done
 }
 
+// Asks nothing: its output is kept, and local-env says how it went, in its
+// frame. False when it failed, or local-env cannot log out of it.
 export const logOutOfSession = async <Config>(
   type: SessionLoginType<Config>,
   login: DeclaredLogin<Config>,
 ) => {
   const command = type.logoutCommand(login)
   if (!command) return false
-  return runWithTerminal(command, type.env(login))
+  const [binary, ...args] = command
+  const { exitCode } = await execa(binary!, args, {
+    env: type.env(login),
+    reject: false,
+    stdin: 'ignore',
+    timeout: 60_000,
+  })
+  return exitCode === 0
 }
 
 export const loginCommandFor = (source: string, name: string) =>

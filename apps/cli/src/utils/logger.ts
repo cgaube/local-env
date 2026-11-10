@@ -1,4 +1,12 @@
-import { cancel, log, note, outro } from '@clack/prompts'
+import {
+  cancel,
+  log,
+  note,
+  outro,
+  S_BAR,
+  S_BAR_END,
+  S_STEP_ACTIVE,
+} from '@clack/prompts'
 import { styleText } from 'node:util'
 import {
   type CalloutLevel,
@@ -87,6 +95,25 @@ export const logger = {
       ),
     ),
   log: (message: string) => line(message),
+  // Before another program takes the terminal (a vendor's login): what it
+  // does and its command, then the frame closes, so that its own lines read
+  // as outside it. takeBack() opens it again.
+  handOver: (title: string, command: string) => {
+    process.stdout.write(
+      [
+        styleText('gray', S_BAR),
+        `${styleText('cyan', S_STEP_ACTIVE)}  ${title}`,
+        `${styleText('gray', S_BAR)}  ${styleText('dim', command)}`,
+        styleText('gray', S_BAR_END),
+        '',
+      ].join('\n'),
+    )
+    gapBefore = false
+  },
+  takeBack: () => {
+    process.stdout.write(`${styleText('gray', S_BAR)}\n`)
+    gapBefore = false
+  },
   // A dim footer, set apart from the lines above
   hint: (message: string) => log.message(styleText('dim', message)),
   // The first line is the title
