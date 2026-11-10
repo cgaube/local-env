@@ -14,8 +14,9 @@ export function OverviewPage() {
         description="How your local environment is doing, at a glance"
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* Both as tall as the taller one: no gap beside Health */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="flex lg:col-span-2">
           <AttentionCard />
         </div>
         <HealthCard />

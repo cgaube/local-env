@@ -4,7 +4,7 @@ import type {
 } from '#services/dashboard/agent-protocol.ts'
 import type { AgentState, Service } from '#ui/features/live-data/live-data.ts'
 import type { WantedInput } from '#services/dashboard/role-graph.ts'
-import { kindLabel, stateLabel } from '#ui/features/logins/logins.ts'
+import { accountLabel, stateLabel } from '#ui/features/logins/logins.ts'
 import { tone } from '#ui/features/status/tone.ts'
 import { plural } from '#ui/lib/plural.ts'
 
@@ -33,7 +33,7 @@ const loginItem = (login: LoginRow): AttentionItem => ({
   id: `login:${login.type}:${login.title}`,
   title: `${login.name}: ${stateLabel(login.state).toLowerCase()}`,
   detail: [
-    `${kindLabel(login.type)} · ${login.title}, for ${login.sources.join(', ')}`,
+    `${accountLabel(login)}, for ${login.sources.join(', ')}`,
     login.state === 'unknown' ? login.detail : null,
     login.help,
   ]

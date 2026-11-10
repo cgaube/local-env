@@ -37,6 +37,14 @@ const KINDS: Record<string, string> = {
 
 export const kindLabel = (type: string) => KINDS[type] ?? type
 
+// The account of a login, as people read it: "Registry · ghcr.io". The titles
+// of AWS and Vault name their vendor already: "AWS 123456789012 (Dev)".
+export const accountLabel = ({
+  type,
+  title,
+}: Pick<LoginRow, 'type' | 'title'>) =>
+  type === 'registry' ? `${kindLabel(type)} · ${title}` : title
+
 // "2 logins, 1 needs you"
 export const loginsSummary = (logins: LoginRow[]) => {
   const waiting = logins.filter(({ state }) => state !== 'logged-in').length

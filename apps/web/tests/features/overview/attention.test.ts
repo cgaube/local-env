@@ -92,7 +92,7 @@ describe('attentionItems', () => {
         id: 'login:vault:Vault vault.acme.test',
         title: 'data: logged out',
         detail:
-          'Vault · Vault vault.acme.test, for acme. Ask #data for the developer role',
+          'Vault vault.acme.test, for acme. Ask #data for the developer role',
         action: {
           kind: 'command',
           command: 'local-env sources login acme --login data',

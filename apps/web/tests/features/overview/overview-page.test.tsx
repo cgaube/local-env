@@ -39,6 +39,15 @@ describe('the overview', () => {
     expect(
       screen.getByText('Your services run, and nothing waits for you'),
     ).toBeInTheDocument()
+    // What it checked, in the space of the list
+    for (const line of [
+      '1 core service running',
+      'Dashboard agent 0.6.1',
+      'No source needs a login',
+      'Your tools are up to date',
+    ]) {
+      expect(screen.getByText(line)).toBeInTheDocument()
+    }
   })
 
   test('lists what needs you first, each with what to do', async () => {
@@ -155,12 +164,9 @@ describe('the logins in Sources', () => {
 
     expect(screen.getByText(/2 logins, 1 needs you/)).toBeInTheDocument()
     const source = screen.getByRole('listitem', { name: 'acme' })
-    expect(within(source).getByText('Logins')).toBeInTheDocument()
     expect(within(source).getByText('Logged in')).toBeInTheDocument()
     expect(within(source).getByText('Logged out')).toBeInTheDocument()
-    expect(
-      within(source).getByText('Vault · Vault vault.dev.test'),
-    ).toBeInTheDocument()
+    expect(within(source).getByText('Vault vault.dev.test')).toBeInTheDocument()
   })
 
   test('says to start the agent, which checks them', async () => {
@@ -171,7 +177,7 @@ describe('the logins in Sources', () => {
     expect(
       screen.getByText(/Start the dashboard agent to check the logins/),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Logins')).not.toBeInTheDocument()
+    expect(screen.queryByText('Logged in')).not.toBeInTheDocument()
   })
 
   test('checks them again on demand', async () => {

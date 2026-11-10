@@ -29,7 +29,7 @@ describe('Sources on the overview', () => {
     const source = screen.getByRole('listitem', { name: 'Acme Platform' })
     expect(
       within(source).getByText(
-        'acme-platform · https://github.com/acme/local-env-templates',
+        'acme-platform · github.com/acme/local-env-templates',
       ),
     ).toBeInTheDocument()
   })

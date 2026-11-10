@@ -1,4 +1,3 @@
-import { Separator } from '#ui/components/ui/separator'
 import type { LoginRow } from '#services/dashboard/agent-protocol.ts'
 import type { Source } from '#ui/features/live-data/live-data.ts'
 import { LoginState } from '#ui/features/logins/login-state'
@@ -13,7 +12,11 @@ const contentOf = ({ docker, ansible }: Source) =>
     .filter(Boolean)
     .join(' · ') || 'Nothing to install yet'
 
-// The sources, one block each: what it is and offers, then the accounts it
+// Where it comes from, shorter: github.com/acme/templates
+const originOf = (origin: string | null) =>
+  origin?.replace(/^https?:\/\//, '').replace(/\.git$/, '') ?? null
+
+// The sources, a panel each: what it is and offers, then the accounts it
 // needs, as the dashboard agent checked them (logins: null when it could
 // not, not running or still checking)
 export function SourcesTable({
@@ -24,8 +27,8 @@ export function SourcesTable({
   logins: LoginRow[] | null
 }) {
   return (
-    <ul className="flex flex-col">
-      {sources.map((source, index) => {
+    <ul className="flex flex-col gap-3">
+      {sources.map((source) => {
         const own = logins?.filter(({ sources: of }) =>
           of.includes(source.name),
         )
@@ -33,16 +36,15 @@ export function SourcesTable({
           <li
             key={source.name}
             aria-label={source.label ?? source.name}
-            className="flex flex-col gap-3"
+            className="border-border flex flex-col gap-3 rounded-lg border p-4"
           >
-            {index > 0 ? <Separator className="mb-1" /> : null}
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="font-medium">
                   {source.label ?? source.name}
                 </span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {[source.label ? source.name : null, source.origin]
+                  {[source.label ? source.name : null, originOf(source.origin)]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
@@ -52,10 +54,7 @@ export function SourcesTable({
               </span>
             </div>
             {own?.length ? (
-              <div className="bg-muted/50 flex flex-col gap-3 rounded-md p-3">
-                <span className="text-muted-foreground text-xs font-medium">
-                  {own.length === 1 ? 'Login' : 'Logins'}
-                </span>
+              <div className="border-border flex flex-col gap-2 border-t pt-3">
                 {own.map((login) => (
                   <LoginState
                     key={`${login.type}:${login.title}:${login.name}`}
