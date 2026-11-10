@@ -3,11 +3,12 @@
 // spawns it, detached, beside the core services; `stop` and `reset` end it.
 // Nothing restarts it, like the core services: after a reboot, `start` brings
 // both back. docs/3-how-it-works/dashboard-terminal.md explains why.
-//   volumes/agent/agent.json -> { pid, port, version } of the running agent
+//   volumes/agent/agent.json -> { pid, port, version, build } of the running
+//                               agent
 //   volumes/agent/token      -> what the dashboard sends it (mounted there)
 //   volumes/agent/agent.log  -> its output
 import { spawn } from 'node:child_process'
-import { existsSync, openSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, openSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import packageJson from '#package.json' with { type: 'json' }
 import type { AgentStatus } from '#services/dashboard/agent-protocol.js'
@@ -24,7 +25,13 @@ const DEFAULT_PORT = 17081
 export const agentPort = () =>
   Number(process.env.LOCAL_ENV_AGENT_PORT ?? DEFAULT_PORT)
 
-export type AgentInfo = { pid: number; port: number; version: string }
+export type AgentInfo = {
+  pid: number
+  port: number
+  version: string
+  // Which program it runs (agentBuild): absent for an agent older than this
+  build?: string
+}
 
 // <prefix>/Cellar/local-env/<version>/bin/local-env
 const HOMEBREW_CELLAR = /\/Cellar\/local-env\/[^/]+\/bin\/local-env$/
@@ -43,6 +50,17 @@ export const selfArgv = () => {
       ? path.replace(HOMEBREW_CELLAR, '/bin/local-env')
       : path,
   ]
+}
+
+// Which program this is: the command that runs local-env, and for a binary,
+// the size and the time of its file. The version alone is not enough: a
+// checkout and Homebrew have the same one until a release, and a binary built
+// again keeps it.
+export const agentBuild = () => {
+  const command = selfArgv().join(' ')
+  if (!IS_COMPILED) return command
+  const { size, mtimeMs } = statSync(process.execPath)
+  return `${command} ${size}:${Math.round(mtimeMs)}`
 }
 
 export const readAgentInfo = (): AgentInfo | null => {
@@ -133,13 +151,14 @@ export type EnsureResult =
   // An older agent busy with a run: replaced by the next `start`
   | { state: 'busy'; version: string }
 
-// The agent of this version on the configured port, running
+// The agent of this program (agentBuild) on the configured port, running
 export const ensureAgent = async (): Promise<EnsureResult> => {
   const info = readAgentInfo()
   const status = info && isAlive(info.pid) ? await fetchAgentStatus(info) : null
   if (
     status &&
     status.version === packageJson.version &&
+    info!.build === agentBuild() &&
     info!.port === agentPort()
   ) {
     return { state: 'running' }

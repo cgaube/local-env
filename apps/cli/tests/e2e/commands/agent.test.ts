@@ -30,6 +30,7 @@ const agentInfo = (cli: Cli) =>
     pid: number
     port: number
     version: string
+    build?: string
   }
 
 const agentStatus = (cli: Cli, token?: string) =>
@@ -137,6 +138,28 @@ describe.concurrent('local-env agent', () => {
 
     expect(result.output).toContain('Dashboard agent running')
     expect(agentInfo(cli).pid).toBe(pid)
+  })
+
+  test.each([
+    // A binary built again, or another binary of the same version (a
+    // checkout and Homebrew)
+    ['of another program', { build: 'another local-env 1:2' }],
+    // Started by a local-env older than the build in agent.json
+    ['that names no program', { build: undefined }],
+  ])('replaces a running agent %s on the next `start`', async (_, change) => {
+    await using cli = await startedCli()
+    await cli.run(['start'])
+    const before = agentInfo(cli)
+    expect(before.build).toBeTruthy()
+    cli.home.writeJson('volumes/agent/agent.json', { ...before, ...change })
+
+    const result = await cli.run(['start'])
+
+    expect(result.output).toContain('Dashboard agent restarted')
+    const after = agentInfo(cli)
+    expect(after.pid).not.toBe(before.pid)
+    expect(isAlive(before.pid)).toBe(false)
+    expect(after.build).toBe(before.build)
   })
 
   test('is listed by `status`', async () => {

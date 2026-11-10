@@ -9,6 +9,7 @@ import {
   AGENT_DIR,
   AGENT_INFO,
   AGENT_TOKEN,
+  agentBuild,
   agentPort,
   readAgentInfo,
   selfArgv,
@@ -75,6 +76,7 @@ export const agentCommand = new Command('agent')
         pid: process.pid,
         port: server.port,
         version: packageJson.version,
+        build: agentBuild(),
       }),
     )
     log(`local-env ${packageJson.version} agent on 127.0.0.1:${server.port}`)
