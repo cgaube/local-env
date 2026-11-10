@@ -66,6 +66,8 @@ const runLookup = (
           ANSIBLE_LOCALHOST_WARNING: 'false',
           ANSIBLE_PYTHON_INTERPRETER: 'auto_silent',
           ANSIBLE_NOCOLOR: '1',
+          // No __pycache__ beside the plugin, in the repo
+          PYTHONDONTWRITEBYTECODE: '1',
           FAKE_CLI: cli,
         },
       },
@@ -89,8 +91,8 @@ const spec = (env: Record<string, string>, keys: string[] = []) => ({
 
 describe.skipIf(!HAS_ANSIBLE)('the lookup local_env.core.secret', () => {
   test('runs the command with its environment, and takes the field', () => {
-    const { output, status } = runLookup(SHOW('stripe_key'), {
-      stripe_key: spec(
+    const { output, status } = runLookup(SHOW('STRIPE_KEY'), {
+      STRIPE_KEY: spec(
         { SECRET: JSON.stringify({ stripe_key: 'sk_{{ x }}', db: 'pw' }) },
         ['stripe_key'],
       ),
@@ -102,43 +104,43 @@ describe.skipIf(!HAS_ANSIBLE)('the lookup local_env.core.secret', () => {
   })
 
   test('gives the whole text without a field', () => {
-    const { output } = runLookup(SHOW('token'), {
-      token: spec({ SECRET: 'ghp_123' }),
+    const { output } = runLookup(SHOW('TOKEN'), {
+      TOKEN: spec({ SECRET: 'ghp_123' }),
     })
 
     expect(output).toContain('"msg": "value=ghp_123"')
   })
 
   test('fails with the error of the CLI and how to log in', () => {
-    const { output, status } = runLookup(SHOW('token'), {
-      token: spec({ FAIL: 'Error loading SSO Token: Token for acme expired' }),
+    const { output, status } = runLookup(SHOW('TOKEN'), {
+      TOKEN: spec({ FAIL: 'Error loading SSO Token: Token for acme expired' }),
     })
 
     expect(status).not.toBe(0)
     expect(output).toContain(
-      'acme.dev.billing: the secret token (billing/dev, acme-dev) could not be read: Error loading SSO Token: Token for acme expired',
+      'acme.dev.billing: the secret TOKEN (billing/dev, acme-dev) could not be read: Error loading SSO Token: Token for acme expired',
     )
     expect(output).toContain('local-env sources login acme --login acme-dev')
   })
 
   test('names the secrets the role declares, for an unknown one', () => {
-    const { output, status } = runLookup(SHOW('nope'), {
-      token: spec({ SECRET: 'x' }),
+    const { output, status } = runLookup(SHOW('NOPE'), {
+      TOKEN: spec({ SECRET: 'x' }),
     })
 
     expect(status).not.toBe(0)
     expect(output).toContain(
-      'acme.dev.billing declares no secret named nope in the secrets: of its local-env.yml (it declares: token)',
+      'acme.dev.billing declares no secret named NOPE in the secrets: of its local-env.yml (it declares: TOKEN)',
     )
   })
 
   test('says when the field is missing', () => {
-    const { output } = runLookup(SHOW('stripe_key'), {
-      stripe_key: spec({ SECRET: '{"other": 1}' }, ['stripe_key']),
+    const { output } = runLookup(SHOW('STRIPE_KEY'), {
+      STRIPE_KEY: spec({ SECRET: '{"other": 1}' }, ['stripe_key']),
     })
 
     expect(output).toContain(
-      'the secret stripe_key (billing/dev, acme-dev) has no field stripe_key',
+      'the secret STRIPE_KEY (billing/dev, acme-dev) has no field stripe_key',
     )
   })
 })

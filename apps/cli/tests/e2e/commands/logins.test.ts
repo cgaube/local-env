@@ -153,8 +153,8 @@ describe.concurrent('local-env install, logins', () => {
       {
         billing: [
           'secrets:',
-          '  stripe_key: { login: acme-dev, ref: billing/dev, field: stripe_key }',
-          '  db_password: { login: data, ref: secret/billing, field: password }',
+          '  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }',
+          '  DB_PASSWORD: { login: data, ref: secret/billing, field: password }',
           '',
         ].join('\n'),
       },
@@ -169,7 +169,7 @@ describe.concurrent('local-env install, logins', () => {
     expect(extraVars(cli)).toEqual({
       local_env_secrets: {
         billing: {
-          stripe_key: {
+          STRIPE_KEY: {
             title: 'billing/dev stripe_key, acme-dev',
             argv: [
               'aws',
@@ -186,7 +186,7 @@ describe.concurrent('local-env install, logins', () => {
             env: { AWS_PROFILE: PROFILE, AWS_REGION: 'eu-west-1' },
             hint: 'If your session ended: local-env sources login acme --login acme-dev',
           },
-          db_password: {
+          DB_PASSWORD: {
             title: 'secret/billing password, data',
             argv: ['vault', 'kv', 'get', '-field=password', 'secret/billing'],
             keys: [],
@@ -218,10 +218,10 @@ describe.concurrent('local-env install, logins', () => {
       {
         billing: [
           'secrets:',
-          '  db_password: { login: data, ref: secret/billing }',
-          '  2fa: { login: data, ref: x, field: y }',
-          '  token: { login: missing, ref: x }',
-          '  key: { ref: x }',
+          '  DB_PASSWORD: { login: data, ref: secret/billing }',
+          '  db_token: { login: data, ref: x, field: y }',
+          '  TOKEN: { login: missing, ref: x }',
+          '  KEY: { ref: x }',
           '',
         ].join('\n'),
       },
@@ -232,10 +232,10 @@ describe.concurrent('local-env install, logins', () => {
 
     expect(result.exitCode).toBe(1)
     for (const problem of [
-      'Billing: local-env.yml: secrets.2fa: a secret name is letters, digits and _, not first a digit',
-      'Billing: local-env.yml: secrets.key.login is required',
+      'Billing: local-env.yml: secrets.db_token: a secret name is uppercase letters, digits and _, like an environment variable (STRIPE_KEY)',
+      'Billing: local-env.yml: secrets.KEY.login is required',
       'Billing needs the login missing, which no source declares.',
-      'Billing: local-env.yml: secrets.db_password.field is required for a Vault secret: the key of the KV entry',
+      'Billing: local-env.yml: secrets.DB_PASSWORD.field is required for a Vault secret: the key of the KV entry',
     ]) {
       expect(result.output).toContain(problem)
     }

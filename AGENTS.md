@@ -272,14 +272,15 @@ holds what we build:
   CLI as data (`types.ts`; `aws.ts`, `vault.ts`), and `session.ts` runs it: the
   status, and the login and logout with the terminal handed over. A role
   declares the secrets it reads in its `local-env.yml`
-  (`secrets: { github_token: { login, ref, field } }`; `src/logins/secrets.ts`
-  reads these references, which Docker stacks will share), and a task reads one
-  with `lookup('local_env.core.secret', 'github_token')`. A role that runs the
-  CLI itself names the login (`logins: [acme-dev]` or `[<source>/acme-dev]`).
-  Before the sudo password, `install` resolves both (`src/logins/wanted.ts`: own
-  source first, then any source; a missing login, a registry, a secret that is
-  not valid or one name for two logins stops it), installs the CLI with
-  Homebrew, writes `~/.aws/config` (`[profile local-env-<source>-<login>]`, an
+  (`secrets: { GITHUB_TOKEN: { login, ref, field } }`: env-var names, as in
+  stacks; `src/logins/secrets.ts` reads these references, which Docker stacks
+  will share), and a task reads one with
+  `lookup('local_env.core.secret', 'GITHUB_TOKEN')`. A role that runs the CLI
+  itself names the login (`logins: [acme-dev]` or `[<source>/acme-dev]`). Before
+  the sudo password, `install` resolves both (`src/logins/wanted.ts`: own source
+  first, then any source; a missing login, a registry, a secret that is not
+  valid or one name for two logins stops it), installs the CLI with Homebrew,
+  writes `~/.aws/config` (`[profile local-env-<source>-<login>]`, an
   `sso-session` for each start URL; never a section it did not write, which
   `volumes/logins.json` records) and checks the session. Logged out, it offers
   to log in, except without a terminal or from the dashboard: the agent sets

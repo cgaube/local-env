@@ -13,6 +13,9 @@ node_modules/
 # Built by `bun run compile` from apps/web
 /services/dashboard/public/
 
+# Python's cache, from running the lookup of ansible/local_env/core
+__pycache__/
+
 # Built by `bun run docs:build`, and its cache
 /docs/.vitepress/dist/
 /docs/.vitepress/cache/

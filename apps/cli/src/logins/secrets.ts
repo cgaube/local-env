@@ -2,7 +2,7 @@ import { isRecord, optionalText, requiredText } from '#cli/logins/types.js'
 
 // A secret that a role reads (the `secrets:` of its local-env.yml), and,
 // later, that a Docker stack gets: a name, and where the value is.
-//   stripe_key:
+//   STRIPE_KEY:
 //     login: acme-dev        # a login of a source manifest, or <source>/<login>
 //     ref: billing/dev       # the secret in that vault: an AWS secret id, a
 //                            # Vault KV path
@@ -18,9 +18,10 @@ export type SecretRef = {
   field?: string
 }
 
-// A name that is also an environment variable: STRIPE_KEY, stripe_key
+// One way to name a secret, in a role and in a stack: an environment
+// variable, which compose reads as ${STRIPE_KEY}
 export const isValidSecretName = (name: string) =>
-  /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+  /^[A-Z][A-Z0-9_]*$/.test(name)
 
 const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
 
@@ -47,7 +48,7 @@ export const parseSecretRefs = (secrets: Record<string, unknown>) => {
   for (const [name, entry] of Object.entries(secrets)) {
     if (!isValidSecretName(name)) {
       problems.push(
-        `secrets.${name}: a secret name is letters, digits and _, not first a digit`,
+        `secrets.${name}: a secret name is uppercase letters, digits and _, like an environment variable (STRIPE_KEY)`,
       )
       continue
     }

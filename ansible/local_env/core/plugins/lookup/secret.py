@@ -31,7 +31,7 @@ EXAMPLES = r"""
 - name: Write the Stripe key
   ansible.builtin.copy:
     dest: ~/.config/billing/credentials
-    content: "stripe_key = {{ lookup('local_env.core.secret', 'stripe_key') }}"
+    content: "stripe_key = {{ lookup('local_env.core.secret', 'STRIPE_KEY') }}"
     mode: "0600"
   no_log: true
 """

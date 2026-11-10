@@ -35,11 +35,11 @@ AWS Secrets Manager and HashiCorp Vault.
    ```yaml
    # ansible/dev_tools/roles/github/local-env.yml
    secrets:
-     github_token:
+     GITHUB_TOKEN:
        login: acme-dev
        ref: platform/dev/github # the secret id in AWS Secrets Manager
        field: token # a key of its JSON value
-     npm_token:
+     NPM_TOKEN:
        login: data-vault
        ref: secret/npm # the path of the KV entry
        field: token # its key: required for Vault
@@ -52,7 +52,7 @@ AWS Secrets Manager and HashiCorp Vault.
    - name: Save the GitHub token
      ansible.builtin.command: gh auth login --with-token
      args:
-       stdin: "{{ lookup('local_env.core.secret', 'github_token') }}"
+       stdin: "{{ lookup('local_env.core.secret', 'GITHUB_TOKEN') }}"
      no_log: true
    ```
 
@@ -65,7 +65,9 @@ in, and does not know a profile name or an address.
 
 ## The secrets
 
-- A name is letters, digits and `_`: `github_token`, `NPM_TOKEN`.
+- A name is an environment variable: uppercase letters, digits and `_`
+  (`GITHUB_TOKEN`). It is the same rule for the secrets of Docker stacks, where
+  compose reads it as `${GITHUB_TOKEN}`: one way to name a secret everywhere.
 - `login` finds the login in the role's own source first, then in any source: a
   company source can declare the logins once for all the teams.
   `acme-platform/acme-dev` names the source.

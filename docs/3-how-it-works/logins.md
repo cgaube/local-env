@@ -59,14 +59,14 @@ logins:
   ```yaml
   # ansible/…/roles/github/local-env.yml
   secrets:
-    github_token: { login: acme-dev, ref: platform/dev/github, field: token }
+    GITHUB_TOKEN: { login: acme-dev, ref: platform/dev/github, field: token }
   ```
 
   ```yaml
   - name: Save the GitHub token
     ansible.builtin.command: gh auth login --with-token
     args:
-      stdin: "{{ lookup('local_env.core.secret', 'github_token') }}"
+      stdin: "{{ lookup('local_env.core.secret', 'GITHUB_TOKEN') }}"
     no_log: true
   ```
 
@@ -155,7 +155,7 @@ is no secret in it.
 ```yaml
 local_env_secrets:
   acme.dev_tools.github: # the role's full name: ansible_role_name
-    github_token:
+    GITHUB_TOKEN:
       title: platform/dev/github token, acme-dev # for the errors
       argv:
         [
