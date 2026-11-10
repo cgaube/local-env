@@ -490,7 +490,7 @@ describe.concurrent('local-env install, logins', () => {
     )
     // Says what the CLI does before it takes the terminal
     expect(result.output).toContain(
-      `◆  acme-dev: the AWS CLI opens your browser to log in\n│  aws sso login --profile ${PROFILE}\n└`,
+      `◆  acme-dev: the AWS CLI opens your browser to log in\n│  aws sso login --profile ${PROFILE}\n├┈┈┈`,
     )
     expect(cli.bin.calls('ansible-playbook')).toHaveLength(1)
   })

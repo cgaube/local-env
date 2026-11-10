@@ -1,12 +1,4 @@
-import {
-  cancel,
-  log,
-  note,
-  outro,
-  S_BAR,
-  S_BAR_END,
-  S_STEP_ACTIVE,
-} from '@clack/prompts'
+import { cancel, log, note, outro, S_BAR, S_STEP_ACTIVE } from '@clack/prompts'
 import { styleText } from 'node:util'
 import {
   type CalloutLevel,
@@ -55,6 +47,10 @@ export const closeFrameWithCallout = (
   frameClosed = true
 }
 
+// Where another program writes in the terminal, between two of these: a
+// dotted rule off clack's guide line
+const DOTTED_RULE = styleText('gray', `├${'┈'.repeat(38)}`)
+
 // A line under the current group, on clack's guide line without an icon
 const line = (text: string) => {
   log.message(text, { spacing: gapBefore ? 1 : 0 })
@@ -96,22 +92,22 @@ export const logger = {
     ),
   log: (message: string) => line(message),
   // Before another program takes the terminal (a vendor's login): what it
-  // does and its command, then the frame closes, so that its own lines read
-  // as outside it. takeBack() opens it again.
+  // does and its command, then a dotted rule, so that its own lines read as
+  // outside the frame. takeBack() draws the same rule after them.
   handOver: (title: string, command: string) => {
     process.stdout.write(
       [
         styleText('gray', S_BAR),
         `${styleText('cyan', S_STEP_ACTIVE)}  ${title}`,
         `${styleText('gray', S_BAR)}  ${styleText('dim', command)}`,
-        styleText('gray', S_BAR_END),
+        DOTTED_RULE,
         '',
       ].join('\n'),
     )
     gapBefore = false
   },
   takeBack: () => {
-    process.stdout.write(`${styleText('gray', S_BAR)}\n`)
+    process.stdout.write(`${DOTTED_RULE}\n`)
     gapBefore = false
   },
   // A dim footer, set apart from the lines above
