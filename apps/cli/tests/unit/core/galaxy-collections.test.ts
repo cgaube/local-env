@@ -25,6 +25,8 @@ const role = (overrides: Partial<Role>): Role => ({
   needsSudo: false,
   galaxy: {},
   inputs: [],
+  logins: [],
+  secrets: [],
   ...overrides,
 })
 

@@ -13,7 +13,19 @@ import {
   usernameQuestion,
 } from '#cli/logins/registry.js'
 import { describeSource, listSources } from '#cli/sources/sources.js'
-import { sourceLoginLines, sourcesWithAnyLogin } from '#cli/logins/listing.js'
+import {
+  type SessionEntry,
+  sourceLoginLines,
+  sourceSessionLogins,
+  sourcesWithAnyLogin,
+} from '#cli/logins/listing.js'
+import {
+  canLogIn,
+  logInToSession,
+  logOutOfSession,
+  sessionStatus,
+} from '#cli/logins/session.js'
+import { installClis } from '#cli/logins/prepare.js'
 import { logger } from '#cli/utils/index.js'
 import {
   askConfirm,
@@ -57,7 +69,8 @@ const pickSource = (message: string, sources: string[]) =>
     sources.map((value) => ({ value, label: value })),
   )
 
-// The registries of the source, or only the one --login names
+// The logins of the source, or only the one --login names: its registries
+// and its aws and vault logins
 const sourceLogins = (source: string, login?: string) => {
   if (!listSources().includes(source)) {
     throw new Error(
@@ -65,15 +78,89 @@ const sourceLogins = (source: string, login?: string) => {
     )
   }
   const registries = readSourceRegistries(source)
-  if (!login) return registries
-  const match = registries.filter((entry) => entry.name === login)
-  if (match.length === 0) {
-    const names = registries.map(({ name }) => name).join(', ')
+  const sessions = sourceSessionLogins(source)
+  if (!login) return { registries, sessions }
+  const match = {
+    registries: registries.filter((entry) => entry.name === login),
+    sessions: sessions.filter((entry) => entry.login.name === login),
+  }
+  if (match.registries.length + match.sessions.length === 0) {
+    const names = [
+      ...registries.map(({ name }) => name),
+      ...sessions.map(({ login }) => login.name),
+    ].join(', ')
     throw new Error(
       `${source} has no login named "${login}"${names ? `, only ${names}` : ''}.`,
     )
   }
   return match
+}
+
+const sessionTitle = ({ type, login }: SessionEntry) =>
+  `${login.name} (${type.title(login.config)})`
+
+const loggedInAs = (detail: string) =>
+  `logged in ${detail.replace(/^logged in ?/, '')}`.trimEnd()
+
+// Logs in to these aws and vault logins with their CLI, which gets the
+// terminal. One that is logged in is asked again only when --login named it.
+const logInToSessions = async (sessions: SessionEntry[], named: boolean) => {
+  if (sessions.length === 0) return
+  if (!canLogIn()) {
+    throw new Error(
+      `Log in to ${sessions.map(sessionTitle).join(', ')} in your own terminal: it opens a browser or asks for a password.`,
+    )
+  }
+  logger.group('Logins')
+  await installClis(sessions.map(({ type }) => type))
+  for (const entry of sessions) {
+    const { type, login } = entry
+    type.configure?.(login)
+    const status = await sessionStatus(type, login)
+    if (
+      status.state === 'logged-in' &&
+      !named &&
+      !(await askConfirm(
+        `${sessionTitle(entry)}: ${loggedInAs(status.detail)}. Log in again?`,
+        false,
+      ))
+    ) {
+      continue
+    }
+    const done = await logInToSession(type, login)
+    const after = await sessionStatus(type, login)
+    if (!done || after.state !== 'logged-in') {
+      const help = type.help(login.config)
+      throw new Error(
+        `${sessionTitle(entry)}: not logged in.${help ? ` ${help}` : ''}`,
+      )
+    }
+    logger.success(`${sessionTitle(entry)}: ${loggedInAs(after.detail)}`)
+  }
+}
+
+// Logs out of these aws and vault logins, when logged in
+const logOutOfSessions = async (sessions: SessionEntry[]) => {
+  if (sessions.length === 0) return
+  logger.group('Logins')
+  for (const entry of sessions) {
+    const status = await sessionStatus(entry.type, entry.login)
+    if (status.state !== 'logged-in') {
+      logger.info(`${sessionTitle(entry)}: not logged in`)
+      continue
+    }
+    if (!entry.type.logoutCommand(entry.login)) {
+      logger.info(
+        `${sessionTitle(entry)}: your own profile, local-env does not log out of it`,
+      )
+      continue
+    }
+    if (await logOutOfSession(entry.type, entry.login)) {
+      logger.success(`Logged out of ${sessionTitle(entry)}`)
+    } else {
+      throw new Error(`Could not log out of ${sessionTitle(entry)}`)
+    }
+  }
 }
 
 type LoginOptions = {
@@ -110,7 +197,7 @@ const logInWithoutPrompts = async (
 
 export const loginCommand = new Command('login')
   .description(
-    'Log in to the registries of a source: the logins are saved in Dockhand',
+    'Log in to the logins of a source: registries (saved in Dockhand), AWS and Vault (with their CLI)',
   )
   .argument(
     '[name]',
@@ -151,17 +238,20 @@ export const loginCommand = new Command('login')
         )
       }
 
-      const declared = sourceLogins(source, options.login)
-      if (declared.length === 0) {
+      const { registries: declared, sessions } = sourceLogins(
+        source,
+        options.login,
+      )
+      if (declared.length + sessions.length === 0) {
         logger.info(`${source} needs no login`)
         return
       }
-      if (options.passwordStdin || !canAsk()) {
+      if (declared.length > 0 && (options.passwordStdin || !canAsk())) {
         await logInWithoutPrompts(source, declared, options)
         return
       }
 
-      const registries = await getRegistries()
+      const registries = declared.length > 0 ? await getRegistries() : []
       for (const { host, usernameHelp, tokenHelp } of declared) {
         const login = findLogin(registries, host)
         // Asked again only when the user names the login or agrees
@@ -189,12 +279,13 @@ export const loginCommand = new Command('login')
         await logInToRegistry(host, username, password)
         logger.success(`Logged in to ${host} as ${username}`)
       }
+      await logInToSessions(sessions, Boolean(options.login))
     }),
   )
 
 export const logoutCommand = new Command('logout')
   .description(
-    'Log out of the registries of a source: removes their logins from Dockhand',
+    'Log out of the logins of a source: its registries in Dockhand, its AWS and Vault sessions',
   )
   .argument(
     '[name]',
@@ -212,11 +303,14 @@ export const logoutCommand = new Command('logout')
           sourcesNeedingLogin().length > 0 ? await getRegistries() : []
         let source = given
         if (!source) {
-          // A registry login in Dockhand
-          const sources = sourcesWithAnyLogin().filter((name) =>
-            readSourceRegistries(name).some(
-              ({ host }) => findHostRegistry(registries, host) !== undefined,
-            ),
+          // A registry login in Dockhand, or an aws or vault login that may
+          // have a session
+          const sources = sourcesWithAnyLogin().filter(
+            (name) =>
+              sourceSessionLogins(name).length > 0 ||
+              readSourceRegistries(name).some(
+                ({ host }) => findHostRegistry(registries, host) !== undefined,
+              ),
           )
           if (sources.length === 0) {
             logger.info('No source has a login')
@@ -234,12 +328,15 @@ export const logoutCommand = new Command('logout')
           )
         }
 
-        const declared = sourceLogins(source, options.login)
-        if (declared.length === 0) {
+        const { registries: declared, sessions } = sourceLogins(
+          source,
+          options.login,
+        )
+        if (declared.length + sessions.length === 0) {
           logger.info(`${source} needs no login`)
           return
         }
-        logger.group('Registries')
+        if (declared.length > 0) logger.group('Registries')
         for (const { host } of declared) {
           const registry = findHostRegistry(registries, host)
           if (!registry) {
@@ -258,6 +355,7 @@ export const logoutCommand = new Command('logout')
               : `Logged out of ${host}`,
           )
         }
+        await logOutOfSessions(sessions)
       },
     ),
   )

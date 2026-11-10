@@ -18,7 +18,12 @@ import {
   testRegistryLogin,
 } from '#cli/logins/registry.js'
 import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
-import { checkManifestLogins } from '#cli/logins/index.js'
+import { checkManifest, SESSION_TYPES } from '#cli/logins/index.js'
+import { listAccounts } from '#cli/logins/declared.js'
+import {
+  loginCommandFor as sessionLoginCommand,
+  sessionStatus,
+} from '#cli/logins/session.js'
 import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
 import {
   BUILD_CONTEXTS_DIR,
@@ -137,25 +142,50 @@ const checkRegistries = async (): Promise<CheckResult[]> => {
   return results
 }
 
-// The logins of the manifests are valid: a source pulled since `sources add`
-// checked them
+// The logins of the manifests are valid (a source pulled since `sources
+// add` checked them), and each aws and vault account has a session
 const checkLogins = async (): Promise<CheckResult[]> => {
   const results: CheckResult[] = []
   for (const source of listSources()) {
     const manifest = tryReadSourceManifest(join(SOURCES_DIR, source))
     try {
-      checkManifestLogins(manifest?.logins ?? {})
+      if (manifest) checkManifest(manifest)
     } catch (error) {
       results.push({
         level: 'fail',
-        message: `${source}: ${error instanceof Error ? error.message : String(error)}. local-env leaves that login out.`,
+        message: `${source}: ${error instanceof Error ? error.message : String(error)}. local-env leaves that entry out.`,
+      })
+    }
+  }
+  const accounts = SESSION_TYPES.flatMap((type) =>
+    listAccounts(type).map((account) => ({ type, account })),
+  )
+  for (const { type, account } of accounts) {
+    const { login } = account
+    const title = `${login.name} (${type.title(login.config)})`
+    const status = await sessionStatus(type, login)
+    if (status.state === 'logged-in') {
+      results.push({
+        level: 'pass',
+        message:
+          `${title}: logged in ${status.detail.replace(/^logged in ?/, '')}`.trimEnd(),
+      })
+    } else if (status.state === 'no-cli') {
+      results.push({
+        level: 'warn',
+        message: `${title}: the ${type.cli.binary} CLI is not installed. \`local-env install\` installs it, or \`brew install ${type.cli.formula}\`.`,
+      })
+    } else {
+      results.push({
+        level: 'warn',
+        message: `${title}: not logged in, needed by ${account.sources.join(', ')}. Run \`${sessionLoginCommand(login.source, login.name)}\`.`,
       })
     }
   }
   if (results.length === 0) {
     results.push({
       level: 'pass',
-      message: 'The logins of every manifest are valid',
+      message: 'No source needs an AWS or Vault login',
     })
   }
   return results

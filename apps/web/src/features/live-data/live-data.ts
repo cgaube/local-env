@@ -68,6 +68,9 @@ export type Role = {
   galaxy: Record<string, string>
   // The values it takes: its meta/argument_specs.yml
   inputs: RoleInput[]
+  // The variables its source's vault gives it (`secrets` of the source
+  // manifest): the form shows them disabled, never their value
+  secrets?: string[]
 }
 
 export type Tools = {

@@ -6,6 +6,7 @@ import {
   isInputValue,
   missingInputs,
   parseInputText,
+  passedVars,
   playbookRoots,
   type RoleInput,
   passedValues,
@@ -38,6 +39,7 @@ const role = (
     galaxy = {},
     inputs = [],
     dependencyVars,
+    secrets,
   }: Partial<GraphRole> = {},
 ): GraphRole => {
   // <source>/<role>, or <source>/<namespace>.<collection>.<role>
@@ -53,6 +55,7 @@ const role = (
     galaxy,
     inputs,
     ...(dependencyVars ? { dependencyVars } : {}),
+    ...(secrets ? { secrets } : {}),
   }
 }
 
@@ -292,6 +295,7 @@ describe('wantedInputs', () => {
         roles: ['git', 'geerlingguy.mac.homebrew'],
         setBy: [],
         provided: false,
+        vault: false,
         conflict: false,
       },
       {
@@ -299,6 +303,7 @@ describe('wantedInputs', () => {
         roles: ['git'],
         setBy: [],
         provided: false,
+        vault: false,
         conflict: false,
       },
       {
@@ -306,6 +311,7 @@ describe('wantedInputs', () => {
         roles: ['geerlingguy.mac.dock'],
         setBy: [],
         provided: false,
+        vault: false,
         conflict: false,
       },
     ])
@@ -425,6 +431,77 @@ describe('wantedInputs', () => {
     expect(unsupportedSecrets(inputs).map(({ name }) => name)).toEqual([
       'token',
     ])
+  })
+
+  test('takes from the vault what the source of a wanted role gives, for every role that declares it', () => {
+    const withVault = [
+      role('acme/git', { inputs: [email], secrets: ['git_email'] }),
+      role('acme/node', {
+        inputs: [
+          input('git_email'),
+          input('token', { required: true, secret: true }),
+        ],
+        secrets: ['token'],
+      }),
+    ]
+    const inputs = wantedInputs(withVault, ['acme/git', 'acme/node'])
+
+    expect(inputs.map(({ name, vault }) => [name, vault])).toEqual([
+      ['git_email', true],
+      ['token', true],
+    ])
+    // Never asked, passed or unsupported: local-env reads it
+    expect(missingInputs(inputs, {})).toEqual([])
+    expect(unsupportedSecrets(inputs)).toEqual([])
+    expect(passedValues(inputs, { git_email: 'me@acme.com' })).toEqual({})
+    // Only what a wanted role's source gives
+    expect(
+      wantedInputs(withVault, ['acme/node']).map(({ name, vault }) => [
+        name,
+        vault,
+      ]),
+    ).toEqual([
+      ['git_email', false],
+      ['token', true],
+    ])
+  })
+
+  test('keeps the value a role including it passes over the vault', () => {
+    const inputs = wantedInputs(
+      [
+        role('acme/backend', {
+          dependencies: ['git'],
+          dependencyVars: [{ git_email: 'team@acme.com' }],
+        }),
+        role('acme/git', { inputs: [email], secrets: ['git_email'] }),
+      ],
+      ['acme/backend'],
+    )
+
+    expect(inputs[0]).toMatchObject({ provided: true, vault: false })
+  })
+})
+
+describe('passedVars', () => {
+  test('gives, by role, the variables the roles of the run pass to it', () => {
+    const roles = [
+      role('acme/backend', {
+        dependencies: ['git', 'node'],
+        dependencyVars: [{ git_email: 'team@acme.com' }, {}],
+      }),
+      role('acme/git'),
+      role('acme/node'),
+      role('acme/other', {
+        dependencies: ['node'],
+        dependencyVars: [{ node_token: 'x' }],
+      }),
+    ]
+
+    const passed = passedVars(roles, ['acme/backend'])
+
+    expect([...(passed.get('acme/git') ?? [])]).toEqual(['git_email'])
+    // Not a role of the run: what it passes does not count
+    expect([...(passed.get('acme/node') ?? [])]).toEqual([])
   })
 })
 

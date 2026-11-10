@@ -48,6 +48,7 @@ describe('readSourceManifest', () => {
       name: 'acme-platform',
       label: 'Acme Platform',
       logins: { ghcr: { type: 'registry', host: 'ghcr.io' } },
+      secrets: {},
     })
   })
 
@@ -56,6 +57,7 @@ describe('readSourceManifest', () => {
       name: 'acme',
       label: null,
       logins: {},
+      secrets: {},
     })
   })
 

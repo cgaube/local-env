@@ -4,11 +4,13 @@ export const buildManifest = ({
   name,
   label,
   logins = {},
+  secrets,
 }: {
   name: string
   label?: string
   logins?: Record<string, unknown>
-}) => `${JSON.stringify({ name, label, logins }, null, 2)}\n`
+  secrets?: Record<string, unknown>
+}) => `${JSON.stringify({ name, label, logins, secrets }, null, 2)}\n`
 
 // "https://GHCR.io/team-a" -> "ghcr-io-team-a"
 export const loginNameFor = (host: string) =>

@@ -129,6 +129,11 @@ The agent starts commands with Homebrew's link (`/opt/homebrew/bin/local-env`),
 not the Cellar path of its own version. `brew upgrade` puts the new version
 behind the link, and `brew cleanup` removes the old Cellar folder.
 
+- A run of the agent has `LOCAL_ENV_FROM_DASHBOARD=1`. The CLI logs in to no AWS
+  or Vault account then: a login opens a browser or asks for a password, which
+  belongs in the user's own terminal ([Logins](logins.md)). The install stops
+  with the command to run.
+
 ## Why
 
 - **A process on the Mac, not the dashboard.** The dashboard runs in a

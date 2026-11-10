@@ -112,7 +112,9 @@ const askNames = async (
   inputs: WantedInput[],
   values: Record<string, unknown>,
 ) => {
-  const settable = inputs.filter((input) => !input.secret && !input.provided)
+  const settable = inputs.filter(
+    (input) => !input.secret && !input.provided && !input.vault,
+  )
   if (settable.length === 0) {
     throw new Error('Your tools take no variables you can set.')
   }
@@ -132,8 +134,8 @@ const askNames = async (
 }
 
 // The input of a variable a value can be saved for: one a tool of the
-// sources declares, no secret, and not one a role that runs sets (its
-// owner's value wins, a saved one would never be used)
+// sources declares, no secret, and not one a role that runs sets or a vault
+// gives (that value wins, a saved one would never be used)
 const settableInput = (
   name: string,
   all: WantedInput[],
@@ -145,12 +147,17 @@ const settableInput = (
       `No tool of your sources declares ${name}. \`local-env vars\` lists the variables of your tools.`,
     )
   }
-  if (input.secret) {
+  const used = wanted.find((candidate) => candidate.name === name)
+  if (used?.vault) {
     throw new Error(
-      `${name} is a secret: local-env does not support secrets yet.`,
+      `${name} comes from the secrets of its source: local-env reads it from the vault at install.`,
     )
   }
-  const used = wanted.find((candidate) => candidate.name === name)
+  if (input.secret) {
+    throw new Error(
+      `${name} is a secret: local-env never saves one. Its source can give it from a vault, in the secrets of its local-env.yml.`,
+    )
+  }
   if (used?.provided) {
     throw new Error(
       `${used.setBy.join(', ')} ${used.setBy.length === 1 ? 'sets' : 'set'} ${name}: its value wins.`,

@@ -28,6 +28,8 @@ local-env, but did not restart them. Run `local-env start`.
 
 - Read the task that failed: local-env shows its error under the tool.
 - `local-env install --verbose` shows the full output of Ansible.
+- **"not logged in"**: a tool reads a secret, and your session ended. Run the
+  command that the message gives: see [Log in to your accounts](4-logins.md).
 - **"A role needs your sudo password"**: the tool uses sudo, and local-env did
   not see it. Tell the team of the source, with the name of the tool.
 

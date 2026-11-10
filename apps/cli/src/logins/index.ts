@@ -1,11 +1,18 @@
+import { awsLogin } from '#cli/logins/aws.js'
 import { isValidLoginName } from '#cli/logins/declared.js'
+import { parseSecretRefs } from '#cli/logins/secrets.js'
 import { registryLogin } from '#cli/logins/registry.js'
-import type { LoginType } from '#cli/logins/types.js'
+import type { LoginType, SessionLoginType } from '#cli/logins/types.js'
+import { vaultLogin } from '#cli/logins/vault.js'
+
+// The types whose session a vendor CLI keeps: roles name them
+export const SESSION_TYPES: SessionLoginType<any>[] = [awsLogin, vaultLogin]
 
 // Every type of login. A new type is a file of logins/ and a line here. Only
 // what works on any type's config is kept: each module uses its own type.
 export const LOGIN_TYPES: Pick<LoginType<unknown>, 'type' | 'parse'>[] = [
   registryLogin,
+  ...SESSION_TYPES,
 ]
 
 const findType = (type: unknown) =>
@@ -39,4 +46,18 @@ export const checkManifestLogins = (logins: Record<string, unknown>) => {
       )
     }
   }
+}
+
+// Checks the `logins` and the `secrets` of a manifest, for `sources add` and
+// `doctor`. Throws an Error that names the first entry that is not valid.
+export const checkManifest = ({
+  logins,
+  secrets,
+}: {
+  logins: Record<string, unknown>
+  secrets: Record<string, unknown>
+}) => {
+  checkManifestLogins(logins)
+  const [problem] = parseSecretRefs(secrets).problems
+  if (problem) throw new Error(problem)
 }

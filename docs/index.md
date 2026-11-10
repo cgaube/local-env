@@ -46,6 +46,8 @@ For the teams that give templates and tools to the others.
 - [Docker templates](2-write-a-source/2-docker-templates.md)
 - [Write tools and profiles](2-write-a-source/3-tools.md)
 - [Tool variables](2-write-a-source/4-variables.md)
+- [Tool secrets](2-write-a-source/5-secrets.md): AWS Secrets Manager and
+  HashiCorp Vault
 
 ## How it works
 

@@ -138,8 +138,9 @@ export const toolInputs = (tools: Tools) => {
   const inputs = wantedInputs(tools.roles, rootsOf(tools), tools.galaxyRoles)
   const names = new Set(inputs.map(({ name }) => name))
   return {
-    // Not the secrets: local-env never shows one
-    inputs: inputs.filter((input) => !input.secret),
+    // Not the secrets, unless the vault gives them: local-env never shows a
+    // secret's value
+    inputs: inputs.filter((input) => !input.secret || input.vault),
     missing: missingInputs(inputs, tools.variables),
     secrets: unsupportedSecrets(inputs),
     unused: unusedValues(tools, names),

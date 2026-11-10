@@ -3,7 +3,8 @@ import { homedir } from 'os'
 import { provisionProviders } from '#cli/providers/index.js'
 import { refreshTemplateSources } from '#cli/providers/docker/index.js'
 import { getRegistries, sourcesNeedingLogin } from '#cli/logins/registry.js'
-import { sourceLoginLines } from '#cli/logins/listing.js'
+import { createStatusCache, sourceLoginLines } from '#cli/logins/listing.js'
+import { pruneUnusedLogins } from '#cli/logins/wanted.js'
 import {
   printStackLinks,
   syncStacks,
@@ -22,7 +23,7 @@ import {
 import { logger } from '#cli/utils/index.js'
 import { askSelect } from '#cli/utils/prompt.js'
 import { loginCommand, logoutCommand } from '#cli/commands/sources/login.js'
-import { checkManifestLogins } from '#cli/logins/index.js'
+import { checkManifest } from '#cli/logins/index.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>
@@ -42,7 +43,7 @@ const addCommand = new Command('add')
     withErrors(async (repo: string) => {
       logger.group('Sources')
       const added = await addSource(repo, {
-        checkManifest: ({ logins }) => checkManifestLogins(logins),
+        checkManifest,
       })
       if (added) await provisionProviders()
     }),
@@ -60,10 +61,11 @@ const listCommand = new Command('list').description('List sources').action(
       sourcesNeedingLogin().length > 0
         ? await getRegistries().catch(() => undefined)
         : []
+    const status = createStatusCache()
     // A group per source, like the other commands' output
     for (const name of names) {
       const url = await getSourceUrl(name).catch(() => 'no remote')
-      const logins = await sourceLoginLines(name, registries)
+      const logins = await sourceLoginLines(name, registries, status)
       logger.group(describeSource(name))
       logger.info(url.replace(homedir(), '~'))
       logger.log(summarizeSourceContent(readSourceContent(name)))
@@ -100,6 +102,8 @@ const removeCommand = new Command('remove')
         ))
       logger.group('Sources')
       removeSource(name)
+      // The AWS profiles local-env wrote for its logins
+      pruneUnusedLogins()
       logger.success(`Removed ${name}`)
       await provisionProviders()
     }),

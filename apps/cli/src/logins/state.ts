@@ -3,10 +3,11 @@ import { dirname, join } from 'path'
 import { HOME_DIR } from '#cli/core/paths.js'
 
 // What local-env keeps about the logins, in the home folder: the accounts
-// the user does not want to be asked about again, as <type>:<identity>
+// the user does not want to be asked about again, as <type>:<identity>, and
+// the sections of ~/.aws/config that local-env wrote, by header
 const STATE_FILE = join(HOME_DIR, 'volumes/logins.json')
 
-type State = { ignored: string[] }
+type State = { ignored: string[]; awsSections: string[] }
 
 const texts = (value: unknown) =>
   Array.isArray(value)
@@ -14,12 +15,14 @@ const texts = (value: unknown) =>
     : []
 
 const readState = (): State => {
-  if (!existsSync(STATE_FILE)) return { ignored: [] }
+  if (!existsSync(STATE_FILE)) return { ignored: [], awsSections: [] }
   try {
-    const { ignored } = JSON.parse(readFileSync(STATE_FILE, 'utf8'))
-    return { ignored: texts(ignored) }
+    const { ignored, awsSections } = JSON.parse(
+      readFileSync(STATE_FILE, 'utf8'),
+    )
+    return { ignored: texts(ignored), awsSections: texts(awsSections) }
   } catch {
-    return { ignored: [] }
+    return { ignored: [], awsSections: [] }
   }
 }
 
@@ -27,6 +30,11 @@ const writeState = (state: State) => {
   mkdirSync(dirname(STATE_FILE), { recursive: true })
   writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`)
 }
+
+export const readAwsSections = () => readState().awsSections
+
+export const writeAwsSections = (headers: string[]) =>
+  writeState({ ...readState(), awsSections: [...new Set(headers)].sort() })
 
 const key = (type: string, identity: string) => `${type}:${identity}`
 

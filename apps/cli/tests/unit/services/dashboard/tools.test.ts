@@ -63,8 +63,64 @@ describe('listRoles', () => {
         needsSudo: false,
         galaxy: {},
         inputs: [],
+        logins: [],
+        secrets: [],
       },
     ])
+  })
+
+  test('reads the logins a role names, and leaves out what is not a name', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/ansible/github/local-env.yml',
+      'logins: [acme-dev, platform/data-vault, Bad Name, 3, acme-dev]\n',
+    )
+
+    expect(listRoles(sources)[0]?.logins).toEqual([
+      'acme-dev',
+      'platform/data-vault',
+    ])
+  })
+
+  test('gives a role the secrets of its source that it declares as inputs, or asks for', () => {
+    const { sources, write } = createVolumes()
+    write(
+      'acme/local-env.yml',
+      [
+        'name: acme',
+        'secrets:',
+        '  github_token: { login: acme-dev, ref: github/dev, field: token }',
+        '  npm_token: { login: acme-dev, ref: npm/dev }',
+        '',
+      ].join('\n'),
+    )
+    write(
+      'acme/ansible/github/meta/argument_specs.yml',
+      [
+        'argument_specs:',
+        '  main:',
+        '    options:',
+        '      github_token: { type: str, required: true, no_log: true }',
+        '      github_user: { type: str }',
+        '',
+      ].join('\n'),
+    )
+    write(
+      'acme/ansible/node/local-env.yml',
+      'secrets: [npm_token, Bad Name, 3, npm_token]\n',
+    )
+    // Another source: not the secrets of acme
+    write(
+      'other/ansible/gh/meta/argument_specs.yml',
+      'argument_specs:\n  main:\n    options:\n      github_token: { type: str }\n',
+    )
+
+    const roles = listRoles(sources)
+    const secretsOf = (id: string) =>
+      roles.find((role) => role.id === id)?.secrets
+    expect(secretsOf('acme/github')).toEqual(['github_token'])
+    expect(secretsOf('acme/node')).toEqual(['npm_token'])
+    expect(secretsOf('other/gh')).toEqual([])
   })
 
   test('reads the roles of a collection, named by its galaxy.yml', () => {

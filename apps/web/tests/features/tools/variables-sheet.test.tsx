@@ -288,6 +288,43 @@ describe('Variables sheet', () => {
     ).toBeInTheDocument()
   })
 
+  test('shows a value the vault of the source gives disabled, never its value', async () => {
+    const user = userEvent.setup()
+    const { events } = await renderApp('/tools')
+    // The source's manifest maps git_token and git_email to its vault
+    const fromVault = { ...git, secrets: ['git_token', 'git_email'] }
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [fromVault],
+          picked: ['acme/git'],
+          variables: { git_email: 'saved@acme.com' },
+        }),
+      ),
+    )
+
+    const sheet = await openVariables(user)
+
+    for (const name of ['git_token', 'git_email']) {
+      const field = within(sheet).getByRole('textbox', { name })
+      expect(field).toBeDisabled()
+      expect(field).toHaveValue('')
+      expect(field).toHaveAttribute('placeholder', 'From the vault')
+    }
+    expect(
+      within(sheet).getAllByText(
+        /From the secrets of the source: local-env reads it from the vault at install\./,
+      ),
+    ).toHaveLength(2)
+    // A required one from the vault is not missing
+    expect(
+      within(sheet)
+        .getByRole('textbox', { name: 'git_email' })
+        .closest('[data-slot="field"]'),
+    ).not.toHaveAttribute('data-invalid')
+  })
+
   test('folds the tools of a profile, the Galaxy roles too', async () => {
     const user = userEvent.setup()
     const { events } = await renderApp('/profiles')
@@ -633,7 +670,7 @@ describe('Variables sheet', () => {
     ).toBeInTheDocument()
   })
 
-  test('names a required secret, which local-env does not support yet', async () => {
+  test('names a required secret that no source gives', async () => {
     const user = userEvent.setup()
     const { events } = await renderApp('/tools')
     const deploy = buildRole({
@@ -650,7 +687,7 @@ describe('Variables sheet', () => {
     const sheet = await openVariables(user)
 
     expect(
-      within(sheet).getByText('Secrets not supported yet'),
+      within(sheet).getByText('Secrets that no source gives'),
     ).toBeInTheDocument()
     expect(within(sheet).queryByRole('textbox')).not.toBeInTheDocument()
   })

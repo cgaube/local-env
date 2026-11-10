@@ -27,6 +27,8 @@ on the page.
   writes it to the disk.
 - When a tool needs a value from you (an email for git), local-env asks for it
   and keeps it for the next installs.
+- When a tool reads a secret from your company's vault, local-env checks that
+  you are logged in first: see [Log in to your accounts](4-logins.md).
 - When a tool needs a Docker stack (a database, a mail catcher), local-env
   deploys it, after asking once.
 

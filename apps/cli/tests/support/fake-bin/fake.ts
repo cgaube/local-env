@@ -47,14 +47,16 @@ const rule = rules.findLast(
     matches(candidate.match) &&
     Object.entries(candidate.env ?? {}).every(
       ([name, value]) => process.env[name] === value,
-    ),
+    ) &&
+    (!candidate.ifFile || existsSync(candidate.ifFile)),
 )
 
-// The variables the CLI passes to compose, Ansible and mkcert
+// The variables the CLI passes to compose, Ansible, mkcert and the CLIs of
+// the logins
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      /^(LOCAL_ENV_|ANSIBLE_|TRUST_STORES$)/.test(entry[0]) &&
+      /^(LOCAL_ENV_|ANSIBLE_|AWS_|VAULT_|TRUST_STORES$)/.test(entry[0]) &&
       entry[1] !== undefined,
   ),
 )
@@ -94,7 +96,9 @@ const filesIn = (folder: string): [string, string][] =>
   readdirSync(folder).flatMap((name) => {
     const path = join(folder, name)
     const stat = lstatSync(path)
-    if (stat.isSymbolicLink()) return []
+    // A named pipe holds nothing on the disk (the secrets: read once, in
+    // `inputs`)
+    if (stat.isSymbolicLink() || stat.isFIFO()) return []
     return stat.isDirectory()
       ? filesIn(path)
       : [[path, readFileSync(path, 'utf8')] as [string, string]]
@@ -124,6 +128,11 @@ appendFileSync(join(dir, 'calls.jsonl'), `${JSON.stringify(call)}\n`)
 if (!rule) {
   console.error(`fake ${command}: no rule for: ${args.join(' ')}`)
   process.exit(1)
+}
+// What the real command changes for the next calls: a session it opened
+if (rule.touch) {
+  mkdirSync(dirname(rule.touch), { recursive: true })
+  writeFileSync(rule.touch, '')
 }
 // The files the real command would create: mkcert -cert-file <path>…
 for (const [flag, content] of Object.entries(rule.writeArgs ?? {})) {

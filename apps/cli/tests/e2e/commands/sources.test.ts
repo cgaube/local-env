@@ -117,7 +117,7 @@ describe.concurrent('local-env sources add', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'logins.box.type must be one of registry ("dropbox")',
+      'logins.box.type must be one of registry, aws, vault ("dropbox")',
     )
   })
 

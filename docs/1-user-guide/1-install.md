@@ -53,7 +53,8 @@ Then:
 
 In `~/.local-env` (or `$LOCAL_ENV_HOME`): its settings (`config.json`), the
 certificates, the clones of the sources and the data of Dockhand. local-env
-writes no other files.
+writes no other files, except the AWS profiles of your logins in
+`~/.aws/config`.
 
 ## From the source code
 
