@@ -96,14 +96,14 @@ export function AttentionCard() {
                 tone="attention"
                 icon={TriangleAlertIcon}
                 title={countTitle(items.length)}
-                description="Each one with what to do"
+                description="Here's what to do"
               />
-              <EmptyContent className="max-w-2xl">
-                <ul className="divide-border flex w-full flex-col divide-y text-left">
+              <EmptyContent className="max-w-xl">
+                <ul className="border-border divide-border flex w-full flex-col divide-y rounded-lg border text-left">
                   {items.map((item) => (
                     <li
                       key={item.id}
-                      className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                     >
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <span className="font-medium">{item.title}</span>
