@@ -375,6 +375,9 @@ filled.
 - **Everything before the run.** A secret that cannot be read (no access, a
   wrong field, a session that ended) stops the install before any role runs, not
   in the middle. Each secret is read once, not at each use.
+- **Read at every install, never kept.** Each install runs all the wanted tools
+  again, and reads their secrets again: a rotated secret is picked up at the
+  next install, and local-env has no copy to protect or to refresh.
 - **A named pipe, not a file.** The run folder is the user's alone, but a file
   would hold the values on the disk for the whole run, and in a backup taken
   then. The pipe holds nothing on the disk: Ansible reads the values from the
@@ -425,8 +428,8 @@ filled.
   as an input runs without local-env with `-e`.
 - A secret is text: an input of another type gets text, which Ansible converts
   and checks.
-- local-env reads every secret of the roles of the run, even when a role skips
-  the task that uses it.
+- local-env reads a secret of a role of the run even when the role skips the
+  task that uses it (`when:`, tags): it cannot know which tasks will run.
 - A binary secret (AWS `SecretBinary`) stops the install: local-env reads text
   only.
 - If the CLI is killed with `kill -9` before Ansible reads the pipe, its writer
