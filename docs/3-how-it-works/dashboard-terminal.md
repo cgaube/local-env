@@ -123,7 +123,12 @@ sequenceDiagram
 `update` can upgrade local-env with Homebrew while the agent runs it. After each
 run, the agent runs `local-env --version`. If the version is different, it
 starts the new agent and exits. It never stops during a run. `local-env start`
-also replaces an agent of another version, unless that agent runs a command.
+also replaces an agent of another program, unless that agent runs a command:
+`agent.json` records which one it runs (`build`: the command that runs local-env
+and, for a binary, the size and the time of its file). The version alone is not
+enough: a checkout and Homebrew have the same one until a release, and a binary
+built again keeps it. An agent that wrote no `build` (an older local-env) is
+replaced too.
 
 The agent starts commands with Homebrew's link (`/opt/homebrew/bin/local-env`),
 not the Cellar path of its own version. `brew upgrade` puts the new version

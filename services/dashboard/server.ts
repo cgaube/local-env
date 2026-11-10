@@ -8,6 +8,8 @@
 //                   and sources on connect, then each of them again when it
 //                   changes (watched files, no polling)
 //   /api/config  -> the domain, for the help section
+//   /api/logins  -> the logins of the sources and their state, asked from the
+//                   dashboard agent, which checks them on the Mac
 //   PUT /api/tools/picked -> the tools picked in the catalog: written to
 //                   picked.json, which `local-env install` reads (tools.ts)
 //   PUT /api/tools/profile -> the profile, picked in the sidebar: written to
@@ -39,6 +41,7 @@ import {
   writeVariables,
 } from './tools.js'
 import { tryReadSourceManifest } from './source-manifest.js'
+import type { LoginsResponse } from './agent-protocol.js'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
@@ -148,6 +151,31 @@ const readAgent = async () => {
     }
   }
   return JSON.stringify({ available: false, version: null, run: null })
+}
+
+// The logins of the sources and their state, from the agent: it checks the
+// sessions on the Mac, where they are. Asked by the page, not streamed: each
+// check is a call to AWS, Vault or Dockhand.
+const readLogins = async () => {
+  const token = readAgentToken()
+  if (token) {
+    try {
+      const response = await fetch(`${AGENT_URL}/logins`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(60_000),
+      })
+      if (response.ok) {
+        const { logins } = await response.json()
+        return Response.json({
+          available: true,
+          logins,
+        } satisfies LoginsResponse)
+      }
+    } catch {
+      // Stopped, or killed without removing its token
+    }
+  }
+  return Response.json({ available: false } satisfies LoginsResponse)
 }
 
 const readers = {
@@ -390,6 +418,7 @@ Bun.serve<TerminalSocket>({
       return new Response('Expected a WebSocket', { status: 426 })
     }
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
+    if (pathname === '/api/logins') return readLogins()
     if (pathname === '/api/tools/picked') return pickTools(request)
     if (pathname === '/api/tools/profile') return chooseProfile(request)
     if (pathname === '/api/tools/variables') return saveVariables(request)

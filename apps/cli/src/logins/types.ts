@@ -50,6 +50,9 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   // Run with the terminal. null when local-env cannot log in (the user's
   // own profile): it shows the help of the source.
   loginCommand: (login: DeclaredLogin<Config>) => string[] | null
+  // What the CLI does when it logs in, said before it takes the terminal:
+  // "the AWS CLI opens your browser to log in"
+  loginHint: (login: DeclaredLogin<Config>) => string
   logoutCommand: (login: DeclaredLogin<Config>) => string[] | null
   // The help of the source: who to ask for access
   help: (config: Config) => string | undefined

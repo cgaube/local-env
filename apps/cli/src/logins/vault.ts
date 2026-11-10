@@ -69,6 +69,14 @@ export const vaultLogin: SessionLoginType<VaultConfig> = {
       return 'logged in'
     }
   },
+  loginHint: ({ config }) =>
+    ['oidc', 'jwt'].includes(config.method)
+      ? 'the Vault CLI opens your browser to log in'
+      : config.method === 'token'
+        ? 'the Vault CLI asks for your token'
+        : ['userpass', 'ldap', 'radius', 'okta'].includes(config.method)
+          ? 'the Vault CLI asks for your password'
+          : `the Vault CLI logs you in (${config.method})`,
   // -no-print: the CLI keeps the token (~/.vault-token) without showing it
   loginCommand: ({ config }) => [
     'vault',

@@ -1,6 +1,10 @@
 import { readFileSync } from 'fs'
 import packageJson from '#package.json' with { type: 'json' }
-import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import {
+  buildDockhandRegistry,
+  provisionedDockhand,
+} from '#cli-tests/support/factories/dockhand.js'
+import { buildManifest } from '#cli-tests/support/factories/manifest.js'
 import { machineReady } from '#cli-tests/support/machine.js'
 import { type Cli, createCli } from '#cli-tests/support/run-cli.js'
 
@@ -26,6 +30,7 @@ const agentInfo = (cli: Cli) =>
     pid: number
     port: number
     version: string
+    build?: string
   }
 
 const agentStatus = (cli: Cli, token?: string) =>
@@ -59,6 +64,71 @@ describe.concurrent('local-env agent', () => {
     })
   })
 
+  test('gives the logins of the sources and their state', async () => {
+    await using cli = await startedCli()
+    cli.dockhand.state.registries.push(buildDockhandRegistry())
+    cli.bin.on('which', ['aws'])
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+      exitCode: 255,
+      stderr:
+        'aws: [ERROR]: Error loading SSO Token: Token for acme does not exist',
+    })
+    const repo = cli.createSource('acme')
+    repo.commit({
+      'local-env.yml': buildManifest({
+        name: 'acme',
+        logins: {
+          ghcr: { type: 'registry', host: 'ghcr.io' },
+          'acme-dev': {
+            type: 'aws',
+            sso: {
+              startUrl: 'https://acme.awsapps.com/start',
+              region: 'eu-west-1',
+              accountId: '123456789012',
+              roleName: 'Dev',
+            },
+            help: 'Ask #platform',
+          },
+        },
+      }),
+    })
+    await cli.run(['sources', 'add', repo.dir], {
+      env: { FAKE_PROMPTS_NO_TTY: '1' },
+    })
+    await cli.run(['start'])
+    const token = readFileSync(cli.home.path('volumes/agent/token'), 'utf8')
+
+    const response = await fetch(`http://127.0.0.1:${cli.agentPort}/logins`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    expect(await response.json()).toEqual({
+      logins: [
+        {
+          type: 'registry',
+          name: 'ghcr',
+          title: 'ghcr.io',
+          sources: ['acme'],
+          state: 'logged-in',
+          detail: 'as octocat',
+          command: null,
+          help: null,
+        },
+        {
+          type: 'aws',
+          name: 'acme-dev',
+          title: 'AWS 123456789012 (Dev)',
+          sources: ['acme'],
+          state: 'logged-out',
+          detail:
+            'aws: [ERROR]: Error loading SSO Token: Token for acme does not exist',
+          command: 'local-env sources login acme --login acme-dev',
+          help: 'Ask #platform',
+        },
+      ],
+    })
+  })
+
   test('keeps the running agent on the next `start`', async () => {
     await using cli = await startedCli()
     await cli.run(['start'])
@@ -68,6 +138,28 @@ describe.concurrent('local-env agent', () => {
 
     expect(result.output).toContain('Dashboard agent running')
     expect(agentInfo(cli).pid).toBe(pid)
+  })
+
+  test.each([
+    // A binary built again, or another binary of the same version (a
+    // checkout and Homebrew)
+    ['of another program', { build: 'another local-env 1:2' }],
+    // Started by a local-env older than the build in agent.json
+    ['that names no program', { build: undefined }],
+  ])('replaces a running agent %s on the next `start`', async (_, change) => {
+    await using cli = await startedCli()
+    await cli.run(['start'])
+    const before = agentInfo(cli)
+    expect(before.build).toBeTruthy()
+    cli.home.writeJson('volumes/agent/agent.json', { ...before, ...change })
+
+    const result = await cli.run(['start'])
+
+    expect(result.output).toContain('Dashboard agent restarted')
+    const after = agentInfo(cli)
+    expect(after.pid).not.toBe(before.pid)
+    expect(isAlive(before.pid)).toBe(false)
+    expect(after.build).toBe(before.build)
   })
 
   test('is listed by `status`', async () => {

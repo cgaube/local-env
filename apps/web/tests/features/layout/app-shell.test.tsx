@@ -50,7 +50,8 @@ describe('App shell', () => {
 
     act(() => events.emit('services', [buildService()]))
 
-    expect(screen.getByRole('link', { name: 'Open Dockhand' })).toHaveAttribute(
+    // In the sidebar: the overview has no app cards
+    expect(screen.getByRole('link', { name: 'Dockhand' })).toHaveAttribute(
       'href',
       'https://docker.dev.test',
     )

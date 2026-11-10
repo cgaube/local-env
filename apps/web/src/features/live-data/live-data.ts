@@ -18,9 +18,8 @@ export type Route = {
 export type Service = {
   service: string
   description: string | null
-  // A card on the overview. content is the source folder the app installs
-  // from (docker, ansible), to count what it can install.
-  app: { name: string; content: string | null } | null
+  // A link in the sidebar
+  app: { name: string } | null
   container: string
   url: string | null
   ports: number[]

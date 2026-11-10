@@ -36,3 +36,31 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'state'; run: RunState | null; replay: boolean }
   | { type: 'error'; message: string }
+
+// GET /logins of the agent: every login of the sources, its state checked
+// on the Mac, where the sessions of AWS and Vault are. Never a secret.
+export type LoginRow = {
+  type: string
+  // Its name in the manifest of the first source that declares it
+  name: string
+  // What the user reads: ghcr.io, AWS 123456789012 (Dev)
+  title: string
+  sources: string[]
+  // not-asked: a registry the user chose not to be asked about again;
+  // unknown: Dockhand cannot be reached
+  state: 'logged-in' | 'logged-out' | 'no-cli' | 'not-asked' | 'unknown'
+  // As whom, or why not
+  detail: string | null
+  // What to run in a terminal, when the state is not logged-in
+  command: string | null
+  // The source's help: who to ask for access
+  help: string | null
+}
+
+export type LoginsReport = { logins: LoginRow[] }
+
+// GET /api/logins of the dashboard: not available when the agent isn't
+// running
+export type LoginsResponse =
+  | { available: true; logins: LoginRow[] }
+  | { available: false }

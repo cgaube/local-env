@@ -87,9 +87,11 @@ holds what we build:
   routes falling back to `index.html`) and streams its data on `/api/events`:
   `volumes/proxy/routes.json` (like `local-env proxy routes`), the core
   services, the sources' content counts, the tools and whether the dashboard
-  agent runs. A core service with a `local-env.app` label gets a card on the
-  overview and a link in the sidebar; `local-env.app.content` (`docker`,
-  `ansible`) adds the count of that folder in the sources.
+  agent runs. The Overview (`features/overview/`) starts with **Needs
+  attention** (`attention.ts`: what the page sees that waits for you, each with
+  a command to copy or a page) beside **Health** (the core services and the
+  agent; the table in a sheet), then Sources, each with its logins. A core
+  service with a `local-env.app` label gets a link in the sidebar.
 - In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
   adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
   `package.json` beside `components.json`). Everything else is in
@@ -300,7 +302,10 @@ holds what we build:
   secret wins over a saved value). The fake `ansible-playbook` reads the pipe
   like Ansible, and skips it when it checks the files of the run folder.
   `sources list`, `login`, `logout` and `doctor` show and manage every type
-  (`listing.ts`).
+  (`listing.ts`). The dashboard's Overview shows the logins of each source in
+  the Sources card, and those that wait for you in Needs attention:
+  `/api/logins` asks the dashboard agent's `GET /logins`, which builds the list
+  on the Mac (`report.ts`), on page open and on Check logins, never on a timer.
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.

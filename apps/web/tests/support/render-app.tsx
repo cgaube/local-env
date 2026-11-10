@@ -7,20 +7,26 @@ import { LiveDataProvider } from '#ui/features/live-data/live-data-provider'
 import { ThemeProvider } from '#ui/features/theme/theme-provider'
 import { createAppRouter } from '#ui/router.tsx'
 import { FakeEventSource } from '#ui-tests/support/fake-event-source.ts'
+import type { LoginsResponse } from '#services/dashboard/agent-protocol.ts'
 
-// The whole app at a path, with the data of a fake event stream. The domain
-// and the latest version are already loaded: no request leaves the test.
+// The whole app at a path, with the data of a fake event stream. The domain,
+// the latest version and the logins are already loaded, and stay fresh: no
+// request leaves the test, unless it refetches (a refresh button).
 export const renderApp = async (
   path = '/',
-  { latestVersion = null }: { latestVersion?: string | null } = {},
+  {
+    latestVersion = null,
+    logins = { available: true, logins: [] },
+  }: { latestVersion?: string | null; logins?: LoginsResponse } = {},
 ) => {
   const events = new FakeEventSource()
   const store = createLiveDataStore(() => events as unknown as EventSource)
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   queryClient.setQueryData(['config'], { domain: 'dev.test' })
   queryClient.setQueryData(['latest-version'], latestVersion)
+  queryClient.setQueryData(['logins'], logins)
   const testRouter = createAppRouter({
     history: createMemoryHistory({ initialEntries: [path] }),
   })

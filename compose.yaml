@@ -45,7 +45,6 @@ services:
       # A card at the top of the dashboard, with the number of docker/
       # templates in the sources
       local-env.app: 'Dockhand'
-      local-env.app.content: 'docker'
       dockhand.tags: 'local-env'
     environment:
       VIRTUAL_HOST: docker

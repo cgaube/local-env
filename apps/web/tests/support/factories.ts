@@ -1,3 +1,4 @@
+import type { LoginRow } from '#services/dashboard/agent-protocol.ts'
 import type {
   Role,
   RoleInput,
@@ -20,7 +21,7 @@ export const buildRoute = (overrides: Partial<Route> = {}): Route => ({
 export const buildService = (overrides: Partial<Service> = {}): Service => ({
   service: 'dockhand',
   description: 'Docker UI: deploy and manage stacks from your templates',
-  app: { name: 'Dockhand', content: 'docker' },
+  app: { name: 'Dockhand' },
   container: 'local-env-dockhand',
   url: 'https://docker.dev.test',
   ports: [3000],
@@ -82,5 +83,17 @@ export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   stacks: {},
   variables: {},
   galaxyRoles: [],
+  ...overrides,
+})
+
+export const buildLogin = (overrides: Partial<LoginRow> = {}): LoginRow => ({
+  type: 'aws',
+  name: 'acme-dev',
+  title: 'AWS 123456789012 (Dev)',
+  sources: ['acme'],
+  state: 'logged-in',
+  detail: 'as arn:aws:sts::123456789012:assumed-role/Dev/octocat',
+  command: null,
+  help: null,
   ...overrides,
 })

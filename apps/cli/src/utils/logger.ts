@@ -1,4 +1,4 @@
-import { cancel, log, note, outro } from '@clack/prompts'
+import { cancel, log, note, outro, S_BAR, S_STEP_ACTIVE } from '@clack/prompts'
 import { styleText } from 'node:util'
 import {
   type CalloutLevel,
@@ -47,6 +47,11 @@ export const closeFrameWithCallout = (
   frameClosed = true
 }
 
+// Where another program writes in the terminal, between two of these: the
+// guide line goes on, dotted
+const dottedGuide = () =>
+  log.message('', { spacing: 0, symbol: styleText('dim', '┊') })
+
 // A line under the current group, on clack's guide line without an icon
 const line = (text: string) => {
   log.message(text, { spacing: gapBefore ? 1 : 0 })
@@ -87,6 +92,25 @@ export const logger = {
       ),
     ),
   log: (message: string) => line(message),
+  // Before another program takes the terminal (a vendor's login): what it
+  // does and its command, then the guide line goes on dotted, so that its own
+  // lines read as outside the frame. takeBack() dots it again after them.
+  handOver: (title: string, command: string) => {
+    process.stdout.write(
+      [
+        styleText('gray', S_BAR),
+        `${styleText('cyan', S_STEP_ACTIVE)}  ${title}`,
+        `${styleText('gray', S_BAR)}  ${styleText('dim', command)}`,
+        '',
+      ].join('\n'),
+    )
+    dottedGuide()
+    gapBefore = false
+  },
+  takeBack: () => {
+    dottedGuide()
+    gapBefore = false
+  },
   // A dim footer, set apart from the lines above
   hint: (message: string) => log.message(styleText('dim', message)),
   // The first line is the title

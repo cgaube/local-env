@@ -11,9 +11,10 @@ describe('Sources on the overview', () => {
     expect(
       screen.getByText('1 git repo of Docker templates and Ansible roles'),
     ).toBeInTheDocument()
-    const row = screen.getByRole('row', { name: /acme/ })
-    expect(within(row).getByText('3 templates')).toBeInTheDocument()
-    expect(within(row).getByText('8 roles')).toBeInTheDocument()
+    const source = screen.getByRole('listitem', { name: 'acme' })
+    expect(
+      within(source).getByText('3 templates · 8 roles'),
+    ).toBeInTheDocument()
   })
 
   test('shows the label of the manifest, with the name under it', async () => {
@@ -25,8 +26,12 @@ describe('Sources on the overview', () => {
       ]),
     )
 
-    const row = screen.getByRole('row', { name: /Acme Platform/ })
-    expect(within(row).getByText('acme-platform')).toBeInTheDocument()
+    const source = screen.getByRole('listitem', { name: 'Acme Platform' })
+    expect(
+      within(source).getByText(
+        'acme-platform · github.com/acme/local-env-templates',
+      ),
+    ).toBeInTheDocument()
   })
 
   test('says how to add one', async () => {

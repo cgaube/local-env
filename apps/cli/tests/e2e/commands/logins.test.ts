@@ -488,6 +488,10 @@ describe.concurrent('local-env install, logins', () => {
     expect(cli.bin.calls('aws')).toContainEqual(
       expect.objectContaining({ args: ['sso', 'login', '--profile', PROFILE] }),
     )
+    // Says what the CLI does before it takes the terminal
+    expect(result.output).toContain(
+      `◆  acme-dev: the AWS CLI opens your browser to log in\n│  aws sso login --profile ${PROFILE}\n┊`,
+    )
     expect(cli.bin.calls('ansible-playbook')).toHaveLength(1)
   })
 
@@ -655,6 +659,9 @@ describe.concurrent('local-env sources login, aws and vault', () => {
       ])
 
       expect(result.exitCode).toBe(0)
+      expect(result.output).toContain(
+        'acme-dev: the AWS CLI opens your browser to log in',
+      )
       expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
       // Configured first: the profile must exist for `aws sso login`
       expect(awsConfig(cli)).toContain(`[profile ${PROFILE}]`)

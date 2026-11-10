@@ -112,6 +112,23 @@ describe('the vault login', () => {
   })
 
   test.each([
+    ['oidc', 'the Vault CLI opens your browser to log in'],
+    ['token', 'the Vault CLI asks for your token'],
+    ['userpass', 'the Vault CLI asks for your password'],
+    ['cert', 'the Vault CLI logs you in (cert)'],
+  ])('says what the CLI does to log in with %s', (method, hint) => {
+    const config = vaultLogin.parse({
+      type: 'vault',
+      address: 'https://v.io',
+      method,
+    })
+
+    expect(
+      vaultLogin.loginHint({ source: 'acme', name: 'v', identity: '', config }),
+    ).toBe(hint)
+  })
+
+  test.each([
     [{ type: 'vault' }, 'address is required'],
     [{ type: 'vault', address: 'vault.acme.io' }, 'address must be the URL'],
     [
