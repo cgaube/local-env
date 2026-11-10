@@ -22,7 +22,7 @@ const VAULT = buildLogin({
 const card = (title: string | RegExp) =>
   screen.getByText(title).closest<HTMLElement>('[data-slot="card"]')!
 
-const attention = () => card(/^(Needs attention|All good)/)
+const attention = () => card(/^(\d+ things? needs? you|All good)$/)
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -56,7 +56,7 @@ describe('the overview', () => {
       events.emit('agent', AGENT)
     })
 
-    expect(screen.getByText('Needs attention (2)')).toBeInTheDocument()
+    expect(screen.getByText('2 things need you')).toBeInTheDocument()
     const needs = attention()
     expect(
       within(needs).getByText('1 core service not running'),
