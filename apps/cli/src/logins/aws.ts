@@ -221,7 +221,8 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
       ? ['aws', 'sso', 'logout', '--profile', awsProfile(login)]
       : null,
   help: ({ help }) => help,
-  // The secret's text (SecretString); a field is a key of its JSON
+  // The secret's text (SecretString), as JSON: null for a binary secret,
+  // which `--output text` would print as None. A field is a key of its JSON.
   secretCommand: (_login, { ref, field }) => ({
     argv: [
       'aws',
@@ -232,8 +233,9 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
       '--query',
       'SecretString',
       '--output',
-      'text',
+      'json',
     ],
+    output: 'json',
     keys: field ? [field] : [],
   }),
   facts: (login) => ({

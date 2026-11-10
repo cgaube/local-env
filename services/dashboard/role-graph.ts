@@ -247,6 +247,8 @@ const wantedGalaxyRoles = (
 // name, and the variables that each role including it passes (`vars:`). A
 // root is included once more, with none.
 type RunNode = {
+  // A role of a source by its id, a Galaxy role by its name
+  key: string
   label: string
   inputs: RoleInput[]
   includedWith: { by: string | null; vars: Record<string, unknown> }[]
@@ -265,6 +267,7 @@ const runNodes = (
   const nodes = new Map<string, RunNode>()
   for (const role of roles.filter(({ id }) => wanted.has(id))) {
     nodes.set(role.id, {
+      key: role.id,
       label: role.label,
       inputs: role.inputs ?? [],
       includedWith: named.has(role.id) ? [{ by: null, vars: {} }] : [],
@@ -273,6 +276,7 @@ const runNodes = (
   const galaxy = wantedGalaxyRoles(roles, roots, galaxyRoles)
   for (const role of galaxy) {
     nodes.set(role.name, {
+      key: role.name,
       label: role.name,
       inputs: role.inputs,
       includedWith: [],
@@ -305,6 +309,21 @@ const runNodes = (
   }
   return [...nodes.values()]
 }
+
+// The variables that the roles which run pass to each one (`vars:` of its
+// dependency entry), by role id (a Galaxy role by its name): their values win
+// over the user's and the vault's
+export const passedVars = (
+  roles: GraphRole[],
+  roots: string[],
+  galaxyRoles: GalaxyRole[] = [],
+) =>
+  new Map(
+    runNodes(roles, roots, galaxyRoles).map(({ key, includedWith }) => [
+      key,
+      new Set(includedWith.flatMap(({ vars }) => Object.keys(vars))),
+    ]),
+  )
 
 // The inputs of the wanted roles, each name once, in the order of the roles.
 // A variable that a role which runs passes to the role declaring it (`vars:`

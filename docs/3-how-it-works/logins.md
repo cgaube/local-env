@@ -139,10 +139,15 @@ flowchart LR
 - `declared.ts` reads the logins of the manifests: by type (`readSourceLogins`,
   `listAccounts`, one entry for each account), or by name (`findSourceLogin`).
   `listing.ts` gives the lines of `sources list`, `sources login` and `logout`.
-- `wanted.ts` resolves the logins that the roles name and the secrets they read,
-  and makes the logins ready before the playbook (`prepareLogins`). `index.ts`
-  lists the types and checks the logins of a manifest (`checkManifestLogins`),
-  for `sources add` and `doctor`.
+- `prepare.ts` serves whatever needs a login or a secret (a role, later a stack:
+  a `Consumer`, its label and its source): `resolveSecret` finds a secret of the
+  consumer's source with its login and command, `ensureSessions` installs the
+  CLIs and checks or opens each session once, and `readSecrets` reads the
+  values. `wanted.ts` adds what roles need: the names each one gets, the values
+  that `vars:` give instead, and one name for one secret and one login in the
+  whole run (`prepareLogins`, before the playbook). `index.ts` lists the types
+  and checks the logins of a manifest (`checkManifestLogins`), for `sources add`
+  and `doctor`.
 - `registry.ts`, `aws.ts` and `vault.ts` implement the types. `ini.ts` edits the
   sections of `~/.aws/config`.
 - `volumes/logins.json` in the home folder keeps the logins that the user does
@@ -165,14 +170,17 @@ Ansible.
 
 - A role gets a secret of **its own source** only: the source that owns the role
   chose to give it. `wanted.ts` takes the names of the role's `secrets`, leaves
-  out those that a role of the run sets (`vars:`, which win), and finds each in
-  the `secrets` of the role's source manifest (`secrets.ts` checks them). A name
-  that the source does not declare, an entry that is not valid, or a login that
-  is missing stops the install before anything runs.
+  out those that a role of the run passes to it (`vars:`, which win:
+  `passedVars` in `role-graph.ts`), and finds each in the `secrets` of the
+  role's source manifest (`secrets.ts` checks them). A name that the source does
+  not declare, an entry that is not valid, or a login that is missing stops the
+  install before anything runs.
 - The login is found in the source first, then in any source, and its type gives
   the command that prints the secret (`secretCommand`):
-  `aws secretsmanager get-secret-value --secret-id <ref> --query SecretString --output text`,
-  or `vault kv get -field=<field> <ref>`.
+  `aws secretsmanager get-secret-value --secret-id <ref> --query SecretString --output json`,
+  which prints the text as a JSON string (null for a binary secret: an error;
+  `--output text` would print `None`), or `vault kv get -field=<field> <ref>`,
+  which prints the value as it is, with no newline after it.
 - `session.ts` runs it with the login's environment (`readSecret`), and takes
   the field from the JSON output for AWS (`pickSecretValue`). The secrets are
   read in parallel, each once even if several roles need it. One that cannot be
@@ -417,6 +425,11 @@ filled.
   and checks.
 - local-env reads every secret of the roles of the run, even when a role skips
   the task that uses it.
+- A binary secret (AWS `SecretBinary`) stops the install: local-env reads text
+  only.
+- If the CLI is killed with `kill -9` before Ansible reads the pipe, its writer
+  (`/bin/cat`) stays, waiting, with the values in its stdin, until the Mac
+  restarts. A Ctrl-C or a `kill` stops it.
 - The values are in the memory of Ansible for the whole run. A task without
   `no_log` can print one.
 - Two roles of one install that name the same login without its source must find

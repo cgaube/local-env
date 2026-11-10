@@ -13,6 +13,10 @@ export const SOURCE_MANIFEST_FILE = 'local-env.yml'
 export const isValidSourceName = (name: string) =>
   /^[a-z0-9][a-z0-9-]*$/.test(name)
 
+// A login as a role or a secret names it: <login>, or <source>/<login>
+export const isLoginRef = (ref: string) =>
+  /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/.test(ref)
+
 export type SourceManifest = {
   name: string
   label: string | null

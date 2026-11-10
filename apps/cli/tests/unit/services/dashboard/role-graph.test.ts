@@ -6,6 +6,7 @@ import {
   isInputValue,
   missingInputs,
   parseInputText,
+  passedVars,
   playbookRoots,
   type RoleInput,
   passedValues,
@@ -478,6 +479,29 @@ describe('wantedInputs', () => {
     )
 
     expect(inputs[0]).toMatchObject({ provided: true, vault: false })
+  })
+})
+
+describe('passedVars', () => {
+  test('gives, by role, the variables the roles of the run pass to it', () => {
+    const roles = [
+      role('acme/backend', {
+        dependencies: ['git', 'node'],
+        dependencyVars: [{ git_email: 'team@acme.com' }, {}],
+      }),
+      role('acme/git'),
+      role('acme/node'),
+      role('acme/other', {
+        dependencies: ['node'],
+        dependencyVars: [{ node_token: 'x' }],
+      }),
+    ]
+
+    const passed = passedVars(roles, ['acme/backend'])
+
+    expect([...(passed.get('acme/git') ?? [])]).toEqual(['git_email'])
+    // Not a role of the run: what it passes does not count
+    expect([...(passed.get('acme/node') ?? [])]).toEqual([])
   })
 })
 

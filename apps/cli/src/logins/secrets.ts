@@ -1,4 +1,5 @@
 import { isRecord, optionalText, requiredText } from '#cli/logins/types.js'
+import { isLoginRef } from '#services/dashboard/source-manifest.js'
 
 // A secret of a source: in the `secrets` of its manifest, the variable it
 // fills, and where its value is. A role of the source that declares that
@@ -26,13 +27,11 @@ export type SecretRef = {
 export const isValidSecretName = (name: string) =>
   /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !/^(local_env|ansible_)/i.test(name)
 
-const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
-
 // One entry of `secrets:`. Throws an Error that names the field.
 export const parseSecretRef = (entry: unknown): SecretRef => {
   if (!isRecord(entry)) throw new Error('must be a mapping with login and ref')
   const login = requiredText(entry, 'login')
-  if (!LOGIN_REF.test(login)) {
+  if (!isLoginRef(login)) {
     throw new Error('login must be the name of a login, or <source>/<login>')
   }
   const field = optionalText(entry, 'field')

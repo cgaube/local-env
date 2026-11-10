@@ -78,14 +78,19 @@ export const vaultLogin: SessionLoginType<VaultConfig> = {
   ],
   logoutCommand: () => ['vault', 'token', 'revoke', '-self'],
   help: ({ help }) => help,
-  // A key of a KV entry: `vault kv get` reads KV v1 and v2 alike
+  // A key of a KV entry: `vault kv get` reads KV v1 and v2 alike, and prints
+  // the value with no newline after it
   secretCommand: (_login, { ref, field }) => {
     if (!field) {
       throw new Error(
         'field is required for a Vault secret: the key of the KV entry',
       )
     }
-    return { argv: ['vault', 'kv', 'get', `-field=${field}`, ref], keys: [] }
+    return {
+      argv: ['vault', 'kv', 'get', `-field=${field}`, ref],
+      output: 'text',
+      keys: [],
+    }
   },
   facts: ({ config }) => ({
     address: config.address,

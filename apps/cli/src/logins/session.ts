@@ -6,6 +6,7 @@ import { canAsk } from '#cli/utils/prompt.js'
 import type {
   DeclaredLogin,
   LoginStatus,
+  SecretCommand,
   SessionLoginType,
 } from '#cli/logins/types.js'
 
@@ -64,7 +65,7 @@ export const pickSecretValue = (text: string, keys: string[]) => {
 export const readSecret = async <Config>(
   type: SessionLoginType<Config>,
   login: DeclaredLogin<Config>,
-  command: { argv: string[]; keys: string[] },
+  command: SecretCommand,
 ) => {
   const [binary, ...args] = command.argv
   const result = await execa(binary!, args, {
@@ -79,7 +80,22 @@ export const readSecret = async <Config>(
       lastLine(String(result.stderr)) || `exit ${result.exitCode}`,
     )
   }
-  return pickSecretValue(String(result.stdout).replace(/\n$/, ''), command.keys)
+  return pickSecretValue(
+    outputValue(String(result.stdout), command),
+    command.keys,
+  )
+}
+
+// The value a secret command printed: as it is, or decoded from JSON
+const outputValue = (stdout: string, { output }: SecretCommand) => {
+  if (output === 'text') return stdout
+  const value: unknown = JSON.parse(stdout)
+  if (value === null) {
+    throw new Error(
+      'it is not text (a binary secret): local-env reads text only',
+    )
+  }
+  return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
 // The vendor's CLI talks to the user: the browser, an MFA code or a

@@ -1,134 +1,56 @@
 import type { Role } from '#services/dashboard/tools.js'
-import { resolveInside } from '#cli/core/paths.js'
-import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
-import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
+import { listSources } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/logger.js'
-import { askConfirm } from '#cli/utils/prompt.js'
-import {
-  ensureBrewInstalled,
-  hasCommand,
-  installBrewPackages,
-} from '#cli/utils/brew.js'
 import { awsLogin, pruneAwsConfig } from '#cli/logins/aws.js'
-import { findSourceLogin, readSourceLogins } from '#cli/logins/declared.js'
-import { SESSION_TYPES } from '#cli/logins/index.js'
-import { registryLogin } from '#cli/logins/registry.js'
+import { readSourceLogins } from '#cli/logins/declared.js'
 import {
-  canLogIn,
-  logInToSession,
-  loginCommandFor,
-  readSecret,
-  sessionStatus,
-} from '#cli/logins/session.js'
-import { parseSecretRefs, type SecretRef } from '#cli/logins/secrets.js'
-import type { DeclaredLogin, SessionLoginType } from '#cli/logins/types.js'
+  ensureSessions,
+  findSessionLogin,
+  readSecrets,
+  resolveSecret,
+  sameSecret,
+  type SessionEntry,
+  sourceSecrets,
+  type WantedSecret,
+} from '#cli/logins/prepare.js'
 
-// The logins that the roles of an install need, made ready before the
-// playbook: the CLI installed and configured, the session checked, the login
-// run with the terminal. A role needs a login when it reads a secret of it
-// (`secrets:` of its local-env.yml), or names it to run the CLI itself
-// (`logins:`). A role gets the secrets of its own source that it declares as
-// inputs, or asks for. Then the secrets are read, and given to Ansible with
-// the logins: each secret as the variable of its name, and local_env.logins,
-// the environment of each login the roles name
-// (docs/3-how-it-works/logins.md).
+// The logins and the secrets of the roles of an install, before the
+// playbook. A role gets the secrets of its own source that it declares as
+// inputs (meta/argument_specs.yml) or asks for in its local-env.yml
+// (`Role.secrets`), and names the logins it runs the CLI with (`logins:`).
+// prepare.ts makes them ready and reads the secrets; this file adds what
+// Ansible needs: its variables are global, so one name is one login and one
+// secret for the whole run (docs/3-how-it-works/logins.md).
 
-export type WantedLogin = {
+export type WantedLogin = SessionEntry & {
   // As the roles name it: <login>, or <source>/<login>
   ref: string
-  type: SessionLoginType<any>
-  login: DeclaredLogin<unknown>
   // The labels of the roles that name it
   roles: string[]
 }
 
-export type WantedSecret = {
-  role: Role
-  name: string
-  secret: SecretRef
-  type: SessionLoginType<any>
-  login: DeclaredLogin<unknown>
-  command: { argv: string[]; keys: string[] }
-}
-
-type Found = { type: SessionLoginType<any>; login: DeclaredLogin<unknown> }
-
-const TYPES = [...SESSION_TYPES, registryLogin]
-
-// The login a role names: in the source it names, else in the role's own
-// source first, then in any source
-const findLogin = (role: Role, ref: string) => {
-  const [named, name] = ref.includes('/')
-    ? (ref.split('/') as [string, string])
-    : [null, ref]
-  const sources = named
-    ? [named]
-    : [role.source, ...listSources().filter((source) => source !== role.source)]
-  for (const source of sources) {
-    const found = findSourceLogin(source, name, TYPES)
-    if (found) return found
-  }
-  return null
-}
-
-// The secrets of each source manifest, checked once per source
-const secretsOfSources = () => {
-  const cache = new Map<string, ReturnType<typeof parseSecretRefs>>()
-  return (source: string) => {
-    if (!cache.has(source)) {
-      const manifest = tryReadSourceManifest(resolveInside(SOURCES_DIR, source))
-      cache.set(source, parseSecretRefs(manifest?.secrets ?? {}))
-    }
-    return cache.get(source)!
-  }
-}
-
-// A login of an aws or vault type, or a problem
-const findSessionLogin = (
-  role: Role,
-  ref: string,
-  problems: string[],
-): Found | null => {
-  const found = findLogin(role, ref)
-  if (!found) {
-    problems.push(
-      `${role.label} needs the login ${ref}, which no source declares.`,
-    )
-    return null
-  }
-  if (found.type === registryLogin) {
-    problems.push(
-      `${role.label} names ${ref}, a registry login: a role can use aws and vault logins only.`,
-    )
-    return null
-  }
-  return found as Found
-}
-
-// The logins the roles name and the secrets they read. Throws an Error that
-// lists every problem: a login missing or of the wrong type, a secret that is
-// not valid, a clash of names.
+// The logins the roles name and the secrets they get. `passed` holds, by role
+// id, the variables that a role of the run passes to it (`vars:`): their
+// value wins, so they are not read. Throws an Error that lists every problem:
+// a login missing or of another type, a secret that its source does not give,
+// one name for two logins or two secrets.
 export const resolveRoleLogins = (
   roles: Role[],
-  // Variables that a role of the run sets for another (`vars:`)
-  skip: ReadonlySet<string> = new Set(),
+  passed: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ): { logins: WantedLogin[]; secrets: WantedSecret[] } => {
-  const sourceSecrets = secretsOfSources()
+  const secretsOf = sourceSecrets()
   const byRef = new Map<string, WantedLogin>()
-  const secrets: WantedSecret[] = []
-  const problems: string[] = []
-  // Extra vars are global: one secret name, one secret for the whole run
   const byName = new Map<string, WantedSecret>()
+  const problems: string[] = []
   for (const role of roles) {
     for (const ref of role.logins) {
       const found = findSessionLogin(role, ref, problems)
       if (!found) continue
       const existing = byRef.get(ref)
       if (!existing) {
-        byRef.set(ref, { ref, ...found, roles: [role.label] })
+        byRef.set(ref, { ...found, ref, roles: [role.label] })
         continue
       }
-      // Extra vars are global: one name, one login for the whole run
       if (existing.login.identity !== found.login.identity) {
         problems.push(
           `${existing.roles[0]} and ${role.label} both name the login ${ref}, but it is another login for each (in ${existing.login.source} and in ${found.login.source}). Name its source in local-env.yml: ${found.login.source}/${found.login.name}.`,
@@ -139,107 +61,21 @@ export const resolveRoleLogins = (
     }
 
     for (const name of role.secrets) {
-      // A role that runs sets it (`vars:`): its value wins, not read
-      if (skip.has(name)) continue
-      const declared = sourceSecrets(role.source)
-      const secret = declared.secrets[name]
-      if (!secret) {
-        const invalid = declared.problems.find((problem) =>
-          [`secrets.${name}.`, `secrets.${name}:`, `secrets.${name} `].some(
-            (start) => problem.startsWith(start),
-          ),
-        )
+      if (passed.get(role.id)?.has(name)) continue
+      const wanted = resolveSecret(role, name, secretsOf, problems)
+      if (!wanted) continue
+      const other = byName.get(name)
+      if (!other) {
+        byName.set(name, wanted)
+      } else if (!sameSecret(other, wanted)) {
         problems.push(
-          invalid
-            ? `${role.source}: local-env.yml: ${invalid}`
-            : `${role.label} asks for the secret ${name}, which its source ${role.source} does not declare in the secrets of its local-env.yml.`,
-        )
-        continue
-      }
-      const found = findSessionLogin(role, secret.login, problems)
-      if (!found) continue
-      try {
-        const command = found.type.secretCommand(found.login, secret)
-        const wanted = { role, name, secret, ...found, command }
-        const other = byName.get(name)
-        if (!other) {
-          byName.set(name, wanted)
-          secrets.push(wanted)
-        } else if (
-          other.login.identity !== found.login.identity ||
-          other.secret.ref !== secret.ref ||
-          other.secret.field !== secret.field
-        ) {
-          problems.push(
-            `${other.role.label} (${other.role.source}) and ${role.label} (${role.source}) both get ${name} from the secrets of their source, but another secret for each: Ansible's variables are global. Rename it in one of the sources.`,
-          )
-        }
-      } catch (error) {
-        problems.push(
-          `${role.source}: local-env.yml: secrets.${name}.${error instanceof Error ? error.message : String(error)}`,
+          `${other.consumer.label} (${other.consumer.source}) and ${role.label} (${role.source}) both get ${name} from the secrets of their source, but another secret for each: Ansible's variables are global. Rename it in one of the sources.`,
         )
       }
     }
   }
   if (problems.length > 0) throw new Error(problems.join('\n'))
-  return { logins: [...byRef.values()], secrets }
-}
-
-const sessionKey = ({ type, login }: Found) => `${type.type}:${login.identity}`
-
-// The CLIs of these types, installed with Homebrew when missing
-export const installClis = async (types: SessionLoginType<unknown>[]) => {
-  const clis = [...new Map(types.map(({ cli }) => [cli.binary, cli])).values()]
-  for (const { binary, formula } of clis) {
-    if (await hasCommand(binary)) continue
-    await ensureBrewInstalled(
-      `The ${binary} CLI is missing, and Homebrew too: install Homebrew, then run local-env install again.`,
-    )
-    await installBrewPackages([formula])
-  }
-}
-
-// Logged in to the account, or throws before anything runs
-const ensureSession = async (wanted: Found & { roles: string[] }) => {
-  const { type, login, roles } = wanted
-  const title = `${login.name} (${type.title(login.config)})`
-  const status = await sessionStatus(type, login)
-  if (status.state === 'logged-in') {
-    logger.success(
-      `${title}: logged in ${status.detail.replace(/^logged in ?/, '')}`.trimEnd(),
-    )
-    return
-  }
-  if (status.state === 'no-cli') {
-    throw new Error(
-      `${title}: the ${type.cli.binary} CLI is still not installed. Nothing ran. Run \`brew install ${type.cli.formula}\`, then local-env install again.`,
-    )
-  }
-  const help = type.help(login.config)
-  const command = loginCommandFor(login.source, login.name)
-  const needs = `needed by ${roles.join(', ')}`
-  if (!canLogIn()) {
-    throw new Error(
-      `${title}: not logged in, ${needs}. Nothing ran. In a terminal: ${command}${help ? `\n${help}` : ''}`,
-    )
-  }
-  if (
-    !(await askConfirm(`${title}: not logged in, ${needs}. Log in now?`, true))
-  ) {
-    throw new Error(
-      `${title}: not logged in. Nothing ran. To log in: ${command}`,
-    )
-  }
-  const done = await logInToSession(type, login)
-  const after = await sessionStatus(type, login)
-  if (!done || after.state !== 'logged-in') {
-    throw new Error(
-      `${title}: still not logged in. Nothing ran.${help ? `\n${help}` : ''}`,
-    )
-  }
-  logger.success(
-    `${title}: logged in ${after.detail.replace(/^logged in ?/, '')}`.trimEnd(),
-  )
+  return { logins: [...byRef.values()], secrets: [...byName.values()] }
 }
 
 // The AWS profiles local-env wrote for logins that no source declares any
@@ -249,76 +85,30 @@ export const pruneUnusedLogins = () =>
     listSources().flatMap((source) => readSourceLogins(source, awsLogin)),
   )
 
-// What a secret is called in the messages
-const secretTitle = ({ name, secret, login }: WantedSecret) =>
-  `${name} (${secret.ref}${secret.field ? ` ${secret.field}` : ''}, ${login.name})`
-
-// The value of each secret, by name, read once the sessions are ready.
-// Throws an Error that names every secret that could not be read, before
-// anything runs.
-const readSecrets = async (secrets: WantedSecret[]) => {
-  const values: Record<string, string> = {}
-  const problems: string[] = []
-  await Promise.all(
-    secrets.map(async (wanted) => {
-      try {
-        values[wanted.name] = await readSecret(
-          wanted.type,
-          wanted.login,
-          wanted.command,
-        )
-      } catch (error) {
-        problems.push(
-          `${wanted.role.label}: the secret ${secretTitle(wanted)} could not be read: ${error instanceof Error ? error.message : String(error)}`,
-        )
-      }
-    }),
-  )
-  if (problems.length > 0) {
-    throw new Error(`${problems.sort().join('\n')}\nNothing ran.`)
-  }
-  logger.success(
-    `Read ${secrets.length === 1 ? 'the secret' : `${secrets.length} secrets`} of the tools: ${secrets.map(({ name }) => name).join(', ')}`,
-  )
-  // In the order the roles declare them
-  return Object.fromEntries(secrets.map(({ name }) => [name, values[name]!]))
-}
-
 // Makes the logins of these roles ready and reads their secrets, then gives
 // what Ansible gets: the logins (local_env.logins) and the value of each
 // secret by its name, each empty when no role needs one
 export const prepareLogins = async (
   roles: Role[],
-  skip: ReadonlySet<string> = new Set(),
+  passed: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ) => {
-  const { logins, secrets } = resolveRoleLogins(roles, skip)
+  const { logins, secrets } = resolveRoleLogins(roles, passed)
   pruneUnusedLogins()
   if (logins.length === 0 && secrets.length === 0) {
     return { logins: {}, secrets: {} }
   }
 
   logger.group('Logins')
-  // Each account once, with the roles that need it
-  const sessions = new Map<string, Found & { roles: string[] }>()
-  for (const { type, login, roles: names } of logins) {
-    const key = sessionKey({ type, login })
-    const session = sessions.get(key) ?? { type, login, roles: [] }
-    session.roles.push(...names.filter((name) => !session.roles.includes(name)))
-    sessions.set(key, session)
-  }
-  for (const { type, login, role } of secrets) {
-    const key = sessionKey({ type, login })
-    const session = sessions.get(key) ?? { type, login, roles: [] }
-    if (!session.roles.includes(role.label)) session.roles.push(role.label)
-    sessions.set(key, session)
-  }
-  await installClis([...sessions.values()].map(({ type }) => type))
-  for (const session of sessions.values()) {
-    session.type.configure?.(session.login)
-    await ensureSession(session)
-  }
-
-  const values = secrets.length > 0 ? await readSecrets(secrets) : {}
+  await ensureSessions([
+    ...logins.map(({ type, login, roles: needs }) => ({ type, login, needs })),
+    ...secrets.map(({ type, login, consumer }) => ({
+      type,
+      login,
+      needs: [consumer.label],
+    })),
+  ])
+  const values =
+    secrets.length > 0 ? await readSecrets(secrets, 'the tools') : {}
   return {
     logins: Object.fromEntries(
       logins.map(({ ref, type, login }) => [

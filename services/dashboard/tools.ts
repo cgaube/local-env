@@ -32,7 +32,7 @@ import {
   titleize,
   wantedInputs,
 } from './role-graph.js'
-import { tryReadSourceManifest } from './source-manifest.js'
+import { isLoginRef, tryReadSourceManifest } from './source-manifest.js'
 
 export type Role = GraphRole & {
   source: string
@@ -125,9 +125,6 @@ const readYaml = (path: string): unknown => {
   }
 }
 
-// A login a role names: <login>, or <source>/<login>
-const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
-
 // What local-env.yml says: its label, its stacks as <source>/<folder>, the
 // logins it needs and the secrets it asks for. A stack that names no folder
 // (a path, not a string), or a login or a secret that is not a name, is left
@@ -160,7 +157,7 @@ const readSettings = (dir: string, source: string) => {
       ...new Set(
         logins.filter(
           (entry): entry is string =>
-            typeof entry === 'string' && LOGIN_REF.test(entry),
+            typeof entry === 'string' && isLoginRef(entry),
         ),
       ),
     ],
@@ -445,6 +442,8 @@ const readRole = (
     (tag): tag is string => typeof tag === 'string',
   )
   const settings = readSettings(dir, source)
+  // Its file is one of the files above: a change is a new revision
+  const inputs = readInputs(dir, meta)
 
   return {
     id: `${source}/${name}`,
@@ -463,7 +462,7 @@ const readRole = (
     secrets: [
       ...new Set([
         ...settings.secrets,
-        ...readInputs(dir, meta)
+        ...inputs
           .map((input) => input.name)
           .filter((input) => vault.has(input)),
       ]),
@@ -477,8 +476,7 @@ const readRole = (
         ([dependency]) => !provided.has(dependency),
       ),
     ),
-    // Its file is one of the files above: a change is a new revision
-    inputs: readInputs(dir, meta),
+    inputs,
   }
 }
 

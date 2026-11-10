@@ -55,14 +55,22 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   help: (config: Config) => string | undefined
   // What a role gets in local_env.logins.<name>, beside `env`
   facts: (login: DeclaredLogin<Config>) => Record<string, string>
-  // The command that prints one secret, run with `env`, and the keys to
-  // take from its JSON output (none: the output as it is). Data: readSecret
+  // The command that prints one secret, run with `env`. Data: readSecret
   // (session.ts) runs it, for the roles and for the stacks. Throws an Error
   // that names the field when the reference does not fit the type.
   secretCommand: (
     login: DeclaredLogin<Config>,
     secret: SecretRef,
-  ) => { argv: string[]; keys: string[] }
+  ) => SecretCommand
+}
+
+export type SecretCommand = {
+  argv: string[]
+  // What it prints: the value as it is (`text`), or the value as a JSON
+  // string (`json`): null when the secret is not text
+  output: 'text' | 'json'
+  // The keys to take from the value, a JSON object; none: the value
+  keys: string[]
 }
 
 // Text that a manifest entry may give, trimmed; undefined when empty

@@ -65,19 +65,19 @@ describe('the aws login', () => {
       '--query',
       'SecretString',
       '--output',
-      'text',
+      'json',
     ]
 
     expect(
       awsLogin.secretCommand(login, { login: 'acme-dev', ref: 'billing/dev' }),
-    ).toEqual({ argv, keys: [] })
+    ).toEqual({ argv, output: 'json', keys: [] })
     expect(
       awsLogin.secretCommand(login, {
         login: 'acme-dev',
         ref: 'billing/dev',
         field: 'db',
       }),
-    ).toEqual({ argv, keys: ['db'] })
+    ).toEqual({ argv, output: 'json', keys: ['db'] })
   })
 
   test('shares one sso-session for each Identity Center', () => {
@@ -133,6 +133,7 @@ describe('the vault login', () => {
       }),
     ).toEqual({
       argv: ['vault', 'kv', 'get', '-field=password', 'secret/billing'],
+      output: 'text',
       keys: [],
     })
     expect(() =>

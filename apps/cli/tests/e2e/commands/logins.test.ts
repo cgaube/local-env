@@ -193,7 +193,8 @@ describe.concurrent('local-env install, logins', () => {
       ['secretsmanager', 'get-secret-value', '--secret-id', 'github/dev'],
       {
         env: { AWS_PROFILE: PROFILE },
-        stdout: `${JSON.stringify({ token: 'ghp_{{ "x" }}', other: 'no' })}\n`,
+        // --output json: the SecretString, as a JSON string
+        stdout: `${JSON.stringify(JSON.stringify({ token: 'ghp_{{ "x" }}', other: 'no' }))}\n`,
       },
     )
     cli.bin.on('vault', ['token', 'lookup'], {
@@ -201,7 +202,8 @@ describe.concurrent('local-env install, logins', () => {
     })
     cli.bin.on('vault', ['kv', 'get', '-field=token', 'secret/npm'], {
       env: { VAULT_ADDR: 'https://vault.acme.test', VAULT_NAMESPACE: 'dev' },
-      stdout: 'npm ss\n',
+      // vault prints the value with no newline after it
+      stdout: 'npm ss',
     })
     await addSourceWith(
       cli,
@@ -292,6 +294,62 @@ describe.concurrent('local-env install, logins', () => {
     )
     expect(result.output).toContain('Nothing ran.')
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('stops on a binary secret, which is not text', async () => {
+    await using cli = await createLoginsCli()
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
+    // A SecretBinary: no SecretString
+    cli.bin.on('aws', ['secretsmanager', 'get-secret-value'], {
+      stdout: 'null\n',
+    })
+    await addSourceWith(
+      cli,
+      'acme',
+      {
+        logins: { 'acme-dev': AWS_DEV },
+        secrets: { cert: { login: 'acme-dev', ref: 'certs/dev' } },
+      },
+      { billing: { 'local-env.yml': 'secrets: [cert]\n' } },
+    )
+    cli.home.seedPickedTools(['acme/billing'])
+
+    const result = await cli.run(['install'], { env: NO_TTY })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Billing: the secret cert (certs/dev, acme-dev) could not be read: it is not text (a binary secret): local-env reads text only',
+    )
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('reads no secret that a role of the run passes in vars:', async () => {
+    await using cli = await createLoginsCli()
+    await addSourceWith(
+      cli,
+      'acme',
+      {
+        logins: { 'acme-dev': AWS_DEV },
+        secrets: {
+          stripe_key: { login: 'acme-dev', ref: 'billing/dev', field: 'key' },
+        },
+      },
+      {
+        billing: { 'local-env.yml': 'secrets: [stripe_key]\n' },
+        backend: {
+          'meta/main.yml':
+            'dependencies:\n  - role: billing\n    vars: { stripe_key: sk_test }\n',
+        },
+      },
+    )
+    cli.home.seedPickedTools(['acme/backend'])
+
+    const result = await cli.run(['install'], { env: NO_TTY })
+
+    expect(result.exitCode).toBe(0)
+    // Not even the session: nothing to read
+    expect(cli.bin.calls('aws')).toEqual([])
+    expect(secretsInput(cli)).toBeUndefined()
   })
 
   test('refuses one variable that two sources fill with two secrets', async () => {
@@ -472,7 +530,7 @@ describe.concurrent('local-env install, logins', () => {
       'Github needs the login nope, which no source declares.',
     )
     expect(result.output).toContain(
-      'Github names ghcr, a registry login: a role can use aws and vault logins only.',
+      'Github names ghcr, a registry login: secrets and tools use aws and vault logins only.',
     )
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })

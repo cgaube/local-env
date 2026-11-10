@@ -25,7 +25,7 @@ import {
   logOutOfSession,
   sessionStatus,
 } from '#cli/logins/session.js'
-import { installClis } from '#cli/logins/wanted.js'
+import { installClis } from '#cli/logins/prepare.js'
 import { logger } from '#cli/utils/index.js'
 import {
   askConfirm,

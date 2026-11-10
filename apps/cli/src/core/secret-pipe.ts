@@ -20,11 +20,14 @@ export const secretsYaml = (secrets: Record<string, string>) =>
 const MKFIFO = '/usr/bin/mkfifo'
 const SH = '/bin/sh'
 
+// Where the pipe is, in the run folder, for --extra-vars
+export const secretsPath = (dir: string) => join(dir, 'secrets.yml')
+
 export const pipeSecrets = async (
   dir: string,
   secrets: Record<string, string>,
 ) => {
-  const path = join(dir, 'secrets.yml')
+  const path = secretsPath(dir)
   await execa(MKFIFO, ['-m', '600', path])
   // A writer that the kernel holds in open() until Ansible opens the pipe,
   // then writes and closes: Ansible reads to the end. The values reach it on

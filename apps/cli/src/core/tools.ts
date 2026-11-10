@@ -27,6 +27,7 @@ import {
   roleValues,
   unsupportedSecrets,
   type WantedInput,
+  passedVars,
   wantedInputs,
   wantedRoles,
 } from '#services/dashboard/role-graph.js'
@@ -43,7 +44,7 @@ import { hasCommand } from '#cli/utils/brew.js'
 import { HOME_DIR } from '#cli/core/paths.js'
 import { createRunFolder } from '#cli/core/run-folder.js'
 import { prepareLogins } from '#cli/logins/wanted.js'
-import { pipeSecrets } from '#cli/core/secret-pipe.js'
+import { pipeSecrets, secretsPath } from '#cli/core/secret-pipe.js'
 import { readConfig } from '#cli/core/config.js'
 import {
   GALAXY_DIR,
@@ -428,8 +429,12 @@ export const runPlaybook = async (
   // password, so a login that fails wastes no typing (logins/wanted.ts)
   const { logins, secrets } = await prepareLogins(
     run,
-    // A value that a role of the run sets wins over the vault's
-    new Set(inputs.filter(({ provided }) => provided).map(({ name }) => name)),
+    // A value that a role of the run passes to another wins over the vault's
+    passedVars(
+      catalog,
+      roots.map(({ id }) => id),
+      listGalaxyRoles(GALAXY_DIR),
+    ),
   )
   const sudo = [
     ...run.filter((role) => role.needsSudo).map(({ label }) => label),
@@ -473,13 +478,6 @@ export const runPlaybook = async (
     })
   }
 
-  // The values of the secrets: never in that file, through a pipe
-  // (secret-pipe.ts)
-  const secretsPipe =
-    Object.keys(secrets).length > 0
-      ? await pipeSecrets(folder.path, secrets)
-      : null
-
   const collections = linkCollections(catalog, join(folder.path, 'collections'))
   const playbook = join(folder.path, 'playbook.yml')
   const args = [
@@ -491,7 +489,11 @@ export const runPlaybook = async (
     ...(Object.keys(extraVars).length > 0
       ? ['--extra-vars', `@${extraVarsFile}`]
       : []),
-    ...(secretsPipe ? ['--extra-vars', `@${secretsPipe.path}`] : []),
+    // The values of the secrets: never in that file, through a pipe
+    // (secret-pipe.ts), made when Ansible starts
+    ...(Object.keys(secrets).length > 0
+      ? ['--extra-vars', `@${secretsPath(folder.path)}`]
+      : []),
     playbook,
   ]
   writeFileSync(
@@ -534,7 +536,13 @@ export const runPlaybook = async (
 
   // null with Ansible's own output, which has its recap
   let summary: PlaybookSummary | null = null
+  // Made here, so that whatever fails after it closes it: its writer waits
+  // for Ansible
+  let secretsPipe: Awaited<ReturnType<typeof pipeSecrets>> | null = null
   try {
+    if (Object.keys(secrets).length > 0) {
+      secretsPipe = await pipeSecrets(folder.path, secrets)
+    }
     if (verbose) {
       const child = execa('ansible-playbook', args, {
         ...stdin,
