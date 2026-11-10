@@ -69,9 +69,11 @@ export const vaultLogin: SessionLoginType<VaultConfig> = {
       return 'logged in'
     }
   },
+  // -no-print: the CLI keeps the token (~/.vault-token) without showing it
   loginCommand: ({ config }) => [
     'vault',
     'login',
+    '-no-print',
     `-method=${config.method}`,
     ...(config.mount ? [`-path=${config.mount}`] : []),
     ...(config.role ? [`role=${config.role}`] : []),

@@ -102,6 +102,7 @@ describe('the vault login', () => {
     expect(vaultLogin.loginCommand(login)).toEqual([
       'vault',
       'login',
+      '-no-print',
       '-method=oidc',
       'role=dev',
     ])

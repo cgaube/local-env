@@ -294,8 +294,10 @@ flowchart TD
 - `configure`: nothing. The CLI has no config file for the address.
 - `env`: `VAULT_ADDR`, and `VAULT_NAMESPACE` when the login has a `namespace`.
 - `status`: `vault token lookup`, with the `env`. Exit 0 is logged in.
-- `logIn`: `vault login -method=<method> [-path=<mount>] [role=<role>]`, with
-  the `env`. `method` is `oidc` by default.
+- `logIn`:
+  `vault login -no-print -method=<method> [-path=<mount>] [role=<role>]`, with
+  the `env`. `method` is `oidc` by default. `-no-print`: the CLI keeps the token
+  without showing it in the terminal.
 - `logOut`: `vault token revoke -self`, with the `env`. The token file stays,
   with a token that no longer works.
 
