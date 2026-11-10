@@ -47,9 +47,10 @@ export const closeFrameWithCallout = (
   frameClosed = true
 }
 
-// Where another program writes in the terminal, between two of these: a
-// dotted rule off clack's guide line
-const DOTTED_RULE = styleText('gray', `├${'┈'.repeat(38)}`)
+// Where another program writes in the terminal, between two of these: the
+// guide line goes on, dotted
+const dottedGuide = () =>
+  log.message('', { spacing: 0, symbol: styleText('dim', '┊') })
 
 // A line under the current group, on clack's guide line without an icon
 const line = (text: string) => {
@@ -92,22 +93,22 @@ export const logger = {
     ),
   log: (message: string) => line(message),
   // Before another program takes the terminal (a vendor's login): what it
-  // does and its command, then a dotted rule, so that its own lines read as
-  // outside the frame. takeBack() draws the same rule after them.
+  // does and its command, then the guide line goes on dotted, so that its own
+  // lines read as outside the frame. takeBack() dots it again after them.
   handOver: (title: string, command: string) => {
     process.stdout.write(
       [
         styleText('gray', S_BAR),
         `${styleText('cyan', S_STEP_ACTIVE)}  ${title}`,
         `${styleText('gray', S_BAR)}  ${styleText('dim', command)}`,
-        DOTTED_RULE,
         '',
       ].join('\n'),
     )
+    dottedGuide()
     gapBefore = false
   },
   takeBack: () => {
-    process.stdout.write(`${DOTTED_RULE}\n`)
+    dottedGuide()
     gapBefore = false
   },
   // A dim footer, set apart from the lines above
