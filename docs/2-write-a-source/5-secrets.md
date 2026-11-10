@@ -45,14 +45,20 @@ AWS Secrets Manager and HashiCorp Vault.
        field: token # its key: required for Vault
    ```
 
-3. Read each one by its name, with the lookup of local-env, in a task with
+3. Use each one by its name, in `local_env_secrets`, in a task with
    `no_log: true`:
 
    ```yaml
    - name: Save the GitHub token
      ansible.builtin.command: gh auth login --with-token
      args:
-       stdin: "{{ lookup('local_env.core.secret', 'GITHUB_TOKEN') }}"
+       stdin: '{{ local_env_secrets.GITHUB_TOKEN }}'
+     no_log: true
+
+   - name: Publish with the npm token
+     ansible.builtin.command: npm whoami
+     environment:
+       NPM_TOKEN: '{{ local_env_secrets.NPM_TOKEN }}'
      no_log: true
    ```
 
@@ -60,8 +66,9 @@ Before the playbook, `local-env install` installs the CLI (`awscli`, or `vault`
 from `hashicorp/tap`), writes the AWS profile, and checks the session. If the
 user is not logged in, it offers to log in (`aws sso login`, `vault login`) and
 gives the terminal to the CLI. From the dashboard, it stops and shows the
-command to run in a terminal. Your role does not install the CLI, does not log
-in, and does not know a profile name or an address.
+command to run in a terminal. Then it reads the secrets, and gives them to
+Ansible. Your role does not install the CLI, does not log in, does not read the
+vault, and does not know a profile name or an address.
 
 ## The secrets
 
@@ -77,17 +84,23 @@ in, and does not know a profile name or an address.
   required: the key to read. KV v1 and v2 both work.
 - `local-env install` checks every secret before anything runs: a name, a login
   or a field that is not valid stops it, with the reason.
-- The lookup reads the secret when the task runs, each time a task uses it. Its
-  value is never written to the disk by local-env, and never templated: a secret
-  can hold `{{`.
-- `no_log: true` keeps the value out of the output. A task that uses the lookup
-  without it can print the secret, as with any variable.
-- The lookup exists only in a run of `local-env install`, which links its
-  collection, `local_env.core`. Without local-env, Ansible stops on it: "The
-  lookup plugin 'local_env.core.secret' was not found".
-- Use local-env's lookup, not Ansible's (`amazon.aws.secretsmanager_secret`,
-  `community.hashi_vault`): those need Python packages (`boto3`, `hvac`) that
-  the Ansible of local-env does not have.
+- local-env reads only the secrets of the tools that this install runs, once
+  each, before the playbook. A secret that cannot be read (no access, a wrong
+  `ref` or `field`) stops the install before anything runs, with the error of
+  the CLI.
+- The values reach Ansible through a named pipe: they are never written to the
+  disk. Ansible never templates them: a secret can hold `{{`.
+- `local_env_secrets` is one variable for the whole run, like the environment of
+  a stack: two roles that read `GITHUB_TOKEN` must read the same secret, else
+  the install stops. Give one of them another name.
+- `no_log: true` keeps the value out of the output. A task that uses it without
+  `no_log` can print the secret, as with any variable.
+- `local_env_secrets` exists only in a run of `local-env install`. A role that
+  also runs without local-env gives a default:
+  `"{{ local_env_secrets.GITHUB_TOKEN | default(my_github_token) }}"`.
+- Don't use Ansible's own lookups (`amazon.aws.secretsmanager_secret`,
+  `community.hashi_vault`): they need Python packages (`boto3`, `hvac`) that the
+  Ansible of local-env does not have.
 
 ## Run the CLI yourself
 

@@ -43,6 +43,7 @@ import { hasCommand } from '#cli/utils/brew.js'
 import { HOME_DIR } from '#cli/core/paths.js'
 import { createRunFolder } from '#cli/core/run-folder.js'
 import { prepareLogins } from '#cli/logins/wanted.js'
+import { pipeSecrets } from '#cli/core/secret-pipe.js'
 import { readConfig } from '#cli/core/config.js'
 import {
   GALAXY_DIR,
@@ -376,15 +377,8 @@ const showAnswers = (answered: WantedInput[], saved: boolean) => {
 // Ansible finds a collection only at ansible_collections/<namespace>/<name>,
 // and a source has it at ansible/<folder>: links each collection of the
 // sources there, in this folder. Of two sources with the same collection, the
-// first one is linked. local-env's own, local_env.core (the lookup of the
-// secrets), comes first: shipped in the binary, written to the home folder.
-// The folder, for ANSIBLE_COLLECTIONS_PATH.
+// first one is linked. The folder, for ANSIBLE_COLLECTIONS_PATH.
 const linkCollections = (catalog: Role[], dir: string) => {
-  mkdirSync(join(dir, 'ansible_collections', 'local_env'), { recursive: true })
-  symlinkSync(
-    join(HOME_DIR, 'ansible', 'local_env', 'core'),
-    join(dir, 'ansible_collections', 'local_env', 'core'),
-  )
   for (const source of new Set(catalog.map((role) => role.source))) {
     const ansible = join(SOURCES_DIR, source, 'ansible')
     for (const { folder, name } of listCollections(ansible)) {
@@ -461,10 +455,8 @@ export const runPlaybook = async (
   // variable of every role, the `vars:` of a dependency too
   const extraVars = {
     ...passedValues(inputs, values),
-    // How the roles reach their accounts and read their secrets: no secret
-    // in it, the lookup local_env.core.secret reads them during the run
+    // How the roles reach their accounts: no secret in it
     ...(Object.keys(logins).length > 0 ? { local_env_logins: logins } : {}),
-    ...(Object.keys(secrets).length > 0 ? { local_env_secrets: secrets } : {}),
   }
   const extraVarsFile = join(folder.path, 'extra-vars.json')
   if (Object.keys(extraVars).length > 0) {
@@ -472,6 +464,13 @@ export const runPlaybook = async (
       mode: 0o600,
     })
   }
+
+  // The values of the secrets: never in that file, through a pipe
+  // (secret-pipe.ts)
+  const secretsPipe =
+    Object.keys(secrets).length > 0
+      ? await pipeSecrets(folder.path, secrets)
+      : null
 
   const collections = linkCollections(catalog, join(folder.path, 'collections'))
   const playbook = join(folder.path, 'playbook.yml')
@@ -484,6 +483,7 @@ export const runPlaybook = async (
     ...(Object.keys(extraVars).length > 0
       ? ['--extra-vars', `@${extraVarsFile}`]
       : []),
+    ...(secretsPipe ? ['--extra-vars', `@${secretsPipe.path}`] : []),
     playbook,
   ]
   writeFileSync(
@@ -526,50 +526,54 @@ export const runPlaybook = async (
 
   // null with Ansible's own output, which has its recap
   let summary: PlaybookSummary | null = null
-  if (verbose) {
-    const child = execa('ansible-playbook', args, {
-      ...stdin,
-      stdout: 'inherit',
-      stderr: 'inherit',
-      env,
-    })
-    // A terminal's Ctrl-C reaches Ansible too (same process group), a kill
-    // doesn't
-    folder.onSignal((signal) => child.kill(signal))
-    await child
-  } else {
-    const child = execa('ansible-playbook', args, {
-      ...stdin,
-      reject: false,
-      env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
-    })
-    folder.onSignal((signal) => child.kill(signal))
-    summary = await renderPlaybook(
-      child.iterable({ from: 'stdout' }),
-      // As the dashboard shows them. Ansible names a plain role by its
-      // folder, which is its name.
-      new Map(catalog.map(({ name, label }) => [name, label])),
-    )
-    const { exitCode, stderr } = await child
-    if (exitCode !== 0) {
-      // Ansible's own errors (a role it can't find, a YAML error) come
-      // before any task: they are only in its stderr
-      if (summary.failed === 0 && stderr) {
-        logger.log(String(stderr).trim().split('\n').slice(-10).join('\n'))
+  try {
+    if (verbose) {
+      const child = execa('ansible-playbook', args, {
+        ...stdin,
+        stdout: 'inherit',
+        stderr: 'inherit',
+        env,
+      })
+      // A terminal's Ctrl-C reaches Ansible too (same process group), a kill
+      // doesn't
+      folder.onSignal((signal) => child.kill(signal))
+      await child
+    } else {
+      const child = execa('ansible-playbook', args, {
+        ...stdin,
+        reject: false,
+        env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
+      })
+      folder.onSignal((signal) => child.kill(signal))
+      summary = await renderPlaybook(
+        child.iterable({ from: 'stdout' }),
+        // As the dashboard shows them. Ansible names a plain role by its
+        // folder, which is its name.
+        new Map(catalog.map(({ name, label }) => [name, label])),
+      )
+      const { exitCode, stderr } = await child
+      if (exitCode !== 0) {
+        // Ansible's own errors (a role it can't find, a YAML error) come
+        // before any task: they are only in its stderr
+        if (summary.failed === 0 && stderr) {
+          logger.log(String(stderr).trim().split('\n').slice(-10).join('\n'))
+        }
+        // sudo wanted a password local-env didn't ask for: the scan missed a
+        // become (`become: "{{ … }}"`, a role it doesn't read)
+        if (!password && summary.needPassword.length > 0) {
+          logger.callout(
+            'warn',
+            [
+              `A role needs your sudo password: ${summary.needPassword.join(', ')}`,
+              'local-env did not see that it uses sudo, so it did not ask for it. Please report it, with the name of the role.',
+            ].join('\n'),
+          )
+        }
+        throw new Error(`ansible-playbook exited with ${exitCode}`)
       }
-      // sudo wanted a password local-env didn't ask for: the scan missed a
-      // become (`become: "{{ … }}"`, a role it doesn't read)
-      if (!password && summary.needPassword.length > 0) {
-        logger.callout(
-          'warn',
-          [
-            `A role needs your sudo password: ${summary.needPassword.join(', ')}`,
-            'local-env did not see that it uses sudo, so it did not ask for it. Please report it, with the name of the role.',
-          ].join('\n'),
-        )
-      }
-      throw new Error(`ansible-playbook exited with ${exitCode}`)
     }
+  } finally {
+    await secretsPipe?.close()
   }
 
   const installedAt = new Date().toISOString()

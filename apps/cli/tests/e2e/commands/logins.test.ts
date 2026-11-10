@@ -68,12 +68,21 @@ const addSource = async (
   expect(added.exitCode).toBe(0)
 }
 
-// The extra vars the playbook got
+// The extra vars the playbook got in its file (extra-vars.json)
 const extraVars = (cli: Cli) => {
   const run = cli.bin.calls('ansible-playbook').at(-1)
-  const flag = run?.args.indexOf('--extra-vars') ?? -1
-  const file = run?.args[flag + 1]?.replace(/^@/, '') ?? ''
-  return JSON.parse(run?.inputs[file] ?? '{}') as Record<string, unknown>
+  const file = run?.args.find((arg) => arg.endsWith('extra-vars.json')) ?? ''
+  return JSON.parse(run?.inputs[file.replace(/^@/, '')] ?? '{}') as Record<
+    string,
+    unknown
+  >
+}
+
+// What Ansible read from the pipe of the secrets, as written
+const secretsInput = (cli: Cli) => {
+  const run = cli.bin.calls('ansible-playbook').at(-1)
+  const file = run?.args.find((arg) => arg.endsWith('secrets.yml')) ?? ''
+  return run?.inputs[file.replace(/^@/, '')]
 }
 
 const awsConfig = (cli: Cli) =>
@@ -140,11 +149,23 @@ describe.concurrent('local-env install, logins', () => {
     })
   })
 
-  test('gives the lookup how to read each secret of a role, never the value', async () => {
+  test('reads the secrets of the roles, and gives them to Ansible through a pipe', async () => {
     await using cli = await createLoginsCli()
     cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
+    cli.bin.on(
+      'aws',
+      ['secretsmanager', 'get-secret-value', '--secret-id', 'billing/dev'],
+      {
+        env: { AWS_PROFILE: PROFILE },
+        stdout: `${JSON.stringify({ stripe_key: 'sk_{{ "x" }}', other: 'no' })}\n`,
+      },
+    )
     cli.bin.on('vault', ['token', 'lookup'], {
       stdout: JSON.stringify({ data: { display_name: 'oidc-octocat' } }),
+    })
+    cli.bin.on('vault', ['kv', 'get', '-field=password', 'secret/billing'], {
+      env: { VAULT_ADDR: 'https://vault.acme.test', VAULT_NAMESPACE: 'dev' },
+      stdout: 'pa ss\n',
     })
     await addSource(
       cli,
@@ -157,56 +178,95 @@ describe.concurrent('local-env install, logins', () => {
           '  DB_PASSWORD: { login: data, ref: secret/billing, field: password }',
           '',
         ].join('\n'),
+        // The same secret again: read once
+        payments: [
+          'secrets:',
+          '  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }',
+          '',
+        ].join('\n'),
       },
     )
-    cli.home.seedPickedTools(['acme/billing'])
+    cli.home.seedPickedTools(['acme/billing', 'acme/payments'])
 
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
-    // Only the secrets: no local_env_logins without `logins:`
-    expect(extraVars(cli)).toEqual({
-      local_env_secrets: {
-        billing: {
-          STRIPE_KEY: {
-            title: 'billing/dev stripe_key, acme-dev',
-            argv: [
-              'aws',
-              'secretsmanager',
-              'get-secret-value',
-              '--secret-id',
-              'billing/dev',
-              '--query',
-              'SecretString',
-              '--output',
-              'text',
-            ],
-            keys: ['stripe_key'],
-            env: { AWS_PROFILE: PROFILE, AWS_REGION: 'eu-west-1' },
-            hint: 'If your session ended: local-env sources login acme --login acme-dev',
-          },
-          DB_PASSWORD: {
-            title: 'secret/billing password, data',
-            argv: ['vault', 'kv', 'get', '-field=password', 'secret/billing'],
-            keys: [],
-            env: {
-              VAULT_ADDR: 'https://vault.acme.test',
-              VAULT_NAMESPACE: 'dev',
-            },
-            hint: 'If your session ended: local-env sources login acme --login data',
-          },
-        },
-      },
-    })
-    // The collection of the lookup: written with the core stack, linked
-    // into the run
+    expect(result.output).toContain(
+      'Read 2 secrets of the tools: STRIPE_KEY, DB_PASSWORD',
+    )
     expect(
-      cli.home.exists('ansible/local_env/core/plugins/lookup/secret.py'),
-    ).toBe(true)
-    expect(cli.bin.calls('ansible-playbook').at(-1)?.collections).toEqual({
-      'local_env.core': cli.home.path('ansible/local_env/core'),
+      cli.bin.calls('aws').filter(({ args }) => args[0] === 'secretsmanager'),
+    ).toHaveLength(1)
+    // In no file of the run folder, which is on the disk
+    expect(extraVars(cli)).toEqual({})
+    const files = cli.bin.calls('ansible-playbook').at(-1)?.runFolder ?? {}
+    expect(Object.keys(files).length).toBeGreaterThan(0)
+    for (const content of Object.values(files)) {
+      expect(content).not.toContain('pa ss')
+      expect(content).not.toContain('sk_')
+    }
+    // As text, never templated by Ansible
+    expect(secretsInput(cli)).toBe(
+      [
+        'local_env_secrets:',
+        '  STRIPE_KEY: !unsafe "sk_{{ \\"x\\" }}"',
+        '  DB_PASSWORD: !unsafe "pa ss"',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  test('stops before Ansible when a secret cannot be read', async () => {
+    await using cli = await createLoginsCli()
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
+    cli.bin.on('aws', ['secretsmanager', 'get-secret-value'], {
+      exitCode: 254,
+      stderr:
+        'An error occurred (AccessDeniedException) when calling the GetSecretValue operation: not authorized',
     })
+    await addSource(
+      cli,
+      'acme',
+      { 'acme-dev': AWS_DEV },
+      {
+        billing:
+          'secrets:\n  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }\n',
+      },
+    )
+    cli.home.seedPickedTools(['acme/billing'])
+
+    const result = await cli.run(['install'], { env: NO_TTY })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Billing: the secret STRIPE_KEY (billing/dev stripe_key, acme-dev) could not be read: An error occurred (AccessDeniedException) when calling the GetSecretValue operation: not authorized',
+    )
+    expect(result.output).toContain('Nothing ran.')
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
+  })
+
+  test('refuses one secret name for two secrets', async () => {
+    await using cli = await createLoginsCli()
+    await addSource(
+      cli,
+      'acme',
+      { 'acme-dev': AWS_DEV },
+      {
+        billing:
+          'secrets:\n  TOKEN: { login: acme-dev, ref: billing/dev, field: token }\n',
+        payments:
+          'secrets:\n  TOKEN: { login: acme-dev, ref: payments/dev, field: token }\n',
+      },
+    )
+    cli.home.seedPickedTools(['acme/billing', 'acme/payments'])
+
+    const result = await cli.run(['install'], { env: NO_TTY })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'Billing and Payments both read a secret named TOKEN, but another one for each. Give one of them another name.',
+    )
+    expect(cli.bin.calls('aws')).toEqual([])
   })
 
   test('stops before anything runs on a secret that is not valid', async () => {

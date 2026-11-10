@@ -15,6 +15,7 @@ import {
   canLogIn,
   logInToSession,
   loginCommandFor,
+  readSecret,
   sessionStatus,
 } from '#cli/logins/session.js'
 import { parseSecretRefs, type SecretRef } from '#cli/logins/secrets.js'
@@ -24,9 +25,10 @@ import type { DeclaredLogin, SessionLoginType } from '#cli/logins/types.js'
 // playbook: the CLI installed and configured, the session checked, the login
 // run with the terminal. A role needs a login when it reads a secret of it
 // (`secrets:` of its local-env.yml), or names it to run the CLI itself
-// (`logins:`). Then given to Ansible: local_env_secrets, how the lookup
-// local_env.core.secret reads each secret of each role, and local_env_logins,
-// the environment of each login the roles name (docs/3-how-it-works/logins.md).
+// (`logins:`). Then the secrets are read, and given to Ansible with the
+// logins: local_env_secrets, the value of each secret by its name, and
+// local_env_logins, the environment of each login the roles name
+// (docs/3-how-it-works/logins.md).
 
 export type WantedLogin = {
   // As the roles name it: <login>, or <source>/<login>
@@ -97,7 +99,8 @@ export const resolveRoleLogins = (
   const byRef = new Map<string, WantedLogin>()
   const secrets: WantedSecret[] = []
   const problems: string[] = []
-  const byName = new Map<string, Role>()
+  // Extra vars are global: one secret name, one secret for the whole run
+  const byName = new Map<string, WantedSecret>()
   for (const role of roles) {
     for (const ref of role.logins) {
       const found = findSessionLogin(role, ref, problems)
@@ -121,22 +124,25 @@ export const resolveRoleLogins = (
     for (const problem of declared.problems) {
       problems.push(`${role.label}: local-env.yml: ${problem}`)
     }
-    if (Object.keys(declared.secrets).length === 0) continue
-    // The lookup finds a role's secrets by the role's name
-    const other = byName.get(role.name)
-    if (other && other.id !== role.id) {
-      problems.push(
-        `${other.label} (${other.source}) and ${role.label} (${role.source}) are both the role ${role.name}, and one reads secrets: rename one of them.`,
-      )
-      continue
-    }
-    byName.set(role.name, role)
     for (const [name, secret] of Object.entries(declared.secrets)) {
       const found = findSessionLogin(role, secret.login, problems)
       if (!found) continue
       try {
         const command = found.type.secretCommand(found.login, secret)
-        secrets.push({ role, name, secret, ...found, command })
+        const wanted = { role, name, secret, ...found, command }
+        const other = byName.get(name)
+        if (!other) {
+          byName.set(name, wanted)
+          secrets.push(wanted)
+        } else if (
+          other.login.identity !== found.login.identity ||
+          other.secret.ref !== secret.ref ||
+          other.secret.field !== secret.field
+        ) {
+          problems.push(
+            `${other.role.label} and ${role.label} both read a secret named ${name}, but another one for each. Give one of them another name.`,
+          )
+        }
       } catch (error) {
         problems.push(
           `${role.label}: local-env.yml: secrets.${name}.${error instanceof Error ? error.message : String(error)}`,
@@ -212,18 +218,44 @@ export const pruneUnusedLogins = () =>
     listSources().flatMap((source) => readSourceLogins(source, awsLogin)),
   )
 
-// What a role's secret is, for the lookup: the command that prints it and
-// its environment, never the value. `title` and `hint` are for its errors.
-const secretSpec = ({ secret, type, login, command }: WantedSecret) => ({
-  title: `${secret.ref}${secret.field ? ` ${secret.field}` : ''}, ${login.name}`,
-  argv: command.argv,
-  keys: command.keys,
-  env: type.env(login),
-  hint: `If your session ended: ${loginCommandFor(login.source, login.name)}`,
-})
+// What a secret is called in the messages
+const secretTitle = ({ name, secret, login }: WantedSecret) =>
+  `${name} (${secret.ref}${secret.field ? ` ${secret.field}` : ''}, ${login.name})`
 
-// Makes the logins of these roles ready, then gives what Ansible gets:
-// local_env_logins and local_env_secrets, each empty when no role needs one
+// The value of each secret, by name, read once the sessions are ready.
+// Throws an Error that names every secret that could not be read, before
+// anything runs.
+const readSecrets = async (secrets: WantedSecret[]) => {
+  const values: Record<string, string> = {}
+  const problems: string[] = []
+  await Promise.all(
+    secrets.map(async (wanted) => {
+      try {
+        values[wanted.name] = await readSecret(
+          wanted.type,
+          wanted.login,
+          wanted.command,
+        )
+      } catch (error) {
+        problems.push(
+          `${wanted.role.label}: the secret ${secretTitle(wanted)} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }),
+  )
+  if (problems.length > 0) {
+    throw new Error(`${problems.sort().join('\n')}\nNothing ran.`)
+  }
+  logger.success(
+    `Read ${secrets.length === 1 ? 'the secret' : `${secrets.length} secrets`} of the tools: ${secrets.map(({ name }) => name).join(', ')}`,
+  )
+  // In the order the roles declare them
+  return Object.fromEntries(secrets.map(({ name }) => [name, values[name]!]))
+}
+
+// Makes the logins of these roles ready and reads their secrets, then gives
+// what Ansible gets: local_env_logins and local_env_secrets, each empty when
+// no role needs one
 export const prepareLogins = async (roles: Role[]) => {
   const { logins, secrets } = resolveRoleLogins(roles)
   pruneUnusedLogins()
@@ -252,16 +284,7 @@ export const prepareLogins = async (roles: Role[]) => {
     await ensureSession(session)
   }
 
-  const byRole: Record<
-    string,
-    Record<string, ReturnType<typeof secretSpec>>
-  > = {}
-  for (const wanted of secrets) {
-    byRole[wanted.role.name] = {
-      ...byRole[wanted.role.name],
-      [wanted.name]: secretSpec(wanted),
-    }
-  }
+  const values = secrets.length > 0 ? await readSecrets(secrets) : {}
   return {
     logins: Object.fromEntries(
       logins.map(({ ref, type, login }) => [
@@ -269,6 +292,6 @@ export const prepareLogins = async (roles: Role[]) => {
         { type: type.type, ...type.facts(login), env: type.env(login) },
       ]),
     ),
-    secrets: byRole,
+    secrets: values,
   }
 }

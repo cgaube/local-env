@@ -1,4 +1,5 @@
 import { parseSecretRefs } from '#cli/logins/secrets.js'
+import { pickSecretValue } from '#cli/logins/session.js'
 
 describe('the secrets of a local-env.yml', () => {
   test('reads each secret, with its field when it has one', () => {
@@ -36,5 +37,22 @@ describe('the secrets of a local-env.yml', () => {
       'secrets.BAD_LOGIN.login must be the name of a login, or <source>/<login>',
       'secrets.NUMBER.ref must be text',
     ])
+  })
+})
+
+describe('the value of a secret', () => {
+  test('is the text as it is, or a field of its JSON', () => {
+    expect(pickSecretValue('plain text', [])).toBe('plain text')
+    expect(pickSecretValue('{"token":"t","n":{"a":1}}', ['token'])).toBe('t')
+    expect(pickSecretValue('{"n":{"a":1}}', ['n'])).toBe('{"a":1}')
+  })
+
+  test('says why a field cannot be taken', () => {
+    expect(() => pickSecretValue('not json', ['token'])).toThrow(
+      'its value is not JSON: it has no fields',
+    )
+    expect(() => pickSecretValue('{"other":1}', ['token'])).toThrow(
+      'it has no field token',
+    )
   })
 })

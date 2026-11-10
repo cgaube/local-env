@@ -11,10 +11,9 @@ holds what we build:
   released on its own: `bun run compile` builds it into
   `services/dashboard/public/` (gitignored), which the CLI ships.
 - The root holds the core stack the CLI ships, `compose.yaml` and `services/`
-  (the Docker images), the Ansible collection it gives to the roles
-  (`ansible/local_env/core`), and the shared tooling: oxlint, oxfmt, lefthook,
-  mise, changesets, `bunfig.toml` and `tsconfig.base.json`, which the
-  `tsconfig.json` of each folder extends.
+  (the Docker images), and the shared tooling: oxlint, oxfmt, lefthook, mise,
+  changesets, `bunfig.toml` and `tsconfig.base.json`, which the `tsconfig.json`
+  of each folder extends.
 - Imports use the aliases of `tsconfig.base.json` (`paths`), which Bun, its
   bundler, Vite and tsc all read, never `./` or `../`: `#services/*`
   (`services/`), `#cli/*` (`apps/cli/src`), `#ui/*` (`apps/web/src`),
@@ -38,7 +37,7 @@ holds what we build:
   everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
-  shipped files (`compose.yaml`, `services/`, `ansible/`) there. The
+  shipped files (`compose.yaml`, `services/`) there. The
   `src/core/shipped-files.ts` macro embeds them at build time. Runtime state
   (`config.json`, `services/proxy/certs/`, `volumes/`) lives only in the home
   folder. `src/core/config.ts` reads and writes `config.json` (the domain); the
@@ -274,26 +273,27 @@ holds what we build:
   declares the secrets it reads in its `local-env.yml`
   (`secrets: { GITHUB_TOKEN: { login, ref, field } }`: env-var names, as in
   stacks; `src/logins/secrets.ts` reads these references, which Docker stacks
-  will share), and a task reads one with
-  `lookup('local_env.core.secret', 'GITHUB_TOKEN')`. A role that runs the CLI
-  itself names the login (`logins: [acme-dev]` or `[<source>/acme-dev]`). Before
-  the sudo password, `install` resolves both (`src/logins/wanted.ts`: own source
-  first, then any source; a missing login, a registry, a secret that is not
-  valid or one name for two logins stops it), installs the CLI with Homebrew,
-  writes `~/.aws/config` (`[profile local-env-<source>-<login>]`, an
-  `sso-session` for each start URL; never a section it did not write, which
-  `volumes/logins.json` records) and checks the session. Logged out, it offers
-  to log in, except without a terminal or from the dashboard: the agent sets
-  `LOCAL_ENV_FROM_DASHBOARD=1`. Then it passes, in the extra vars,
-  `local_env_secrets` (by role full name, then secret name: the command from the
-  type's `secretCommand`, its `env` and the JSON keys to take; never a value)
-  and `local_env_logins` (by the name the roles use: `env`, `profile`/`region`
-  or `address`/`namespace`). The lookup is `ansible/local_env/core`, a
-  collection that the binary ships (`shipped-files.ts`) and every run links
-  first (`linkCollections`); it only runs what it is given, and
-  `tests/unit/ansible/secret-lookup.test.ts` runs it with the real Ansible
-  (skipped without it). `sources list`, `login`, `logout` and `doctor` show and
-  manage every type (`listing.ts`).
+  will share), and a task uses one as `{{ local_env_secrets.GITHUB_TOKEN }}`. A
+  role that runs the CLI itself names the login (`logins: [acme-dev]` or
+  `[<source>/acme-dev]`). Before the sudo password, `install` resolves both
+  (`src/logins/wanted.ts`: own source first, then any source; a missing login, a
+  registry, a secret that is not valid or one name for two logins stops it),
+  installs the CLI with Homebrew, writes `~/.aws/config`
+  (`[profile local-env-<source>-<login>]`, an `sso-session` for each start URL;
+  never a section it did not write, which `volumes/logins.json` records) and
+  checks the session. Logged out, it offers to log in, except without a terminal
+  or from the dashboard: the agent sets `LOCAL_ENV_FROM_DASHBOARD=1`. Then it
+  reads every secret of the roles of the run, once each (the command of the
+  type's `secretCommand`, run by `readSecret` in `session.ts`, the same code
+  that stacks will use); one that cannot be read stops it before anything runs.
+  It passes `local_env_logins` (by the name the roles use: `env`,
+  `profile`/`region` or `address`/`namespace`; no secret) in the extra vars
+  file, and the values in `local_env_secrets` through a named pipe of the run
+  folder (`src/core/secret-pipe.ts`: `--extra-vars @secrets.yml`, each value
+  `!unsafe`, nothing on the disk). The fake `ansible-playbook` reads the pipe
+  like Ansible, and skips it when it checks the files of the run folder.
+  `sources list`, `login`, `logout` and `doctor` show and manage every type
+  (`listing.ts`).
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.

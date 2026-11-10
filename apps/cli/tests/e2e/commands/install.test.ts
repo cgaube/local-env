@@ -719,10 +719,8 @@ describe.concurrent('local-env install', () => {
 
     const run = cli.bin.calls('ansible-playbook').at(-1)
     expect(rolesRun(cli)).toEqual(['acme.profiles.backend'])
-    // local-env's own, then each collection of the sources, where Ansible
-    // looks for them first
+    // Each collection of the sources, where Ansible looks for it first
     expect(run?.collections).toEqual({
-      'local_env.core': cli.home.path('ansible/local_env/core'),
       'acme.profiles': cli.home.path('volumes/sources/acme/ansible/profiles'),
       'acme.tools': cli.home.path('volumes/sources/acme/ansible/tools'),
     })

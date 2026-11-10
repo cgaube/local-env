@@ -38,6 +38,50 @@ export const sessionStatus = async <Config>(
     : { state: 'logged-out', detail: lastLine(String(result.stderr)) }
 }
 
+// The value at these keys of a JSON text; the text as it is without keys.
+// Throws an Error that says which key is missing.
+export const pickSecretValue = (text: string, keys: string[]) => {
+  if (keys.length === 0) return text
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error('its value is not JSON: it has no fields')
+  }
+  for (const key of keys) {
+    if (typeof data !== 'object' || data === null || !(key in data)) {
+      throw new Error(`it has no field ${key}`)
+    }
+    data = (data as Record<string, unknown>)[key]
+  }
+  return typeof data === 'string' ? data : JSON.stringify(data)
+}
+
+// One secret's value, read with the vendor's CLI and the user's session:
+// the command of the type (secretCommand), with the login's environment.
+// The value stays in memory. Throws an Error with the CLI's own message,
+// which holds no secret.
+export const readSecret = async <Config>(
+  type: SessionLoginType<Config>,
+  login: DeclaredLogin<Config>,
+  command: { argv: string[]; keys: string[] },
+) => {
+  const [binary, ...args] = command.argv
+  const result = await execa(binary!, args, {
+    env: type.env(login),
+    reject: false,
+    stdin: 'ignore',
+    stripFinalNewline: false,
+    timeout: 60_000,
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(
+      lastLine(String(result.stderr)) || `exit ${result.exitCode}`,
+    )
+  }
+  return pickSecretValue(String(result.stdout).replace(/\n$/, ''), command.keys)
+}
+
 // The vendor's CLI talks to the user: the browser, an MFA code or a
 // password goes between them, never through local-env
 const runWithTerminal = async (

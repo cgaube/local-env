@@ -96,7 +96,9 @@ const filesIn = (folder: string): [string, string][] =>
   readdirSync(folder).flatMap((name) => {
     const path = join(folder, name)
     const stat = lstatSync(path)
-    if (stat.isSymbolicLink()) return []
+    // A named pipe holds nothing on the disk (the secrets: read once, in
+    // `inputs`)
+    if (stat.isSymbolicLink() || stat.isFIFO()) return []
     return stat.isDirectory()
       ? filesIn(path)
       : [[path, readFileSync(path, 'utf8')] as [string, string]]

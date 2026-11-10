@@ -56,9 +56,8 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   // What a role gets in local_env_logins.<name>, beside `env`
   facts: (login: DeclaredLogin<Config>) => Record<string, string>
   // The command that prints one secret, run with `env`, and the keys to
-  // take from its JSON output (none: the output as it is). Data, so that
-  // whatever reads the secret runs the same command: the lookup of the roles
-  // (ansible/local_env/core), and local-env for the stacks. Throws an Error
+  // take from its JSON output (none: the output as it is). Data: readSecret
+  // (session.ts) runs it, for the roles and for the stacks. Throws an Error
   // that names the field when the reference does not fit the type.
   secretCommand: (
     login: DeclaredLogin<Config>,
