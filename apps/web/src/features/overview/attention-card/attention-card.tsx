@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { CheckIcon, CircleCheckIcon, TriangleAlertIcon } from 'lucide-react'
+import { CircleCheckIcon, TriangleAlertIcon } from 'lucide-react'
 import { buttonVariants } from '#ui/components/ui/button'
 import {
   Card,
@@ -10,7 +10,6 @@ import {
 } from '#ui/components/ui/card'
 import {
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -24,9 +23,6 @@ import {
   attentionItems,
 } from '#ui/features/overview/attention.ts'
 import { useToolChanges } from '#ui/features/tools/use-tool-changes.ts'
-import type { LoginsResponse } from '#services/dashboard/agent-protocol.ts'
-import type { AgentState, Service } from '#ui/features/live-data/live-data.ts'
-import { plural } from '#ui/lib/plural.ts'
 
 function ItemAction({ action }: Pick<AttentionItem, 'action'>) {
   if (!action) return null
@@ -41,30 +37,9 @@ function ItemAction({ action }: Pick<AttentionItem, 'action'>) {
   )
 }
 
-// What the page checked, when nothing needs you: one line each
-const checks = ({
-  services,
-  agent,
-  logins,
-}: {
-  services: Service[]
-  agent: AgentState
-  logins: LoginsResponse | undefined
-}) =>
-  [
-    `${plural(services.length, 'core service')} running`,
-    agent.available ? `Dashboard agent ${agent.version}` : null,
-    logins?.available
-      ? logins.logins.length > 0
-        ? `${plural(logins.logins.length, 'login')}, all logged in`
-        : 'No source needs a login'
-      : null,
-    'Your tools are up to date',
-  ].filter((line): line is string => line !== null)
-
-// When nothing needs you: a check, and what was checked, in the space the
-// list takes otherwise
-function AllGood({ lines }: { lines: string[] }) {
+// When nothing needs you: a check in the space the list takes otherwise.
+// Health, beside it, shows the services; Sources, the logins.
+function AllGood() {
   return (
     <Empty className="p-4">
       <EmptyHeader>
@@ -76,25 +51,15 @@ function AllGood({ lines }: { lines: string[] }) {
         </EmptyMedia>
         <EmptyTitle>All good</EmptyTitle>
         <EmptyDescription>
-          Your services run, and nothing waits for you
+          Your services run, your logins work and your tools are up to date
         </EmptyDescription>
       </EmptyHeader>
-      <EmptyContent>
-        <ul className="text-muted-foreground flex flex-col gap-1.5 text-sm">
-          {lines.map((line) => (
-            <li key={line} className="flex items-center gap-2">
-              <CheckIcon aria-hidden="true" className="text-success size-4" />
-              {line}
-            </li>
-          ))}
-        </ul>
-      </EmptyContent>
     </Empty>
   )
 }
 
 // At the top of the overview: what needs you, each with what to do, or that
-// all is well, with what was checked. From what the page knows: the core
+// all is well. From what the page knows: the core
 // services, the agent, the logins it checked and the tools of the next
 // install. It fills its row, as tall as Health beside it.
 export function AttentionCard() {
@@ -107,7 +72,7 @@ export function AttentionCard() {
     return (
       <Card className="flex-1">
         <CardContent className="flex flex-1">
-          <AllGood lines={checks({ services, agent, logins: logins.data })} />
+          <AllGood />
         </CardContent>
       </Card>
     )

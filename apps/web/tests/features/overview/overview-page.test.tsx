@@ -37,17 +37,10 @@ describe('the overview', () => {
 
     expect(screen.getByText('All good')).toBeInTheDocument()
     expect(
-      screen.getByText('Your services run, and nothing waits for you'),
+      screen.getByText(
+        'Your services run, your logins work and your tools are up to date',
+      ),
     ).toBeInTheDocument()
-    // What it checked, in the space of the list
-    for (const line of [
-      '1 core service running',
-      'Dashboard agent 0.6.1',
-      'No source needs a login',
-      'Your tools are up to date',
-    ]) {
-      expect(screen.getByText(line)).toBeInTheDocument()
-    }
   })
 
   test('lists what needs you first, each with what to do', async () => {
@@ -72,6 +65,10 @@ describe('the overview', () => {
     expect(
       within(needs).getByText('example-vault: logged out'),
     ).toBeInTheDocument()
+    // Health names the state of the one that is down
+    expect(
+      within(card('Health')).getByText('exited').closest('[data-slot="badge"]'),
+    ).not.toBeNull()
     expect(
       within(needs).getByText(
         'local-env sources login acme --login example-vault',
@@ -141,6 +138,12 @@ describe('the overview', () => {
     const health = card('Health')
     expect(within(health).getByText('2 running')).toBeInTheDocument()
     expect(within(health).getByText('dashboard agent')).toBeInTheDocument()
+    // A dot for each one that is well, not "running" again and again
+    expect(
+      within(health).queryByText('running', {
+        selector: '[data-slot="badge"]',
+      }),
+    ).not.toBeInTheDocument()
 
     await user.click(within(health).getByRole('button', { name: 'Details' }))
 

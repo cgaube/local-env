@@ -20,7 +20,7 @@ import { Skeleton } from '#ui/components/ui/skeleton'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { CoreServicesTable } from '#ui/features/overview/core-services-table'
 import { servicesSummary } from '#ui/features/overview/overview.ts'
-import { StatusBadge } from '#ui/features/status/status-badge'
+import { StatusDot } from '#ui/features/status/status-dot'
 
 // Beside the apps: is each core service up, and the dashboard agent. The
 // table of the services, with their containers and URLs, opens in a sheet:
@@ -66,7 +66,7 @@ export function HealthCard() {
                 className="flex items-center justify-between gap-2"
               >
                 <span className="truncate">{service}</span>
-                <StatusBadge state={state} />
+                <StatusDot state={state} />
               </li>
             ))}
             {agent ? (
@@ -80,7 +80,7 @@ export function HealthCard() {
                     </span>
                   ) : null}
                 </span>
-                <StatusBadge state={agent.available ? 'running' : 'stopped'} />
+                <StatusDot state={agent.available ? 'running' : 'stopped'} />
               </li>
             ) : null}
           </ul>
