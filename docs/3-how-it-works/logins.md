@@ -94,13 +94,14 @@ logins:
   They do not ask for AWS or Vault logins: they read no secret.
 - `local-env sources remove` removes the AWS profiles that only this source
   used.
-- The Overview of the dashboard has a **Logins** card, beside the Sources card
-  (`features/logins/`): one row for each account, with its type, the sources
-  that need it and its state (logged in as …, logged out, CLI not installed, not
-  asked). A logged-out row shows the command to copy
-  (`local-env sources login acme --login acme-dev`) and the `help` of the
-  source. It checks them when the page opens, and again with **Refresh**. A card
-  without any login is not shown.
+- The Overview of the dashboard shows the logins of each source in its row of
+  the **Sources** card (`features/logins/login-state/`): each account, its type
+  and its state (logged in as …, logged out, CLI not installed, not asked). A
+  login that waits for you is also in **Needs attention**, at the top of the
+  page, with the command to copy
+  (`local-env sources login acme --login acme-dev`) and the `help` of the source
+  (`features/overview/attention.ts`). It checks them when the page opens, and
+  again with **Check logins**.
 - The dashboard never logs in and never takes a credential.
 
 ## How it works
@@ -279,7 +280,7 @@ sequenceDiagram
   participant Agent as dashboard agent (Mac)
   participant CLI as aws / vault
   participant DH as Dockhand
-  Page->>Dash: GET /api/logins (on open, on Refresh)
+  Page->>Dash: GET /api/logins (on open, on Check logins)
   Dash->>Agent: GET /logins (Bearer token)
   Agent->>DH: GET /registries
   Agent->>CLI: status of each aws / vault account, in parallel
@@ -296,13 +297,13 @@ sequenceDiagram
   `logged-out`, `no-cli`, `not-asked`, `unknown` when Dockhand cannot be
   reached), a detail without a secret (as whom, or the CLI's error), the command
   to run and the help (`LoginRow` in `services/dashboard/agent-protocol.ts`).
-- The page asks when it opens and on **Refresh**, never on a timer, and not on
-  window focus: each check is a call to AWS, Vault or Dockhand
+- The page asks when it opens and on **Check logins**, never on a timer, and not
+  on window focus: each check is a call to AWS, Vault or Dockhand
   (`apps/web/src/features/logins/logins.ts`). The states are not in
   `/api/events`, which sends every change at once. The agent keeps no cache: a
   refresh checks again.
-- Without the agent, `/api/logins` answers `{ available: false }`, and the card
-  shows `local-env start`.
+- Without the agent, `/api/logins` answers `{ available: false }`: the Sources
+  card says to start it, and Needs attention shows `local-env start`.
 
 ### The `aws` type
 
@@ -456,15 +457,17 @@ filled.
   keys do not.
 - **The dashboard never logs in.** It runs in a container. A login opens a
   browser or asks for a password: it belongs to a terminal on the Mac.
-- **A card on the Overview, not a page.** Logins belong to sources, and the
-  Sources card is on the Overview. A page is for when the list grows.
+- **In the Sources card, not a card or a page of their own.** Logins belong to
+  sources: each one shows under the source that needs it. What to do about one
+  is in Needs attention, with the other problems of the page, so that the top of
+  the Overview answers "is everything OK?".
 - **The agent builds the list, not the container.** Mounting `~/.aws` and
   `~/.vault-token` into the dashboard gives a container the user's sessions. The
   agent already runs on the Mac as the user, behind a token, with the CLI's
   code: the dashboard needs no copy of it.
-- **On open and on Refresh, no polling.** A login changes when the user logs in
-  in a terminal: they come back and refresh. A timer would call AWS and Vault
-  every minute for nothing.
+- **On open and on Check logins, no polling.** A login changes when the user
+  logs in in a terminal: they come back and refresh. A timer would call AWS and
+  Vault every minute for nothing.
 
 ## Limits
 

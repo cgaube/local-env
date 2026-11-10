@@ -21,9 +21,10 @@ local-env sources list
 Each login of a source has a line: `✔` when you are logged in, `▲` with the
 command to run when you are not. `local-env doctor` checks them too.
 
-The **Logins** card on the Overview of the dashboard shows the same: each login,
-its state, and the command to copy. It checks them when the page opens: after
-you log in, click **Refresh**.
+The Overview of the dashboard shows the same: each source lists its logins and
+their state, and **Needs attention**, at the top, gives the command to copy for
+one that waits for you. It checks them when the page opens: after you log in,
+click **Check logins**.
 
 ## Registries
 

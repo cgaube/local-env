@@ -248,14 +248,8 @@ const writeServices = async (routes: Route[]) => {
       return {
         service: container.Labels?.['com.docker.compose.service'] ?? name,
         description: container.Labels?.['local-env.description'] ?? null,
-        // An app gets a card in the dashboard. content is the source folder
-        // it uses (docker, ansible), to count what it can install.
-        app: app
-          ? {
-              name: app,
-              content: container.Labels?.['local-env.app.content'] ?? null,
-            }
-          : null,
+        // An app gets a link in the dashboard's sidebar
+        app: app ? { name: app } : null,
         container: name,
         url,
         ports,

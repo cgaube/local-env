@@ -31,9 +31,8 @@ secrets: # see Logins: the variable each secret fills, and where it is
 - When a source of that `name` is already added, `sources add` skips the repo
   with a warning and exits 0: the same repo again, or another one with the same
   name.
-- The dashboard's Sources card and the Logins card, `sources list` and the
-  prompts show the `label`. Commands take the `name`:
-  `local-env sources login acme-platform`.
+- The dashboard's Sources card, `sources list` and the prompts show the `label`.
+  Commands take the `name`: `local-env sources login acme-platform`.
 - A repo without a manifest still works. Its name is the repo's basename. It has
   no label and no logins. If that name is not valid, the author adds a manifest.
 - References to another source use its name: a role's

@@ -1,52 +1,27 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '#ui/components/ui/card'
-import { Skeleton } from '#ui/components/ui/skeleton'
-import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { PageHeader } from '#ui/features/page-header/page-header'
 import { SourcesCard } from '#ui/features/sources/sources-card'
-import { LoginsCard } from '#ui/features/logins/logins-card'
-import { AppCards } from '#ui/features/overview/app-cards'
-import { CoreServicesTable } from '#ui/features/overview/core-services-table'
-import { servicesSummary } from '#ui/features/overview/overview.ts'
+import { AttentionCard } from '#ui/features/overview/attention-card'
+import { HealthCard } from '#ui/features/overview/health-card'
 
+// What needs you first, beside the health of the core services, then the
+// sources and their logins, across the page. The apps (Dockhand…) are in the
+// sidebar.
 export function OverviewPage() {
-  const { services, sources } = useLiveData()
-
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Overview"
-        description="Your local environment: the apps, the services behind them and your sources"
+        description="How your local environment is doing, at a glance"
       />
 
-      {services ? (
-        <AppCards services={services} sources={sources ?? []} />
-      ) : (
-        <Skeleton className="h-32" />
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Core services</CardTitle>
-          <CardDescription>
-            {services ? servicesSummary(services) : 'Loading…'}
-          </CardDescription>
-        </CardHeader>
-        {services?.length ? (
-          <CardContent>
-            <CoreServicesTable services={services} />
-          </CardContent>
-        ) : null}
-      </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <AttentionCard />
+        </div>
+        <HealthCard />
+      </div>
 
       <SourcesCard />
-
-      <LoginsCard />
     </div>
   )
 }
