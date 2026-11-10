@@ -28,6 +28,16 @@
       "additionalProperties": {
         "$ref": "#/definitions/login"
       }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Where the values of the secrets of the source are, by the name of the variable each one fills: an input of a role of the source (meta/argument_specs.yml), or a name its local-env.yml asks for. local-env reads a secret only when a tool it installs needs it, with the login's CLI and the user's own session.",
+      "propertyNames": {
+        "pattern": "^(?![Ll][Oo][Cc][Aa][Ll]_[Ee][Nn][Vv]|[Aa][Nn][Ss][Ii][Bb][Ll][Ee]_)[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/secret"
+      }
     }
   },
   "definitions": {
@@ -202,6 +212,28 @@
         "help": {
           "type": "string",
           "description": "Shown when the user is not logged in: who to ask for access."
+        }
+      }
+    },
+    "secret": {
+      "type": "object",
+      "required": ["login", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "login": {
+          "type": "string",
+          "pattern": "^(?:[a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$",
+          "description": "The login that reaches the vault: a login of this manifest, or <source>/<login>. An aws or vault login."
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The secret in that vault: an AWS secret name or ARN, or the path of a Vault KV entry (secret/github)."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The key to take: of the secret's JSON value (AWS; without it, the whole text), or of the KV entry (Vault: required)."
         }
       }
     }

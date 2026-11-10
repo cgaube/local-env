@@ -1,5 +1,7 @@
 import type { Role } from '#services/dashboard/tools.js'
-import { listSources } from '#cli/sources/sources.js'
+import { resolveInside } from '#cli/core/paths.js'
+import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
+import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
 import { logger } from '#cli/utils/logger.js'
 import { askConfirm } from '#cli/utils/prompt.js'
 import {
@@ -25,9 +27,10 @@ import type { DeclaredLogin, SessionLoginType } from '#cli/logins/types.js'
 // playbook: the CLI installed and configured, the session checked, the login
 // run with the terminal. A role needs a login when it reads a secret of it
 // (`secrets:` of its local-env.yml), or names it to run the CLI itself
-// (`logins:`). Then the secrets are read, and given to Ansible with the
-// logins: local_env_secrets, the value of each secret by its name, and
-// local_env_logins, the environment of each login the roles name
+// (`logins:`). A role gets the secrets of its own source that it declares as
+// inputs, or asks for. Then the secrets are read, and given to Ansible with
+// the logins: each secret as the variable of its name, and local_env.logins,
+// the environment of each login the roles name
 // (docs/3-how-it-works/logins.md).
 
 export type WantedLogin = {
@@ -68,6 +71,18 @@ const findLogin = (role: Role, ref: string) => {
   return null
 }
 
+// The secrets of each source manifest, checked once per source
+const secretsOfSources = () => {
+  const cache = new Map<string, ReturnType<typeof parseSecretRefs>>()
+  return (source: string) => {
+    if (!cache.has(source)) {
+      const manifest = tryReadSourceManifest(resolveInside(SOURCES_DIR, source))
+      cache.set(source, parseSecretRefs(manifest?.secrets ?? {}))
+    }
+    return cache.get(source)!
+  }
+}
+
 // A login of an aws or vault type, or a problem
 const findSessionLogin = (
   role: Role,
@@ -95,7 +110,10 @@ const findSessionLogin = (
 // not valid, a clash of names.
 export const resolveRoleLogins = (
   roles: Role[],
+  // Variables that a role of the run sets for another (`vars:`)
+  skip: ReadonlySet<string> = new Set(),
 ): { logins: WantedLogin[]; secrets: WantedSecret[] } => {
+  const sourceSecrets = secretsOfSources()
   const byRef = new Map<string, WantedLogin>()
   const secrets: WantedSecret[] = []
   const problems: string[] = []
@@ -120,11 +138,24 @@ export const resolveRoleLogins = (
       if (!existing.roles.includes(role.label)) existing.roles.push(role.label)
     }
 
-    const declared = parseSecretRefs(role.secrets)
-    for (const problem of declared.problems) {
-      problems.push(`${role.label}: local-env.yml: ${problem}`)
-    }
-    for (const [name, secret] of Object.entries(declared.secrets)) {
+    for (const name of role.secrets) {
+      // A role that runs sets it (`vars:`): its value wins, not read
+      if (skip.has(name)) continue
+      const declared = sourceSecrets(role.source)
+      const secret = declared.secrets[name]
+      if (!secret) {
+        const invalid = declared.problems.find((problem) =>
+          [`secrets.${name}.`, `secrets.${name}:`, `secrets.${name} `].some(
+            (start) => problem.startsWith(start),
+          ),
+        )
+        problems.push(
+          invalid
+            ? `${role.source}: local-env.yml: ${invalid}`
+            : `${role.label} asks for the secret ${name}, which its source ${role.source} does not declare in the secrets of its local-env.yml.`,
+        )
+        continue
+      }
       const found = findSessionLogin(role, secret.login, problems)
       if (!found) continue
       try {
@@ -140,12 +171,12 @@ export const resolveRoleLogins = (
           other.secret.field !== secret.field
         ) {
           problems.push(
-            `${other.role.label} and ${role.label} both read a secret named ${name}, but another one for each. Give one of them another name.`,
+            `${other.role.label} (${other.role.source}) and ${role.label} (${role.source}) both get ${name} from the secrets of their source, but another secret for each: Ansible's variables are global. Rename it in one of the sources.`,
           )
         }
       } catch (error) {
         problems.push(
-          `${role.label}: local-env.yml: secrets.${name}.${error instanceof Error ? error.message : String(error)}`,
+          `${role.source}: local-env.yml: secrets.${name}.${error instanceof Error ? error.message : String(error)}`,
         )
       }
     }
@@ -254,10 +285,13 @@ const readSecrets = async (secrets: WantedSecret[]) => {
 }
 
 // Makes the logins of these roles ready and reads their secrets, then gives
-// what Ansible gets: local_env_logins and local_env_secrets, each empty when
-// no role needs one
-export const prepareLogins = async (roles: Role[]) => {
-  const { logins, secrets } = resolveRoleLogins(roles)
+// what Ansible gets: the logins (local_env.logins) and the value of each
+// secret by its name, each empty when no role needs one
+export const prepareLogins = async (
+  roles: Role[],
+  skip: ReadonlySet<string> = new Set(),
+) => {
+  const { logins, secrets } = resolveRoleLogins(roles, skip)
   pruneUnusedLogins()
   if (logins.length === 0 && secrets.length === 0) {
     return { logins: {}, secrets: {} }

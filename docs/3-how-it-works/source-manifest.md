@@ -1,6 +1,7 @@
 # Source manifest
 
-Status: done for `name` and `label`. [Logins](logins.md) reads `logins`.
+Status: done for `name` and `label`. [Logins](logins.md) reads `logins` and
+`secrets`.
 
 ## What it does
 
@@ -15,12 +16,15 @@ logins: # see Logins
   acme-dev:
     type: aws
     # …
+secrets: # see Logins: the variable each secret fills, and where it is
+  github_token: { login: acme-dev, ref: platform/dev/github, field: token }
 ```
 
 - `name` is required in a manifest. It is lowercase letters, digits and `-`,
   like the name of a source today.
 - `label` is optional, free text. Without it, local-env shows the `name`.
-- `logins` is optional. [Logins](logins.md) explains it.
+- `logins` and `secrets` are optional. [Logins](logins.md) explains them.
+  `sources add` refuses a manifest whose logins or secrets are not valid.
 - `local-env sources add <repo>` reads the manifest of the repo before it clones
   it into `volumes/sources/<name>`. With a manifest, the folder is the `name` of
   the manifest.

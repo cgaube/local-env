@@ -1460,7 +1460,7 @@ describe.concurrent('local-env install inputs', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'Your tools need a secret that local-env does not support yet: deploy_token (Deploy).',
+      'Your tools need a secret that no source gives: deploy_token (Deploy).',
     )
     expect(result.questions).toEqual([])
     expect(cli.bin.calls('ansible-playbook')).toEqual([])

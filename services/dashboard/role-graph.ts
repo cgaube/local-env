@@ -33,6 +33,9 @@ export type GraphRole = {
   galaxy?: Record<string, string>
   // The values it takes (meta/argument_specs.yml)
   inputs?: RoleInput[]
+  // The variables its source's vault gives it: its inputs that the `secrets`
+  // of its source manifest name, and those its local-env.yml asks for
+  secrets?: string[]
 }
 
 // A value a role takes: an option of the `main` entry point of its
@@ -207,6 +210,10 @@ export type WantedInput = RoleInput & {
   provided: boolean
   // That value, as written in the dependency entry: a template stays text
   given?: unknown
+  // A wanted role's source gives it from its vault (`secrets` of the source
+  // manifest), and no role sets it: never asked, saved or passed by the
+  // user; local-env reads it before the run. The form shows it disabled.
+  vault: boolean
   // Two roles declare it with another type or other choices: one value
   // still goes to both, as Ansible's variables are global
   conflict: boolean
@@ -307,6 +314,14 @@ export const wantedInputs = (
   roots: string[],
   galaxyRoles: GalaxyRole[] = [],
 ): WantedInput[] => {
+  // Extra vars are global: a variable that a wanted role gets from its
+  // source's vault fills that input for every role that declares it
+  const wanted = wantedRoles(roles, roots)
+  const vault = new Set(
+    roles
+      .filter(({ id }) => wanted.has(id))
+      .flatMap(({ secrets }) => secrets ?? []),
+  )
   const inputs = new Map<string, WantedInput>()
   for (const { label, inputs: own, includedWith } of runNodes(
     roles,
@@ -328,6 +343,7 @@ export const wantedInputs = (
           roles: [label],
           setBy,
           provided,
+          vault: !provided && vault.has(input.name),
           conflict: false,
           ...(provided ? { given: setters[0]!.vars[input.name] } : {}),
         })
@@ -345,6 +361,7 @@ export const wantedInputs = (
           : [...known.roles, label],
         setBy: [...new Set([...known.setBy, ...setBy])],
         provided: known.provided || provided,
+        vault: !(known.provided || provided) && vault.has(input.name),
         ...(known.provided
           ? {}
           : provided
@@ -363,7 +380,7 @@ export const wantedInputs = (
 // The inputs the user sets: no secret, and not given by the roles that
 // include them
 export const userInputs = (inputs: WantedInput[]) =>
-  inputs.filter((input) => !input.secret && !input.provided)
+  inputs.filter((input) => !input.secret && !input.provided && !input.vault)
 
 // The saved values the install passes to Ansible (extra vars): only those of
 // the inputs the user sets, so a value given by a parent role stays
@@ -473,12 +490,13 @@ export const missingInputs = (
       input.required &&
       !input.secret &&
       !input.provided &&
+      !input.vault &&
       !(input.name in values),
   )
 
-// The required secrets: local-env can't give them, so the role fails
+// The required secrets that no vault gives: the role fails without them
 export const unsupportedSecrets = (inputs: WantedInput[]) =>
-  inputs.filter((input) => input.required && input.secret)
+  inputs.filter((input) => input.required && input.secret && !input.vault)
 
 // The values passed of a role's own inputs (passedValues), by name in
 // order: recorded in installed.json. A change makes the role changed.

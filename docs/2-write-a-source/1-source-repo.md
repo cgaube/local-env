@@ -65,8 +65,10 @@ $schema: https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-
 - `logins` lists the accounts that your templates and tools need: registries of
   private images (see [Private images](2-docker-templates.md#private-images))
   and secret managers (see [Tool secrets](5-secrets.md)).
-- Without a manifest, the source is named after the repo, and has no label and
-  no logins.
+- `secrets` says where the secrets of your tools are, in those secret managers,
+  by the name of the variable each one fills (see [Tool secrets](5-secrets.md)).
+- Without a manifest, the source is named after the repo, and has no label, no
+  logins and no secrets.
 - Other sources name yours by its `name`: `acme-platform/postgres` in `stacks:`.
   Changing the name later breaks them, and users must remove and add the source
   again.

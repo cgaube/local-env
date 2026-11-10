@@ -64,7 +64,7 @@ describe('listRoles', () => {
         galaxy: {},
         inputs: [],
         logins: [],
-        secrets: {},
+        secrets: [],
       },
     ])
   })
@@ -82,19 +82,45 @@ describe('listRoles', () => {
     ])
   })
 
-  test('keeps the secrets a role declares as written, for the CLI to check', () => {
+  test('gives a role the secrets of its source that it declares as inputs, or asks for', () => {
     const { sources, write } = createVolumes()
     write(
-      'acme/ansible/github/local-env.yml',
-      'secrets:\n  token: { login: acme-dev, ref: github/dev }\n',
+      'acme/local-env.yml',
+      [
+        'name: acme',
+        'secrets:',
+        '  github_token: { login: acme-dev, ref: github/dev, field: token }',
+        '  npm_token: { login: acme-dev, ref: npm/dev }',
+        '',
+      ].join('\n'),
     )
-    write('acme/ansible/node/local-env.yml', 'secrets: [token]\n')
+    write(
+      'acme/ansible/github/meta/argument_specs.yml',
+      [
+        'argument_specs:',
+        '  main:',
+        '    options:',
+        '      github_token: { type: str, required: true, no_log: true }',
+        '      github_user: { type: str }',
+        '',
+      ].join('\n'),
+    )
+    write(
+      'acme/ansible/node/local-env.yml',
+      'secrets: [npm_token, Bad Name, 3, npm_token]\n',
+    )
+    // Another source: not the secrets of acme
+    write(
+      'other/ansible/gh/meta/argument_specs.yml',
+      'argument_specs:\n  main:\n    options:\n      github_token: { type: str }\n',
+    )
 
-    const [github, node] = listRoles(sources)
-    expect(github?.secrets).toEqual({
-      token: { login: 'acme-dev', ref: 'github/dev' },
-    })
-    expect(node?.secrets).toEqual({})
+    const roles = listRoles(sources)
+    const secretsOf = (id: string) =>
+      roles.find((role) => role.id === id)?.secrets
+    expect(secretsOf('acme/github')).toEqual(['github_token'])
+    expect(secretsOf('acme/node')).toEqual(['npm_token'])
+    expect(secretsOf('other/gh')).toEqual([])
   })
 
   test('reads the roles of a collection, named by its galaxy.yml', () => {

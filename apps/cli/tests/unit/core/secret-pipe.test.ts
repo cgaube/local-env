@@ -15,15 +15,14 @@ const withDir = async (run: (dir: string) => Promise<void>) => {
 }
 
 describe('the pipe of the secrets', () => {
-  test('writes each value as unsafe YAML text, escaped', () => {
+  test('writes each secret as the variable of its name, unsafe text, escaped', () => {
     expect(
-      secretsYaml({ TOKEN: 'a "b"\nc {{ d }}', EMPTY: '', EMOJI: 'é🔑' }),
+      secretsYaml({ token: 'a "b"\nc {{ d }}', EMPTY: '', emoji: 'é🔑' }),
     ).toBe(
       [
-        'local_env_secrets:',
-        '  TOKEN: !unsafe "a \\"b\\"\\nc {{ d }}"',
-        '  EMPTY: !unsafe ""',
-        '  EMOJI: !unsafe "é🔑"',
+        'token: !unsafe "a \\"b\\"\\nc {{ d }}"',
+        'EMPTY: !unsafe ""',
+        'emoji: !unsafe "é🔑"',
         '',
       ].join('\n'),
     )

@@ -18,7 +18,7 @@ import {
   testRegistryLogin,
 } from '#cli/logins/registry.js'
 import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
-import { checkManifestLogins, SESSION_TYPES } from '#cli/logins/index.js'
+import { checkManifest, SESSION_TYPES } from '#cli/logins/index.js'
 import { listAccounts } from '#cli/logins/declared.js'
 import {
   loginCommandFor as sessionLoginCommand,
@@ -149,11 +149,11 @@ const checkLogins = async (): Promise<CheckResult[]> => {
   for (const source of listSources()) {
     const manifest = tryReadSourceManifest(join(SOURCES_DIR, source))
     try {
-      checkManifestLogins(manifest?.logins ?? {})
+      if (manifest) checkManifest(manifest)
     } catch (error) {
       results.push({
         level: 'fail',
-        message: `${source}: ${error instanceof Error ? error.message : String(error)}. local-env leaves that login out.`,
+        message: `${source}: ${error instanceof Error ? error.message : String(error)}. local-env leaves that entry out.`,
       })
     }
   }

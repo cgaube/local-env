@@ -176,30 +176,43 @@ function GivenControl({ id, labelId, input }: ControlProps) {
   )
 }
 
+// A value the vault of the source gives (`secrets` of its manifest):
+// local-env reads it at install, and the dashboard never sees it
+function VaultControl({ id }: ControlProps) {
+  return (
+    <Input id={id} value="" placeholder="From the vault" disabled readOnly />
+  )
+}
+
 // The control of the spec: a select for choices, a switch for a bool, a
 // number for an int or a float, else text: a list as "a, b", a dict as
 // JSON
 const controlOf = (input: WantedInput) =>
   input.provided
     ? GivenControl
-    : input.choices
-      ? SelectControl
-      : input.type === 'bool'
-        ? SwitchControl
-        : input.type === 'int' || input.type === 'float'
-          ? NumberControl
-          : TextControl
+    : input.vault
+      ? VaultControl
+      : input.choices
+        ? SelectControl
+        : input.type === 'bool'
+          ? SwitchControl
+          : input.type === 'int' || input.type === 'float'
+            ? NumberControl
+            : TextControl
 
 // What the field says besides its description: who sets its value, which
 // other roles share the variable, and whether they declare it differently
 const notes = (
-  { roles, setBy, provided, conflict }: WantedInput,
+  { roles, setBy, provided, vault, conflict }: WantedInput,
   group: string,
 ) => {
   // The roles that use it, besides the one whose group it is in
   const others = roles.filter((role) => role !== group)
   return [
     provided ? `Set by ${setBy.join(', ')}.` : null,
+    vault
+      ? 'From the secrets of the source: local-env reads it from the vault at install.'
+      : null,
     others.length > 0
       ? `${roles.includes(group) ? 'Also used' : 'Used'} by ${others.join(', ')}.`
       : null,

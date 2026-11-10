@@ -2,22 +2,19 @@ import { execa } from 'execa'
 import { join } from 'path'
 
 // The values of the roles' secrets, for Ansible: a named pipe in the run
-// folder, which Ansible reads once (`--extra-vars @<pipe>`). The values go
-// from local-env to Ansible through the kernel, never to the disk. Each one is
-// tagged !unsafe: Ansible never templates it, so a secret can hold `{{`.
+// folder, which Ansible reads once (`--extra-vars @<pipe>`), each secret as
+// the variable of its name. The values go from local-env to Ansible through
+// the kernel, never to the disk. Each one is tagged !unsafe: Ansible never
+// templates it, so a secret can hold `{{`.
 // docs/3-how-it-works/logins.md explains why.
 
 // "value" as YAML: a JSON string is a valid double-quoted YAML scalar
 const unsafe = (value: string) => `!unsafe ${JSON.stringify(value)}`
 
 export const secretsYaml = (secrets: Record<string, string>) =>
-  [
-    'local_env_secrets:',
-    ...Object.entries(secrets).map(
-      ([name, value]) => `  ${name}: ${unsafe(value)}`,
-    ),
-    '',
-  ].join('\n')
+  Object.entries(secrets)
+    .map(([name, value]) => `${name}: ${unsafe(value)}\n`)
+    .join('')
 
 // System tools, by their path: not tools to find in PATH
 const MKFIFO = '/usr/bin/mkfifo'

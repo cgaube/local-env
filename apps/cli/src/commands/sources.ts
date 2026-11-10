@@ -23,7 +23,7 @@ import {
 import { logger } from '#cli/utils/index.js'
 import { askSelect } from '#cli/utils/prompt.js'
 import { loginCommand, logoutCommand } from '#cli/commands/sources/login.js'
-import { checkManifestLogins } from '#cli/logins/index.js'
+import { checkManifest } from '#cli/logins/index.js'
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>
@@ -43,7 +43,7 @@ const addCommand = new Command('add')
     withErrors(async (repo: string) => {
       logger.group('Sources')
       const added = await addSource(repo, {
-        checkManifest: ({ logins }) => checkManifestLogins(logins),
+        checkManifest,
       })
       if (added) await provisionProviders()
     }),

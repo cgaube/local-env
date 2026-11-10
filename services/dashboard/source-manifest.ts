@@ -4,7 +4,8 @@ import { join } from 'path'
 // The manifest of a source: local-env.yml at the root of its repo. It says
 // what the source is, for every Mac that adds it: its name (unique, the
 // folder in volumes/sources), its label (what people read) and its logins
-// (docs/3-how-it-works/source-manifest.md). Shared by the dashboard and
+// and its secrets (docs/3-how-it-works/source-manifest.md). Shared by the
+// dashboard and
 // the CLI: no imports of the CLI.
 
 export const SOURCE_MANIFEST_FILE = 'local-env.yml'
@@ -17,6 +18,9 @@ export type SourceManifest = {
   label: string | null
   // By login name, as written: the CLI checks each entry by its type
   logins: Record<string, unknown>
+  // By variable name, as written: where its value is, in a vault the logins
+  // reach. The CLI checks each entry (apps/cli/src/logins/secrets.ts).
+  secrets: Record<string, unknown>
 }
 
 // A manifest that is there but wrong. The message names the field.
@@ -45,7 +49,7 @@ export const readSourceManifest = (dir: string): SourceManifest | null => {
     )
   }
 
-  const { name, label, logins } = content
+  const { name, label, logins, secrets } = content
   if (typeof name !== 'string' || !isValidSourceName(name)) {
     throw new SourceManifestError(
       `${SOURCE_MANIFEST_FILE}: name must be lowercase letters, digits and dashes (${name === undefined ? 'missing' : JSON.stringify(name)})`,
@@ -60,10 +64,17 @@ export const readSourceManifest = (dir: string): SourceManifest | null => {
     )
   }
 
+  if (secrets !== undefined && secrets !== null && !isRecord(secrets)) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE}: secrets must be a mapping of variable names`,
+    )
+  }
+
   return {
     name,
     label: label?.trim() || null,
     logins: logins ?? {},
+    secrets: secrets ?? {},
   }
 }
 

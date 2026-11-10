@@ -248,17 +248,19 @@ export const describeInputs = (inputs: WantedInput[]) => {
   return inputs.map((input) => {
     const state = input.provided
       ? `${JSON.stringify(input.given)}, set by ${input.setBy.join(', ')}`
-      : input.secret
-        ? input.required
-          ? 'a secret local-env does not support yet'
-          : 'a secret, not passed'
-        : input.name in values
-          ? `${JSON.stringify(values[input.name])}, saved`
-          : input.default !== undefined
-            ? `the role's default, ${JSON.stringify(input.default)}`
-            : input.required
-              ? 'missing: install asks for it'
-              : 'not set'
+      : input.vault
+        ? 'from the secrets of its source, read from the vault at install'
+        : input.secret
+          ? input.required
+            ? 'a secret that no source gives: the install stops'
+            : 'a secret, not passed'
+          : input.name in values
+            ? `${JSON.stringify(values[input.name])}, saved`
+            : input.default !== undefined
+              ? `the role's default, ${JSON.stringify(input.default)}`
+              : input.required
+                ? 'missing: install asks for it'
+                : 'not set'
     return `${describeInput(input)}: ${state}`
   })
 }
@@ -302,7 +304,7 @@ export const checkInputs = (inputs: WantedInput[]) => {
   const secrets = unsupportedSecrets(inputs)
   if (secrets.length > 0) {
     throw new Error(
-      `Your tools need a secret that local-env does not support yet: ${secrets.map(describeInput).join(', ')}. The role would fail without it, so nothing ran.`,
+      `Your tools need a secret that no source gives: ${secrets.map(describeInput).join(', ')}. The role would fail without it, so nothing ran. Its source can give it from a vault, in the secrets of its local-env.yml.`,
     )
   }
   const missing = missingInputs(inputs, readVariables(TOOLS_DIR))
@@ -424,7 +426,11 @@ export const runPlaybook = async (
   const missing = checkInputs(inputs)
   // The accounts the roles read secrets from: logged in before the sudo
   // password, so a login that fails wastes no typing (logins/wanted.ts)
-  const { logins, secrets } = await prepareLogins(run)
+  const { logins, secrets } = await prepareLogins(
+    run,
+    // A value that a role of the run sets wins over the vault's
+    new Set(inputs.filter(({ provided }) => provided).map(({ name }) => name)),
+  )
   const sudo = [
     ...run.filter((role) => role.needsSudo).map(({ label }) => label),
     ...galaxyRolesNeedingSudo(
@@ -453,11 +459,13 @@ export const runPlaybook = async (
   // Only the inputs the wanted roles declare, never a secret, and not one
   // that the roles including it give: extra vars win over every other
   // variable of every role, the `vars:` of a dependency too
-  const extraVars = {
+  const extraVars: Record<string, unknown> = {
     ...passedValues(inputs, values),
     // How the roles reach their accounts: no secret in it
-    ...(Object.keys(logins).length > 0 ? { local_env_logins: logins } : {}),
+    ...(Object.keys(logins).length > 0 ? { local_env: { logins } } : {}),
   }
+  // A secret wins over a saved value: the pipe gives it
+  for (const name of Object.keys(secrets)) delete extraVars[name]
   const extraVarsFile = join(folder.path, 'extra-vars.json')
   if (Object.keys(extraVars).length > 0) {
     writeFileSync(extraVarsFile, `${JSON.stringify(extraVars, null, 2)}\n`, {

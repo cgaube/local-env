@@ -32,6 +32,7 @@ import {
   titleize,
   wantedInputs,
 } from './role-graph.js'
+import { tryReadSourceManifest } from './source-manifest.js'
 
 export type Role = GraphRole & {
   source: string
@@ -58,9 +59,10 @@ export type Role = GraphRole & {
   // The logins of the source manifests it needs (local-env.yml), as written:
   // <login>, or <source>/<login>. For a role that runs the vendor's CLI.
   logins: string[]
-  // The secrets it reads (local-env.yml), by name, as written: the CLI checks
-  // each entry (apps/cli/src/logins/secrets.ts)
-  secrets: Record<string, unknown>
+  // The variables its source's vault gives it: its inputs that the
+  // `secrets` of the source manifest name, and the names that its
+  // local-env.yml asks for (`secrets: [github_token]`), which the CLI checks
+  secrets: string[]
 }
 
 export type InstalledRole = {
@@ -127,8 +129,9 @@ const readYaml = (path: string): unknown => {
 const LOGIN_REF = /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/
 
 // What local-env.yml says: its label, its stacks as <source>/<folder>, the
-// logins it needs and its secrets. A stack that names no folder (a path, not
-// a string), or a login that is not a name, is left out.
+// logins it needs and the secrets it asks for. A stack that names no folder
+// (a path, not a string), or a login or a secret that is not a name, is left
+// out.
 const readSettings = (dir: string, source: string) => {
   const settings = readYaml(join(dir, ROLE_SETTINGS_FILE)) as {
     label?: unknown
@@ -142,13 +145,17 @@ const readSettings = (dir: string, source: string) => {
       : null
   const stacks = Array.isArray(settings?.stacks) ? settings.stacks : []
   const logins = Array.isArray(settings?.logins) ? settings.logins : []
-  const secrets = settings?.secrets
+  const secrets = Array.isArray(settings?.secrets) ? settings.secrets : []
   return {
     label,
-    secrets:
-      typeof secrets === 'object' && secrets !== null && !Array.isArray(secrets)
-        ? (secrets as Record<string, unknown>)
-        : {},
+    secrets: [
+      ...new Set(
+        secrets.filter(
+          (entry): entry is string =>
+            typeof entry === 'string' && VARIABLE.test(entry),
+        ),
+      ),
+    ],
     logins: [
       ...new Set(
         logins.filter(
@@ -414,6 +421,8 @@ const readRole = (
   source: string,
   { folder, name, collection, collectionDependencies }: RoleFolder,
   provided: Set<string>,
+  // The variables of the `secrets` of the source manifest
+  vault: Set<string>,
 ): Role => {
   const dir = join(sourcesDir, source, 'ansible', folder)
   const files = listFiles(dir)
@@ -451,7 +460,14 @@ const readRole = (
     ...readDependencyEntries(meta),
     stacks: settings.stacks,
     logins: settings.logins,
-    secrets: settings.secrets,
+    secrets: [
+      ...new Set([
+        ...settings.secrets,
+        ...readInputs(dir, meta)
+          .map((input) => input.name)
+          .filter((input) => vault.has(input)),
+      ]),
+    ],
     revision: hasher.digest('hex').slice(0, 12),
     needsSudo,
     // A collection of a source is linked, not installed: ansible-galaxy
@@ -503,11 +519,16 @@ export const listRoles = (sourcesDir: string): Role[] => {
       ),
     ),
   )
-  return sources.flatMap((source) =>
-    listRoleFolders(join(sourcesDir, source, 'ansible')).map((role) =>
-      readRole(sourcesDir, source, role, provided),
-    ),
-  )
+  return sources.flatMap((source) => {
+    const vault = new Set(
+      Object.keys(
+        tryReadSourceManifest(join(sourcesDir, source))?.secrets ?? {},
+      ),
+    )
+    return listRoleFolders(join(sourcesDir, source, 'ansible')).map((role) =>
+      readRole(sourcesDir, source, role, provided, vault),
+    )
+  })
 }
 
 // The ids of the picked roles. One gone from the sources stays, so it can be

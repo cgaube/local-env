@@ -40,7 +40,7 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   // The binary, and what `brew install` takes to install it
   cli: { binary: string; formula: string }
   // The environment of every call of the CLI, and of the role's tasks
-  // (local_env_logins.<name>.env)
+  // (local_env.logins.<name>.env)
   env: (login: DeclaredLogin<Config>) => Record<string, string>
   // Writes the config the CLI reads, that is no secret. Idempotent.
   configure?: (login: DeclaredLogin<Config>) => void
@@ -53,7 +53,7 @@ export type SessionLoginType<Config> = LoginType<Config> & {
   logoutCommand: (login: DeclaredLogin<Config>) => string[] | null
   // The help of the source: who to ask for access
   help: (config: Config) => string | undefined
-  // What a role gets in local_env_logins.<name>, beside `env`
+  // What a role gets in local_env.logins.<name>, beside `env`
   facts: (login: DeclaredLogin<Config>) => Record<string, string>
   // The command that prints one secret, run with `env`, and the keys to
   // take from its JSON output (none: the output as it is). Data: readSecret

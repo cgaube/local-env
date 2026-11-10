@@ -1,5 +1,6 @@
 import { awsLogin } from '#cli/logins/aws.js'
 import { isValidLoginName } from '#cli/logins/declared.js'
+import { parseSecretRefs } from '#cli/logins/secrets.js'
 import { registryLogin } from '#cli/logins/registry.js'
 import type { LoginType, SessionLoginType } from '#cli/logins/types.js'
 import { vaultLogin } from '#cli/logins/vault.js'
@@ -45,4 +46,18 @@ export const checkManifestLogins = (logins: Record<string, unknown>) => {
       )
     }
   }
+}
+
+// Checks the `logins` and the `secrets` of a manifest, for `sources add` and
+// `doctor`. Throws an Error that names the first entry that is not valid.
+export const checkManifest = ({
+  logins,
+  secrets,
+}: {
+  logins: Record<string, unknown>
+  secrets: Record<string, unknown>
+}) => {
+  checkManifestLogins(logins)
+  const [problem] = parseSecretRefs(secrets).problems
+  if (problem) throw new Error(problem)
 }

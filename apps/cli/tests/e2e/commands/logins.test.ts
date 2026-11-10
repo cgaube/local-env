@@ -68,6 +68,42 @@ const addSource = async (
   expect(added.exitCode).toBe(0)
 }
 
+// A source with this manifest, and roles of these files (picked by the test)
+const addSourceWith = async (
+  cli: Cli,
+  name: string,
+  manifest: {
+    logins: Record<string, unknown>
+    secrets?: Record<string, unknown>
+  },
+  roles: Record<string, Record<string, string>>,
+) => {
+  const repo = cli.createSource(name, { roles: Object.keys(roles) })
+  repo.commit({
+    'local-env.yml': buildManifest({ name, ...manifest }),
+    ...Object.fromEntries(
+      Object.entries(roles).flatMap(([role, files]) =>
+        Object.entries(files).map(([path, content]) => [
+          `ansible/${role}/${path}`,
+          content,
+        ]),
+      ),
+    ),
+  })
+  const added = await cli.run(['sources', 'add', repo.dir], { env: NO_TTY })
+  expect(added.exitCode).toBe(0)
+}
+
+// A meta/argument_specs.yml with this input: a required secret
+const specOf = (name: string) =>
+  [
+    'argument_specs:',
+    '  main:',
+    '    options:',
+    `      ${name}: { type: str, required: true, no_log: true }`,
+    '',
+  ].join('\n')
+
 // The extra vars the playbook got in its file (extra-vars.json)
 const extraVars = (cli: Cli) => {
   const run = cli.bin.calls('ansible-playbook').at(-1)
@@ -111,7 +147,7 @@ describe.concurrent('local-env install, logins', () => {
     expect(awsConfig(cli)).toContain(
       'sso_start_url = https://acme.awsapps.com/start',
     )
-    expect(extraVars(cli).local_env_logins).toEqual({
+    expect((extraVars(cli).local_env as { logins: unknown }).logins).toEqual({
       'acme-dev': {
         type: 'aws',
         profile: PROFILE,
@@ -136,7 +172,7 @@ describe.concurrent('local-env install, logins', () => {
     expect(result.output).toContain(
       'data (Vault vault.acme.test (dev)): logged in as oidc-octocat',
     )
-    expect(extraVars(cli).local_env_logins).toEqual({
+    expect((extraVars(cli).local_env as { logins: unknown }).logins).toEqual({
       data: {
         type: 'vault',
         address: 'https://vault.acme.test',
@@ -149,68 +185,79 @@ describe.concurrent('local-env install, logins', () => {
     })
   })
 
-  test('reads the secrets of the roles, and gives them to Ansible through a pipe', async () => {
+  test('fills the inputs of the roles from the secrets of their source, through a pipe', async () => {
     await using cli = await createLoginsCli()
     cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
     cli.bin.on(
       'aws',
-      ['secretsmanager', 'get-secret-value', '--secret-id', 'billing/dev'],
+      ['secretsmanager', 'get-secret-value', '--secret-id', 'github/dev'],
       {
         env: { AWS_PROFILE: PROFILE },
-        stdout: `${JSON.stringify({ stripe_key: 'sk_{{ "x" }}', other: 'no' })}\n`,
+        stdout: `${JSON.stringify({ token: 'ghp_{{ "x" }}', other: 'no' })}\n`,
       },
     )
     cli.bin.on('vault', ['token', 'lookup'], {
       stdout: JSON.stringify({ data: { display_name: 'oidc-octocat' } }),
     })
-    cli.bin.on('vault', ['kv', 'get', '-field=password', 'secret/billing'], {
+    cli.bin.on('vault', ['kv', 'get', '-field=token', 'secret/npm'], {
       env: { VAULT_ADDR: 'https://vault.acme.test', VAULT_NAMESPACE: 'dev' },
-      stdout: 'pa ss\n',
+      stdout: 'npm ss\n',
     })
-    await addSource(
+    await addSourceWith(
       cli,
       'acme',
-      { 'acme-dev': AWS_DEV, data: VAULT_DATA },
       {
-        billing: [
-          'secrets:',
-          '  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }',
-          '  DB_PASSWORD: { login: data, ref: secret/billing, field: password }',
-          '',
-        ].join('\n'),
-        // The same secret again: read once
-        payments: [
-          'secrets:',
-          '  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }',
-          '',
-        ].join('\n'),
+        logins: { 'acme-dev': AWS_DEV, data: VAULT_DATA },
+        secrets: {
+          github_token: {
+            login: 'acme-dev',
+            ref: 'github/dev',
+            field: 'token',
+          },
+          npm_token: { login: 'data', ref: 'secret/npm', field: 'token' },
+          // No wanted tool needs it: never read (the fake fails a call it
+          // has no rule for)
+          deploy_key: { login: 'acme-dev', ref: 'deploy/key' },
+        },
+      },
+      {
+        // An input of the spec, a secret Ansible hides
+        github: { 'meta/argument_specs.yml': specOf('github_token') },
+        // Two roles need it: read once
+        gh_cli: { 'meta/argument_specs.yml': specOf('github_token') },
+        // Asked for in local-env.yml, without a spec
+        node: { 'local-env.yml': 'secrets: [npm_token]\n' },
       },
     )
-    cli.home.seedPickedTools(['acme/billing', 'acme/payments'])
+    cli.home.seedPickedTools(['acme/github', 'acme/gh_cli', 'acme/node'])
+    // A value saved by hand: the vault wins
+    cli.home.writeJson('volumes/tools/variables.json', {
+      github_token: 'saved',
+    })
 
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(
-      'Read 2 secrets of the tools: STRIPE_KEY, DB_PASSWORD',
+      'Read 2 secrets of the tools: github_token, npm_token',
     )
     expect(
       cli.bin.calls('aws').filter(({ args }) => args[0] === 'secretsmanager'),
     ).toHaveLength(1)
-    // In no file of the run folder, which is on the disk
+    // Not in the extra vars file, which is on the disk
     expect(extraVars(cli)).toEqual({})
     const files = cli.bin.calls('ansible-playbook').at(-1)?.runFolder ?? {}
     expect(Object.keys(files).length).toBeGreaterThan(0)
     for (const content of Object.values(files)) {
-      expect(content).not.toContain('pa ss')
-      expect(content).not.toContain('sk_')
+      expect(content).not.toContain('npm ss')
+      expect(content).not.toContain('ghp_')
     }
-    // As text, never templated by Ansible
+    // Each secret as the variable of its name, as text Ansible never
+    // templates
     expect(secretsInput(cli)).toBe(
       [
-        'local_env_secrets:',
-        '  STRIPE_KEY: !unsafe "sk_{{ \\"x\\" }}"',
-        '  DB_PASSWORD: !unsafe "pa ss"',
+        'github_token: !unsafe "ghp_{{ \\"x\\" }}"',
+        'npm_token: !unsafe "npm ss"',
         '',
       ].join('\n'),
     )
@@ -224,14 +271,16 @@ describe.concurrent('local-env install, logins', () => {
       stderr:
         'An error occurred (AccessDeniedException) when calling the GetSecretValue operation: not authorized',
     })
-    await addSource(
+    await addSourceWith(
       cli,
       'acme',
-      { 'acme-dev': AWS_DEV },
       {
-        billing:
-          'secrets:\n  STRIPE_KEY: { login: acme-dev, ref: billing/dev, field: stripe_key }\n',
+        logins: { 'acme-dev': AWS_DEV },
+        secrets: {
+          stripe_key: { login: 'acme-dev', ref: 'billing/dev', field: 'key' },
+        },
       },
+      { billing: { 'local-env.yml': 'secrets: [stripe_key]\n' } },
     )
     cli.home.seedPickedTools(['acme/billing'])
 
@@ -239,51 +288,56 @@ describe.concurrent('local-env install, logins', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'Billing: the secret STRIPE_KEY (billing/dev stripe_key, acme-dev) could not be read: An error occurred (AccessDeniedException) when calling the GetSecretValue operation: not authorized',
+      'Billing: the secret stripe_key (billing/dev key, acme-dev) could not be read: An error occurred (AccessDeniedException) when calling the GetSecretValue operation: not authorized',
     )
     expect(result.output).toContain('Nothing ran.')
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 
-  test('refuses one secret name for two secrets', async () => {
+  test('refuses one variable that two sources fill with two secrets', async () => {
     await using cli = await createLoginsCli()
-    await addSource(
-      cli,
-      'acme',
-      { 'acme-dev': AWS_DEV },
-      {
-        billing:
-          'secrets:\n  TOKEN: { login: acme-dev, ref: billing/dev, field: token }\n',
-        payments:
-          'secrets:\n  TOKEN: { login: acme-dev, ref: payments/dev, field: token }\n',
-      },
-    )
-    cli.home.seedPickedTools(['acme/billing', 'acme/payments'])
+    const source = (name: string, ref: string) =>
+      addSourceWith(
+        cli,
+        name,
+        {
+          logins: { 'acme-dev': AWS_DEV },
+          secrets: { github_token: { login: 'acme-dev', ref } },
+        },
+        {
+          [`${name}_gh`]: { 'meta/argument_specs.yml': specOf('github_token') },
+        },
+      )
+    await source('acme', 'acme/github')
+    await source('platform', 'platform/github')
+    cli.home.seedPickedTools(['acme/acme_gh', 'platform/platform_gh'])
 
     const result = await cli.run(['install'], { env: NO_TTY })
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'Billing and Payments both read a secret named TOKEN, but another one for each. Give one of them another name.',
+      "Acme Gh (acme) and Platform Gh (platform) both get github_token from the secrets of their source, but another secret for each: Ansible's variables are global. Rename it in one of the sources.",
     )
     expect(cli.bin.calls('aws')).toEqual([])
   })
 
-  test('stops before anything runs on a secret that is not valid', async () => {
+  test('names each secret a role cannot get, before anything runs', async () => {
     await using cli = await createLoginsCli()
-    await addSource(
+    await addSourceWith(
       cli,
       'acme',
-      { data: VAULT_DATA },
       {
-        billing: [
-          'secrets:',
-          '  DB_PASSWORD: { login: data, ref: secret/billing }',
-          '  db_token: { login: data, ref: x, field: y }',
-          '  TOKEN: { login: missing, ref: x }',
-          '  KEY: { ref: x }',
-          '',
-        ].join('\n'),
+        logins: { data: VAULT_DATA },
+        secrets: {
+          // Vault needs the key of the entry
+          db_password: { login: 'data', ref: 'secret/billing' },
+          token: { login: 'missing', ref: 'x' },
+        },
+      },
+      {
+        billing: {
+          'local-env.yml': 'secrets: [db_password, token, not_declared]\n',
+        },
       },
     )
     cli.home.seedPickedTools(['acme/billing'])
@@ -292,10 +346,9 @@ describe.concurrent('local-env install, logins', () => {
 
     expect(result.exitCode).toBe(1)
     for (const problem of [
-      'Billing: local-env.yml: secrets.db_token: a secret name is uppercase letters, digits and _, like an environment variable (STRIPE_KEY)',
-      'Billing: local-env.yml: secrets.KEY.login is required',
+      'acme: local-env.yml: secrets.db_password.field is required for a Vault secret: the key of the KV entry',
       'Billing needs the login missing, which no source declares.',
-      'Billing: local-env.yml: secrets.DB_PASSWORD.field is required for a Vault secret: the key of the KV entry',
+      'Billing asks for the secret not_declared, which its source acme does not declare in the secrets of its local-env.yml.',
     ]) {
       expect(result.output).toContain(problem)
     }
@@ -471,6 +524,30 @@ describe.concurrent('local-env install, logins', () => {
     )
     expect(awsConfig(cli)).toContain(own)
     expect(awsConfig(cli).match(/\[profile /g)).toHaveLength(1)
+  })
+})
+
+describe.concurrent('local-env sources add, secrets', () => {
+  test('refuses a manifest whose secrets are not valid', async () => {
+    await using cli = await createLoginsCli()
+    const repo = cli.createSource('acme')
+    repo.commit({
+      'local-env.yml': buildManifest({
+        name: 'acme',
+        logins: { 'acme-dev': AWS_DEV },
+        secrets: { local_env_token: { login: 'acme-dev', ref: 'x' } },
+      }),
+    })
+
+    const result = await cli.run(['sources', 'add', repo.dir], {
+      env: NO_TTY,
+    })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.output).toContain(
+      'secrets.local_env_token: a secret is named after the variable it fills',
+    )
+    expect(cli.home.exists('volumes/sources/acme')).toBe(false)
   })
 })
 

@@ -199,13 +199,13 @@ export function VariablesSheet({
           {secrets.length > 0 ? (
             <Alert variant="destructive">
               <TriangleAlertIcon />
-              <AlertTitle>Secrets not supported yet</AlertTitle>
+              <AlertTitle>Secrets that no source gives</AlertTitle>
               <AlertDescription>
                 {secrets
                   .map(({ name, roles }) => `${name} (${roles.join(', ')})`)
                   .join(', ')}
-                . local-env cannot give a secret yet, so the install stops
-                before it runs.
+                . The install stops before it runs. Their source can give them
+                from a vault, in the secrets of its local-env.yml.
               </AlertDescription>
             </Alert>
           ) : null}

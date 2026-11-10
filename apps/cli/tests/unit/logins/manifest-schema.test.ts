@@ -2,6 +2,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { LOGIN_TYPES } from '#cli/logins/index.js'
 import { isValidLoginName } from '#cli/logins/declared.js'
+import { isValidSecretName } from '#cli/logins/secrets.js'
 import { isValidSourceName } from '#services/dashboard/source-manifest.js'
 
 // schemas/source-manifest.json helps authors write local-env.yml in their
@@ -17,6 +18,23 @@ describe('schemas/source-manifest.json', () => {
     for (const name of ['acme', 'acme-2', '0day', '', '-a', 'Acme', 'a_b']) {
       expect(names.test(name)).toBe(isValidSourceName(name))
       expect(logins.test(name)).toBe(isValidLoginName(name))
+    }
+  })
+
+  test('has the same rule as the CLI for the names of the secrets', () => {
+    const secrets = new RegExp(schema.properties.secrets.propertyNames.pattern)
+    for (const name of [
+      'github_token',
+      'DB_PASSWORD',
+      '_x',
+      '2fa',
+      'a-b',
+      'local_env',
+      'LOCAL_ENV_X',
+      'ansible_user',
+      'ansible',
+    ]) {
+      expect(secrets.test(name)).toBe(isValidSecretName(name))
     }
   })
 

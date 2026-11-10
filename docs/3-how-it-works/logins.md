@@ -52,31 +52,33 @@ logins:
 - `name` and `label` belong to the [source manifest](source-manifest.md).
   `logins` maps a login name to a login. A login name is lowercase letters,
   digits and `-`, unique in its source.
-- A role declares the **secrets** it reads in its own `local-env.yml`: a name,
-  the login, the secret (`ref`) and the key to take (`field`). local-env reads
-  them before the playbook, and a task uses one by its name, in the variable
-  `local_env_secrets`:
+- The manifest also lists the source's **secrets**, by the name of the variable
+  each one fills: the login, the secret (`ref`) and the key to take (`field`). A
+  role of the source gets the ones it declares as inputs in
+  `meta/argument_specs.yml` (or asks for in its `local-env.yml`:
+  `secrets: [npm_token]`), and uses them as any variable:
 
   ```yaml
-  # ansible/…/roles/github/local-env.yml
+  # <source>/local-env.yml
   secrets:
-    GITHUB_TOKEN: { login: acme-dev, ref: platform/dev/github, field: token }
+    github_token: { login: acme-dev, ref: platform/dev/github, field: token }
   ```
 
   ```yaml
+  # ansible/…/roles/github/meta/argument_specs.yml: github_token, no_log
   - name: Save the GitHub token
     ansible.builtin.command: gh auth login --with-token
     args:
-      stdin: '{{ local_env_secrets.GITHUB_TOKEN }}'
+      stdin: '{{ github_token }}'
     no_log: true
   ```
 
-- `login: acme-dev` finds the login in the role's own source first, then in any
-  source. `acme-platform/acme-dev` names the source.
+- `login: acme-dev` finds the login in the source first, then in any source.
+  `acme-platform/acme-dev` names the source.
 - A role that runs the CLI for more than a secret (`aws s3 sync`) names the
   login in `logins: [acme-dev]`, and its tasks use the login's environment, in
-  the extra var `local_env_logins`:
-  `environment: "{{ local_env_logins['acme-dev'].env }}"`.
+  the extra var `local_env.logins`:
+  `environment: "{{ local_env.logins['acme-dev'].env }}"`.
 
 - A registry login is not named by anything. The images of the templates need
   it.
@@ -100,19 +102,24 @@ logins:
 
 ```mermaid
 flowchart LR
-  manifest["&lt;source&gt;/local-env.yml<br/>name, label, logins"] -->|names| role["ansible/…/roles/&lt;role&gt;/local-env.yml<br/>secrets: { name: login, ref, field }<br/>logins: [acme-dev]"]
+  manifest["&lt;source&gt;/local-env.yml<br/>name, label, logins, secrets"] -->|"secrets of the inputs it declares"| role["ansible/…/roles/&lt;role&gt;<br/>meta/argument_specs.yml: github_token<br/>local-env.yml: secrets: [npm_token], logins: [acme-dev]"]
   manifest -->|type: registry| dockhand[(Dockhand registries)]
   manifest -->|type: aws| awscfg["~/.aws/config<br/>[sso-session local-env-…] + [profile local-env-&lt;source&gt;-&lt;login&gt;]"]
   manifest -->|type: vault| vaulttoken["~/.vault-token<br/>(written by vault login)"]
-  role --> extra["extra-vars.json<br/>local_env_logins (no secret)"]
+  role --> extra["extra-vars.json<br/>local_env.logins, saved variables (no secret)"]
   role -->|read by local-env| pipe
-  pipe["named pipe secrets.yml<br/>local_env_secrets (values)"] --> ansible["ansible-playbook"]
+  pipe["named pipe secrets.yml<br/>github_token: !unsafe …"] --> ansible["ansible-playbook"]
   extra --> ansible
   state["volumes/logins.json<br/>not asked, written profiles"] -.-> manifest
 ```
 
 - `services/dashboard/source-manifest.ts` reads the manifest
-  ([Source manifest](source-manifest.md)). This feature uses its `logins`.
+  ([Source manifest](source-manifest.md)). This feature uses its `logins` and
+  its `secrets`. `services/dashboard/tools.ts` gives each role the names its
+  source's vault gives it (`secrets` of the role: its inputs that the manifest
+  names, and the names its `local-env.yml` asks for), and `role-graph.ts` marks
+  those inputs `vault`: never asked, saved or passed by the user, shown "From
+  the vault" in the Variables form.
 - `apps/cli/src/logins/types.ts` defines a `LoginType`: `parse` (the YAML entry
   to a typed login, or an error that names the field), `identity` (the key that
   makes two declarations one account) and `title`. A `SessionLoginType` (aws,
@@ -122,8 +129,9 @@ flowchart LR
   `logoutCommand`, `help`, `facts` (what a role gets beside `env`) and
   `secretCommand` (the command that prints one secret, and the keys to take from
   its JSON output).
-- `secrets.ts` reads a secret reference (`login`, `ref`, `field`) and checks the
-  names. It is not tied to roles: Docker stacks will use the same references.
+- `secrets.ts` reads the `secrets` of a manifest (`login`, `ref`, `field`) and
+  checks the names. It is not tied to roles: Docker stacks will use the same
+  secrets.
 - `session.ts` runs them: `sessionStatus` (`logged-in`, `logged-out`, `no-cli`),
   `logInToSession` and `logOutOfSession` with the terminal handed over, and the
   line that the lists show. `canLogIn` is false without a terminal, and in a run
@@ -151,46 +159,54 @@ The identity of each type:
 
 ### The secrets
 
-Before the playbook, once the sessions are ready, local-env reads every secret
-that the roles of the run declare, and gives the values to Ansible.
+Before the playbook, once the sessions are ready, local-env reads the secrets
+that the roles of the run get from their source, and gives the values to
+Ansible.
 
-- `secrets.ts` checks each reference. `wanted.ts` finds its login (own source
-  first), and the login's type gives the command that prints it
-  (`secretCommand`):
+- A role gets a secret of **its own source** only: the source that owns the role
+  chose to give it. `wanted.ts` takes the names of the role's `secrets`, leaves
+  out those that a role of the run sets (`vars:`, which win), and finds each in
+  the `secrets` of the role's source manifest (`secrets.ts` checks them). A name
+  that the source does not declare, an entry that is not valid, or a login that
+  is missing stops the install before anything runs.
+- The login is found in the source first, then in any source, and its type gives
+  the command that prints the secret (`secretCommand`):
   `aws secretsmanager get-secret-value --secret-id <ref> --query SecretString --output text`,
   or `vault kv get -field=<field> <ref>`.
 - `session.ts` runs it with the login's environment (`readSecret`), and takes
   the field from the JSON output for AWS (`pickSecretValue`). The secrets are
-  read in parallel, each once even if several roles declare it. One that cannot
-  be read stops the install before anything runs, with the error of the CLI.
+  read in parallel, each once even if several roles need it. One that cannot be
+  read stops the install before anything runs, with the error of the CLI.
 - `apps/cli/src/core/secret-pipe.ts` gives the values to Ansible:
-  `--extra-vars @<run folder>/secrets.yml`, a named pipe (`mkfifo`, mode 0600).
-  A `/bin/cat` writes into it: the kernel holds it until Ansible opens the pipe,
-  and the values reach it on its stdin. Ansible reads the pipe once; nothing is
-  on the disk. When Ansible is done, local-env stops the writer if it still
-  waits.
-- Each value is tagged `!unsafe` (`GITHUB_TOKEN: !unsafe "…"`): Ansible never
+  `--extra-vars @<run folder>/secrets.yml`, a named pipe (`mkfifo`, mode 0600),
+  each secret as the variable of its name. A `/bin/cat` writes into it: the
+  kernel holds it until Ansible opens the pipe, and the values reach it on its
+  stdin. Ansible reads the pipe once; nothing is on the disk. When Ansible is
+  done, local-env stops the writer if it still waits.
+- Each value is tagged `!unsafe` (`github_token: !unsafe "…"`): Ansible never
   templates it, so a secret can hold `{{`.
-- `local_env_secrets` is one variable for the run: two roles that declare
-  `GITHUB_TOKEN` must declare the same secret, else the install stops.
+- A secret wins over a saved value of the same name: local-env leaves that one
+  out of the extra vars file. `installed.json` records no secret.
+- Ansible's variables are global: two sources that give `github_token` from two
+  different secrets, to roles of one run, stop the install.
 
-`local_env_logins`, in the extra vars file, holds the logins that the roles name
-in `logins:`. There is no secret in it: `local_env_logins` holds the logins that
-the roles name in `logins:`:
+`local_env.logins`, in the extra vars file, holds the logins that the roles name
+in `logins:`. There is no secret in it:
 
 ```yaml
-local_env_logins:
-  acme-dev:
-    type: aws
-    profile: local-env-acme-platform-acme-dev
-    region: eu-west-1
-    env:
-      { AWS_PROFILE: local-env-acme-platform-acme-dev, AWS_REGION: eu-west-1 }
-  data-vault:
-    type: vault
-    address: https://vault.data.acme.io
-    namespace: dev
-    env: { VAULT_ADDR: https://vault.data.acme.io, VAULT_NAMESPACE: dev }
+local_env:
+  logins:
+    acme-dev:
+      type: aws
+      profile: local-env-acme-platform-acme-dev
+      region: eu-west-1
+      env:
+        { AWS_PROFILE: local-env-acme-platform-acme-dev, AWS_REGION: eu-west-1 }
+    data-vault:
+      type: vault
+      address: https://vault.data.acme.io
+      namespace: dev
+      env: { VAULT_ADDR: https://vault.data.acme.io, VAULT_NAMESPACE: dev }
 ```
 
 - The key is the login as the role names it: `acme-dev`, or
@@ -220,7 +236,7 @@ flowchart TD
   ask -- yes --> login["Log in now?<br/>runs aws sso login / vault login<br/>with the terminal handed over"]
   login --> status
   ask -- "no terminal, or the dashboard" --> stop["Stop before anything runs:<br/>show the command and the help"]
-  sudo["sudo password, then the missing variables"] --> playbook["ansible-playbook<br/>extra vars local_env_secrets, local_env_logins"]
+  sudo["sudo password, then the missing variables"] --> playbook["ansible-playbook<br/>secrets by name (pipe), local_env.logins"]
   playbook --> stacks["Deploy the stacks"]
 ```
 
@@ -302,7 +318,9 @@ rule with `touch: <file>`, and the status after it is a rule with
 `sources login`, `logout`, `list`, `remove` and `doctor`. The `aws` type was
 also checked by hand against MiniStack, with the real AWS CLI and Ansible: a
 role read a secret with only
-`environment: "{{ local_env_logins['acme-dev'].env }}"`.
+`environment: "{{ local_env.logins['acme-dev'].env }}"`, and the real Ansible
+validated an input of `argument_specs.yml` (`no_log`, required) that the pipe
+filled.
 
 ## Why
 
@@ -318,15 +336,23 @@ role read a secret with only
 - **The vendor's CLI owns the session.** The CLI handles SSO, MFA, profiles and
   `credential_process` as the company set them up. local-env holds no vault
   credential, and the compiled binary needs no SDK.
-- **A role declares its secrets, not only its logins.** A login is an account; a
-  role needs values from it. With `secrets:`, the references sit in one file
-  that local-env reads before the run: it knows which logins to make ready (it
-  cannot find them in the tasks), checks every reference, and the tasks only
-  name the secret. A team that moves to another manager changes the manifest and
-  the `local-env.yml` of its roles, not their tasks.
-- **One reference for roles and stacks.** `{ login, ref, field }` is the shape a
-  Docker stack will use for its variables. One way to write a secret, and one
-  `secretCommand` per type, whatever reads it.
+- **The source maps names to secrets, the role declares inputs.** The source
+  knows the vault: its logins and where each secret is, once, like its logins.
+  The role stays plain Ansible: an input of `argument_specs.yml`, a variable in
+  its tasks, `-e github_token=…` without local-env. A Galaxy role that takes a
+  token can be fed from the vault without a change: a role of the source asks
+  for the name.
+- **Only the role's own source.** A role of another team's source that declares
+  `github_token` must not get your token: the source that owns a role decides
+  what it gets. Logins can come from any source, since a company source can
+  declare the accounts of every team, but the names stay per source.
+- **local-env knows what to read before the run.** The inputs and the manifests
+  say it: local-env makes the logins ready, checks every secret and reads only
+  the ones that the tools of this install need. It cannot find them in the
+  tasks.
+- **One way for roles and stacks.** A secret is named after the variable it
+  fills: an input of a role, a variable of a compose file. The same `secrets` of
+  the manifest will serve the stacks, with one `secretCommand` per type.
 - **local-env reads the secrets, not Ansible.** Ansible's lookups
   (`amazon.aws.secretsmanager_secret`, `community.hashi_vault`) need `boto3` and
   `hvac` in Ansible's Python. Homebrew's Ansible has neither, and a role cannot
@@ -343,12 +369,13 @@ role read a secret with only
   would hold the values on the disk for the whole run, and in a backup taken
   then. The pipe holds nothing on the disk: Ansible reads the values from the
   kernel.
-- **A plain variable.** `local_env_secrets.GITHUB_TOKEN` is what a role author
-  already knows: it works in `stdin:`, `environment:`, a template, and takes a
-  `default()` for a run without local-env.
+- **The variable of the input, not a variable of local-env.**
+  `{{ github_token }}` is what a role author writes anyway, and what the role's
+  spec checks. The Variables form shows that the vault gives it, as it shows the
+  values a profile gives.
 - **`logins:` stays, for the CLI itself.** A role that syncs a bucket or writes
   to a Vault needs the login's environment, not a secret. With
-  `environment: "{{ local_env_logins[name].env }}"`, the task is the same for
+  `environment: "{{ local_env.logins[name].env }}"`, the task is the same for
   AWS and Vault.
 - **local-env names the AWS profile.** The source does not know the profiles of
   the user or of the other sources. A name that a source picks can be the name
@@ -381,11 +408,13 @@ role read a secret with only
 - Only `registry`, `aws` and `vault`. A new type is a new file in
   `apps/cli/src/logins/` and a line in its list.
 - Templates cannot use a secret of a vault yet (`${NAME}` filled from AWS or
-  Vault): the references are ready for it. Only roles read secrets. A registry
-  token cannot come from a vault yet.
-- A role that uses `local_env_secrets` or `local_env_logins` runs only with
-  local-env, unless it gives a default (`| default(my_github_token)`,
-  `| default({'AWS_PROFILE': 'acme'})`).
+  Vault): the `secrets` of the manifest are ready for it. Only roles read
+  secrets. A registry token cannot come from a vault yet.
+- A role that uses `local_env.logins` runs only with local-env, unless it gives
+  a default (`| default({'AWS_PROFILE': 'acme'})`). A role that takes a secret
+  as an input runs without local-env with `-e`.
+- A secret is text: an input of another type gets text, which Ansible converts
+  and checks.
 - local-env reads every secret of the roles of the run, even when a role skips
   the task that uses it.
 - The values are in the memory of Ansible for the whole run. A task without

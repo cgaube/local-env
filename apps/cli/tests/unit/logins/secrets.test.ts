@@ -18,24 +18,29 @@ describe('the secrets of a local-env.yml', () => {
   })
 
   test('gives a problem for each entry that is not valid, and keeps the others', () => {
+    const NAME_RULE =
+      'a secret is named after the variable it fills: letters, digits and _, not first a digit, and not local_env… or ansible_…'
     const { secrets, problems } = parseSecretRefs({
-      GOOD: { login: 'acme-dev', ref: 'x' },
-      'BAD-NAME': { login: 'acme-dev', ref: 'x' },
-      lower: { login: 'acme-dev', ref: 'x' },
-      LIST: ['acme-dev'],
-      NO_REF: { login: 'acme-dev' },
-      BAD_LOGIN: { login: 'Acme Dev', ref: 'x' },
-      NUMBER: { login: 'acme-dev', ref: 3 },
+      github_token: { login: 'acme-dev', ref: 'x' },
+      DB_PASSWORD: { login: 'acme-dev', ref: 'x' },
+      'bad-name': { login: 'acme-dev', ref: 'x' },
+      local_env_x: { login: 'acme-dev', ref: 'x' },
+      ansible_user: { login: 'acme-dev', ref: 'x' },
+      list: ['acme-dev'],
+      no_ref: { login: 'acme-dev' },
+      bad_login: { login: 'Acme Dev', ref: 'x' },
+      number: { login: 'acme-dev', ref: 3 },
     })
 
-    expect(Object.keys(secrets)).toEqual(['GOOD'])
+    expect(Object.keys(secrets)).toEqual(['github_token', 'DB_PASSWORD'])
     expect(problems).toEqual([
-      'secrets.BAD-NAME: a secret name is uppercase letters, digits and _, like an environment variable (STRIPE_KEY)',
-      'secrets.lower: a secret name is uppercase letters, digits and _, like an environment variable (STRIPE_KEY)',
-      'secrets.LIST must be a mapping with login and ref',
-      'secrets.NO_REF.ref is required',
-      'secrets.BAD_LOGIN.login must be the name of a login, or <source>/<login>',
-      'secrets.NUMBER.ref must be text',
+      `secrets.bad-name: ${NAME_RULE}`,
+      `secrets.local_env_x: ${NAME_RULE}`,
+      `secrets.ansible_user: ${NAME_RULE}`,
+      'secrets.list must be a mapping with login and ref',
+      'secrets.no_ref.ref is required',
+      'secrets.bad_login.login must be the name of a login, or <source>/<login>',
+      'secrets.number.ref must be text',
     ])
   })
 })
