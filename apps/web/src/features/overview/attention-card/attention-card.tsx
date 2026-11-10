@@ -98,12 +98,18 @@ export function AttentionCard() {
                 title={countTitle(items.length)}
                 description="Here's what to do"
               />
-              <EmptyContent className="max-w-xl">
+              <EmptyContent className="max-w-2xl">
                 <ul className="border-border divide-border flex w-full flex-col divide-y rounded-lg border text-left">
                   {items.map((item) => (
                     <li
                       key={item.id}
-                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                      // A command takes the width of the row, under the text;
+                      // a button stays beside it
+                      className={cn(
+                        'flex flex-col gap-2 px-4 py-3',
+                        item.action?.kind !== 'command' &&
+                          'sm:flex-row sm:items-center sm:justify-between sm:gap-4',
+                      )}
                     >
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <span className="font-medium">{item.title}</span>
@@ -113,7 +119,13 @@ export function AttentionCard() {
                           </span>
                         ) : null}
                       </div>
-                      <div className="shrink-0 sm:max-w-sm">
+                      <div
+                        className={
+                          item.action?.kind === 'command'
+                            ? 'min-w-0'
+                            : 'shrink-0'
+                        }
+                      >
                         <ItemAction action={item.action} />
                       </div>
                     </li>
