@@ -7,9 +7,10 @@ changes too.
 
 ## Start from the template
 
-[local-env-templates-example](https://github.com/cgaube/local-env-templates-example)
-is a source to copy: an example of each thing a source can have, with the checks
-and the CI that go with it.
+> [!TIP]
+> [local-env-templates-example](https://github.com/cgaube/local-env-templates-example)
+> is a source to copy: an example of each thing a source can have, with the
+> checks and the CI that go with it.
 
 1. On GitHub, open it, click **Use this template**, then **Create a new
    repository**. Your repo gets the files, but not the history. It can be
@@ -29,14 +30,18 @@ What it holds:
   inputs, one with a Galaxy dependency) and a profile
   ([Write tools and profiles](3-tools.md)).
 - **The manifest**, with its logins and secrets commented out
-  ([Tool secrets](5-secrets.md)).
+  ([Secrets](5-secrets.md)).
 - **Checks:** a git hook checks `docker/` before each commit, and
   `mise run ansible:check` tries the roles with `--check`.
 - **Prebuilt images:** a GitHub workflow that builds an image and pushes it to
   ghcr.io, run by hand until you turn on its triggers.
 
-To try it as it is:
-`local-env sources add https://github.com/cgaube/local-env-templates-example`.
+> [!TIP]
+> To try it as it is, add it as a source:
+>
+> ```sh
+> local-env sources add https://github.com/cgaube/local-env-templates-example
+> ```
 
 ## A source repo
 
@@ -97,9 +102,9 @@ $schema: https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-
 - `label` is optional, free text. Without it, local-env shows the name.
 - `logins` lists the accounts that your templates and tools need: registries of
   private images (see [Private images](2-docker-templates.md#private-images))
-  and secret managers (see [Tool secrets](5-secrets.md)).
+  and secret managers (see [Secrets](5-secrets.md)).
 - `secrets` says where the secrets of your tools are, in those secret managers,
-  by the name of the variable each one fills (see [Tool secrets](5-secrets.md)).
+  by the name of the variable each one fills (see [Secrets](5-secrets.md)).
 - Without a manifest, the source is named after the repo, and has no label, no
   logins and no secrets.
 - Other sources name yours by its `name`: `acme-platform/postgres` in `stacks:`.

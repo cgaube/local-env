@@ -1,95 +1,143 @@
-# Tool secrets
+# Secrets
 
 local-env keeps no secret. Your source says where each secret is, in your
 company's secret manager; local-env reads it with the manager's CLI and the
-user's own session, and gives it to the tools that need it. local-env supports
-AWS Secrets Manager and HashiCorp Vault.
+user's own session, and gives it to the tools and the Docker templates that need
+it. local-env supports AWS Secrets Manager and HashiCorp Vault.
 
-1. Declare the login and the secrets in the manifest of the source. A secret is
-   named after the variable it fills:
+## Where the secrets are
 
-   ```yaml
-   # local-env.yml
-   name: acme-platform
-   logins:
-     acme-dev:
-       type: aws
-       region: eu-west-1
-       sso:
-         startUrl: https://acme.awsapps.com/start
-         region: eu-west-1
-         accountId: '123456789012'
-         roleName: DevSecretsRead
-       help: Request the dev account in #platform
-     data-vault:
-       type: vault
-       address: https://vault.data.acme.io
-       namespace: dev
-       method: oidc
-       role: developer
-       help: Ask #data for the developer role
-   secrets:
-     github_token:
-       login: acme-dev
-       ref: platform/dev/github # the secret id in AWS Secrets Manager
-       field: token # a key of its JSON value
-     npm_token:
-       login: data-vault
-       ref: secret/npm # the path of the KV entry
-       field: token # its key: required for Vault
-   ```
+Declare the logins and the secrets in the manifest of the source. A secret is
+named after the variable it fills: an input of a role, or a variable of a
+compose file.
 
-2. Declare the input in the role, as Ansible does: in `meta/argument_specs.yml`,
-   usually with `no_log: true`. Its tasks use it as any variable:
+```yaml
+# local-env.yml
+name: acme-platform
+logins:
+  acme-dev:
+    type: aws
+    region: eu-west-1
+    sso:
+      startUrl: https://acme.awsapps.com/start
+      region: eu-west-1
+      accountId: '123456789012'
+      roleName: DevSecretsRead
+    help: Request the dev account in #platform
+  data-vault:
+    type: vault
+    address: https://vault.data.acme.io
+    namespace: dev
+    method: oidc
+    role: developer
+    help: Ask #data for the developer role
+secrets:
+  github_token:
+    login: acme-dev
+    ref: platform/dev/github # the secret id in AWS Secrets Manager
+    field: token # a key of its JSON value
+  npm_token:
+    login: data-vault
+    ref: secret/npm # the path of the KV entry
+    field: token # its key: required for Vault
+  SMTP_PASSWORD: # a variable of a compose file
+    login: acme-dev
+    ref: mail/dev
+    field: password
+```
 
-   ```yaml
-   # ansible/dev_tools/roles/github/meta/argument_specs.yml
-   argument_specs:
-     main:
-       options:
-         github_token:
-           type: str
-           required: true
-           no_log: true
-           description: A token to read the repos of Acme
-   ```
+## In a tool
 
-   ```yaml
-   - name: Save the GitHub token
-     ansible.builtin.command: gh auth login --with-token
-     args:
-       stdin: '{{ github_token }}'
-     no_log: true
-   ```
+Declare the input in the role, as Ansible does: in `meta/argument_specs.yml`,
+usually with `no_log: true`. Its tasks use it as any variable:
 
-   A role without an `argument_specs.yml` asks for the secret in its
-   `local-env.yml` instead: `secrets: [npm_token]`.
+```yaml
+# ansible/dev_tools/roles/github/meta/argument_specs.yml
+argument_specs:
+  main:
+    options:
+      github_token:
+        type: str
+        required: true
+        no_log: true
+        description: A token to read the repos of Acme
+```
+
+```yaml
+- name: Save the GitHub token
+  ansible.builtin.command: gh auth login --with-token
+  args:
+    stdin: '{{ github_token }}'
+  no_log: true
+```
+
+A role without an `argument_specs.yml` asks for the secret in its
+`local-env.yml` instead: `secrets: [npm_token]`.
 
 Before the playbook, `local-env install` installs the CLI (`awscli`, or `vault`
-from `hashicorp/tap`), writes the AWS profile, and checks the session. If the
-user is not logged in, it offers to log in (`aws sso login`, `vault login`) and
-gives the terminal to the CLI. From the dashboard, it stops and shows the
-command to run in a terminal. Then it reads the secrets, and gives them to
-Ansible. Your role does not install the CLI, does not log in, does not read the
-vault, and stays plain Ansible: without local-env, pass `-e github_token=…`
-yourself.
+from `hashicorp/tap`), writes the AWS profile, and checks the session (the same
+as a deploy, below). If the user is not logged in, it offers to log in
+(`aws sso login`, `vault login`) and gives the terminal to the CLI. From the
+dashboard, it stops and shows the command to run in a terminal. Then it reads
+the secrets, and gives them to Ansible. Your role does not install the CLI, does
+not log in, does not read the vault, and stays plain Ansible: without local-env,
+pass `-e github_token=…` yourself.
 
-## The secrets
+## In a Docker template
+
+The compose file uses the variable, in the list form of `environment:`:
+
+```yaml
+# docker/mail/compose.yaml: plain compose
+services:
+  mail:
+    image: axllent/mailpit
+    environment:
+      - MP_SMTP_AUTH=user:${SMTP_PASSWORD:?the SMTP password}
+```
+
+A stack gets the secrets of **its template's own source** that its compose file
+uses. When it deploys it (the dashboard's **Deploy**, `local-env deploy`, or
+`local-env install` for a stack a tool needs), local-env logs in as for a tool,
+reads them, and saves them in Dockhand as **secret variables** of the stack:
+encrypted in Dockhand's database, given to compose through the environment,
+never in the stack's `.env`. Dockhand uses them again on a restart and an
+update. A deploy never asks for them.
+
+- **Rotation:** `sources sync` and `update` read the secrets again before they
+  apply a template change, so a new value in the vault reaches the stack then,
+  not before.
+- **Hidden in Dockhand:** use the list form (`- NAME=${SECRET}`), or give the
+  container variable the secret's name
+  (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`). Dockhand then shows `***` in its
+  pages (a container's Compose and Environment tabs). A secret in a map entry of
+  another name (`MP_SMTP_AUTH: user:${SMTP_PASSWORD}`), a command or a label
+  shows in clear there: the dashboard card, `local-env deploy` and
+  `sources sync` say so. It only hides the value in Dockhand's pages: anyone
+  with Docker access can read the container's environment.
+- **Required:** prefer `${NAME:?…}`: without local-env, compose then stops with
+  your message, and the template stays a plain Portainer template, whose user
+  sets the variable in Dockhand.
+- **Deployed outside local-env** (from Dockhand), a stack has no secrets:
+  `sources sync` says so. The dashboard card shows **From your vault** for each
+  secret a deploy reads.
+
+## The rules
 
 - A secret is named after the variable it fills: letters, digits and `_`, as
-  Ansible wants. `local_env…` and `ansible_…` are local-env's and Ansible's own.
-  A Docker template uses the same rule, with the variable of its compose file
-  (`DB_PASSWORD`): see [Docker templates](2-docker-templates.md#secrets).
+  Ansible and compose want. `local_env…` and `ansible_…` are local-env's and
+  Ansible's own.
 - The case is yours, it must only match: name a secret as its consumer expects,
   lowercase for a role's input (`github_token`, as Ansible and Galaxy roles do),
   UPPERCASE for a compose variable (`DB_PASSWORD`). A secret that a role and a
   template both need is declared twice, once under each name, with the same
   `ref`. If your own role and template share it, you can give both one name:
   Ansible accepts `GITHUB_TOKEN`, but ansible-lint's `var-naming` rule warns.
-- A role gets the secrets of **its own source**: the inputs of its
-  `argument_specs.yml` that the `secrets` of the manifest name, and the names
-  its `local-env.yml` asks for. A role of another source that declares
-  `github_token` does not get yours.
+- Each gets the secrets of **its own source** only: a role, the inputs of its
+  `argument_specs.yml` that the `secrets` of the manifest name and the names its
+  `local-env.yml` asks for; a stack, the variables of its template's compose
+  file that they name. A role of another source that declares `github_token`
+  does not get yours.
 - `login` can be a login of another source (`platform/acme-dev`), as a company
   source can declare the logins of every team. It must be an `aws` or a `vault`
   login.
@@ -97,9 +145,9 @@ yourself.
   text as it is; with `field`, a key of its JSON value.
 - Vault: `ref` is the path of a KV entry (`secret/npm`), and `field` is
   required: the key to read. KV v1 and v2 both work.
-- local-env reads a secret only when a tool that this install runs needs it,
-  once, before the playbook. A secret that no tool of the install needs is never
-  read.
+- local-env reads a secret only when a tool that this install runs, or a stack
+  that it deploys, needs it: once, before anything runs. A secret that nothing
+  of the run needs is never read.
 - `local-env sources add` refuses a manifest whose secrets are not valid.
   `local-env install` stops before anything runs on a secret that it cannot get:
   a role asks for a name that its source does not declare, a login is missing,
@@ -124,9 +172,9 @@ yourself.
 
 ## Run the CLI yourself
 
-A role that does more than read a secret (`aws s3 sync`, `vault write`) names
-the login in `logins:` and runs the CLI with the login's environment, which
-local-env gives in the extra var `local_env.logins`:
+In a tool: a role that does more than read a secret (`aws s3 sync`,
+`vault write`) names the login in `logins:` and runs the CLI with the login's
+environment, which local-env gives in the extra var `local_env.logins`:
 
 ```yaml
 # ansible/dev_tools/roles/fixtures/local-env.yml
