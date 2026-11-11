@@ -38,6 +38,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 const run = (overrides: Partial<RunState> = {}): RunState => ({
   command: 'install',
+  template: null,
   status: 'running',
   exitCode: null,
   startedAt: '2026-11-05T10:00:00Z',

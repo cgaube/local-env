@@ -80,10 +80,10 @@ describe.concurrent('local-env', () => {
   test('rejects an unknown command', async () => {
     await using cli = await createCli()
 
-    const result = await cli.run(['deploy'])
+    const result = await cli.run(['launch'])
 
     expect(result.exitCode).toBe(1)
-    expect(result.output).toContain("unknown command 'deploy'")
+    expect(result.output).toContain("unknown command 'launch'")
   })
 })
 

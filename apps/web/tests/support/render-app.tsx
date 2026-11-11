@@ -17,7 +17,10 @@ export const renderApp = async (
   {
     latestVersion = null,
     logins = { available: true, logins: [] },
-  }: { latestVersion?: string | null; logins?: LoginsResponse } = {},
+  }: {
+    latestVersion?: string | null
+    logins?: LoginsResponse
+  } = {},
 ) => {
   const events = new FakeEventSource()
   const store = createLiveDataStore(() => events as unknown as EventSource)

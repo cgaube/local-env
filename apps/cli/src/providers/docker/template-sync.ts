@@ -11,6 +11,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { prepareTemplateCompose } from '#services/catalog-server/template-compose.js'
 import { readConfig } from '#cli/core/config.js'
+import { stackSecretNames } from '#cli/providers/docker/stack-secrets.js'
 import { resolveInside } from '#cli/core/paths.js'
 import { COMPOSE_FILES, SOURCES_DIR } from '#cli/sources/sources.js'
 import {
@@ -520,7 +521,12 @@ export const diffStack = async (
     `/stacks/${name}/env/validate${query}`,
     {
       compose: next,
-      variables: [...variables.map(({ key }) => key), ...injectedSecretKeys],
+      // The secrets its source gives: written before the redeploy
+      variables: [
+        ...variables.map(({ key }) => key),
+        ...injectedSecretKeys,
+        ...stackSecretNames(stack.template, next),
+      ],
     },
   )
 

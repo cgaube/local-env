@@ -26,15 +26,15 @@ holds what we build:
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
   `update`, `sources` (add, list, remove, sync, links, login, logout),
-  `install`, `vars` (list, set, unset), `proxy routes`, `doctor`. `update` first
-  upgrades local-env with Homebrew when a newer version is out, then hands over
-  to the new version (`src/core/self-update.ts`; a checkout skips it). It
-  refreshes the core stack and the sources, then lists the stacks whose template
-  changed and offers to run the `sources sync` flow. Last, it upgrades the
-  Galaxy collections of the wanted tools (`upgradeGalaxyCollections`), without
-  running the playbook. `sources sync` pulls the sources first (`--no-pull` to
-  skip): it is the everyday command after a template change, `update` refreshes
-  everything.
+  `install`, `deploy`, `vars` (list, set, unset), `proxy routes`, `doctor`.
+  `update` first upgrades local-env with Homebrew when a newer version is out,
+  then hands over to the new version (`src/core/self-update.ts`; a checkout
+  skips it). It refreshes the core stack and the sources, then lists the stacks
+  whose template changed and offers to run the `sources sync` flow. Last, it
+  upgrades the Galaxy collections of the wanted tools
+  (`upgradeGalaxyCollections`), without running the playbook. `sources sync`
+  pulls the sources first (`--no-pull` to skip): it is the everyday command
+  after a template change, `update` refreshes everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The
@@ -81,17 +81,29 @@ holds what we build:
   Certificates are generated into `services/proxy/certs/` in the home folder by
   `local-env setup`.
 - `services/catalog-server/server.ts` serves the `docker/` folder of every
-  source to Dockhand.
+  source: the build contexts and the compose files Dockhand and the CLI read.
 - `services/dashboard/` serves the dashboard at `https://local-env.dev.test`:
   `server.ts` serves the app built from `apps/web` (`public/`, with the app's
   routes falling back to `index.html`) and streams its data on `/api/events`:
   `volumes/proxy/routes.json` (like `local-env proxy routes`), the core
-  services, the sources' content counts, the tools and whether the dashboard
-  agent runs. The Overview (`features/overview/`) starts with **Needs
-  attention** (`attention.ts`: what the page sees that waits for you, each with
-  a command to copy or a page) beside **Health** (the core services and the
-  agent; the table in a sheet), then Sources, each with its logins. A core
-  service with a `local-env.app` label gets a link in the sidebar.
+  services, the sources' content counts, their Docker templates
+  (`services/dashboard/templates.ts`), the tools and whether the dashboard agent
+  runs. The Docker page (`features/docker/`) is the catalog of the sources'
+  stack templates (what a deploy asks for, reads from the vault and logs in to;
+  **Running** or **Stopped** once Dockhand has a stack of its name, from the
+  `stacks` topic, which the server asks Dockhand on its network every 5 seconds
+  while a page is open and when the routes change, and the live routes), whose
+  **Deploy** runs `local-env deploy <source>/<folder>` through the dashboard
+  agent, then **Other apps**, the routes no template deployed.
+  `local-env deploy` (`src/commands/deploy.ts`) deploys one template once, with
+  `src/providers/docker/stack-deploy.ts` (shared with `install`: registry
+  logins, vault secrets, asked `${NAME:?help}` variables, `POST /stacks`, the
+  link). `docs/3-how-it-works/docker-catalog.md` explains why. The Overview
+  (`features/overview/`) starts with **Needs attention** (`attention.ts`: what
+  the page sees that waits for you, each with a command to copy or a page)
+  beside **Health** (the core services and the agent; the table in a sheet),
+  then Sources, each with its logins. A core service with a `local-env.app`
+  label gets a link in the sidebar.
 - In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
   adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
   `package.json` beside `components.json`). Everything else is in
@@ -168,9 +180,9 @@ holds what we build:
   wanted roles need are planned before the playbook (one confirmation, `--yes`
   to skip it, then registry logins and required variables) and deployed after it
   with Dockhand's `POST /stacks`, linked to their template, once: `stacks.json`
-  keeps them from coming back (`src/providers/docker/required-stacks.ts`). The
-  dashboard runs nothing on the Mac itself: it asks the dashboard agent.
-  `docs/3-how-it-works/tools-and-profiles.md` explains why.
+  keeps them from coming back (`src/providers/docker/required-stacks.ts`, on top
+  of `stack-deploy.ts`). The dashboard runs nothing on the Mac itself: it asks
+  the dashboard agent. `docs/3-how-it-works/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources, the tools (`volumes/tools/`) and the dashboard agent's files
   (`volumes/agent/`).
@@ -209,7 +221,11 @@ holds what we build:
 - The CLI ships no templates. Sources hold them: `docker/templates.json` is a
   Portainer template list whose stack entries point to
   `docker/<folder>/compose.yaml`; `ansible/<name>/` will hold roles.
-  `catalog-server` serves the list with those entries pointed at itself.
+  `catalog-server` serves the list with those entries pointed at itself. Users
+  deploy them from the dashboard's Docker page (`local-env deploy`), not from
+  Dockhand's Templates page, which can't give a stack its secrets: the
+  provisioning steps hide that page (`steps/sidebar.ts`) and remove the lists
+  local-env registered there before (`steps/template-sources.ts`).
 - Templates are plain Portainer templates: nothing local-env specific. A
   deployed stack is linked to the template with the same top-level compose
   `name:`, so templates that should get updates need a unique `name:`. Stacks
@@ -274,9 +290,9 @@ holds what we build:
   status, and the login and logout with the terminal handed over. The manifest
   maps the source's secrets by the name of the variable each fills
   (`secrets: { github_token: { login, ref, field } }`; `src/logins/secrets.ts`
-  checks them; Docker stacks will use the same). A role of the source gets the
-  ones it declares as inputs (`meta/argument_specs.yml`, usually `no_log`) or
-  asks for (`secrets: [npm_token]` in its `local-env.yml`): `Role.secrets` in
+  checks them). A role of the source gets the ones it declares as inputs
+  (`meta/argument_specs.yml`, usually `no_log`) or asks for
+  (`secrets: [npm_token]` in its `local-env.yml`): `Role.secrets` in
   `services/dashboard/tools.ts`, and `role-graph.ts` marks those inputs `vault`
   (never asked, saved or passed by the user; the Variables form shows "From the
   vault", `vars set` refuses them). Only the role's own source gives it secrets.
@@ -293,19 +309,28 @@ holds what we build:
   to log in, except without a terminal or from the dashboard: the agent sets
   `LOCAL_ENV_FROM_DASHBOARD=1`. Then it reads the secrets the roles of the run
   get, once each (the command of the type's `secretCommand`, run by `readSecret`
-  in `session.ts`, the same code that stacks will use); one that cannot be read
-  stops it before anything runs. It passes `local_env.logins` (by the name the
-  roles use: `env`, `profile`/`region` or `address`/`namespace`; no secret) in
-  the extra vars file, and each secret as the variable of its name through a
-  named pipe of the run folder (`src/core/secret-pipe.ts`:
-  `--extra-vars @secrets.yml`, each value `!unsafe`, nothing on the disk; a
-  secret wins over a saved value). The fake `ansible-playbook` reads the pipe
-  like Ansible, and skips it when it checks the files of the run folder.
-  `sources list`, `login`, `logout` and `doctor` show and manage every type
-  (`listing.ts`). The dashboard's Overview shows the logins of each source in
-  the Sources card, and those that wait for you in Needs attention:
-  `/api/logins` asks the dashboard agent's `GET /logins`, which builds the list
-  on the Mac (`report.ts`), on page open and on Check logins, never on a timer.
+  in `session.ts`); one that cannot be read stops it before anything runs. It
+  passes `local_env.logins` (by the name the roles use: `env`,
+  `profile`/`region` or `address`/`namespace`; no secret) in the extra vars
+  file, and each secret as the variable of its name through a named pipe of the
+  run folder (`src/core/secret-pipe.ts`: `--extra-vars @secrets.yml`, each value
+  `!unsafe`, nothing on the disk; a secret wins over a saved value). The fake
+  `ansible-playbook` reads the pipe like Ansible, and skips it when it checks
+  the files of the run folder. `sources list`, `login`, `logout` and `doctor`
+  show and manage every type (`listing.ts`). The dashboard's Overview shows the
+  logins of each source in the Sources card, and those that wait for you in
+  Needs attention: `/api/logins` asks the dashboard agent's `GET /logins`, which
+  builds the list on the Mac (`report.ts`), on page open and on Check logins,
+  never on a timer.
+- A Docker stack gets the `secrets` of its template's source the same way
+  (`src/providers/docker/stack-secrets.ts`): the variables of its compose file
+  that the manifest names, read with `logins/prepare.ts` (the stack is the
+  consumer) and saved in Dockhand as secret variables (`PUT /stacks/:name/env`
+  with the stack's other variables as they are; a secret comes back as `***`,
+  which Dockhand keeps). `deploy` and `install` pass them when they deploy a
+  stack (`stack-deploy.ts`); `sources sync` and `update` read them again before
+  a template change redeploys the stack, and `sources sync` says when a linked
+  stack lacks some (deployed outside local-env).
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.

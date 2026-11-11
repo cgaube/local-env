@@ -2,9 +2,10 @@ import { dockhandApi, dockhandPost } from '#cli/providers/docker/api.js'
 import type { DockhandStep } from '#cli/providers/docker/types.js'
 
 // The pages local-env users rarely need: the CLI and the dashboard handle
-// registries, updates and the rest. They stay one click away, in Dockhand's
-// sidebar settings.
+// templates (the dashboard's Docker page), registries, updates and the rest.
+// They stay one click away, in Dockhand's sidebar settings.
 export const HIDDEN_SIDEBAR_ITEMS = [
+  '/templates',
   '/activity',
   '/registry',
   '/schedules',

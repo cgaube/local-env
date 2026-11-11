@@ -16,13 +16,14 @@ local-env is a local development environment for macOS. It gives your Mac:
 
 - **An HTTPS proxy.** Every container with `VIRTUAL_HOST=name` is served at
   `https://name.dev.test`, with a certificate that your Mac trusts.
-- **A catalog of apps.** [Dockhand](https://github.com/Finsys/dockhand), at
-  `https://docker.dev.test`, lists the Docker templates of your sources. One
-  click installs a template, and its containers update on their own.
+- **A catalog of apps.** The dashboard lists the Docker templates of your
+  sources. One click deploys a template, with its secrets from your vault, in
+  [Dockhand](https://github.com/Finsys/dockhand), and its containers update on
+  their own.
 - **Tools.** The Ansible roles of your sources (Git, Node.js, a CLI…), which
   `local-env install` installs on your Mac.
-- **A dashboard,** at `https://local-env.dev.test`: your routes, your sources,
-  your tools and your profile.
+- **A dashboard,** at `https://local-env.dev.test`: your apps and routes, your
+  sources, your tools and your profile.
 
 Your team's **sources** hold the templates and the tools: git repos that you add
 with `local-env sources add`. local-env ships none.
@@ -33,9 +34,10 @@ For everyone who runs local-env on their Mac.
 
 - [Install local-env](1-user-guide/1-install.md)
 - [Everyday use](1-user-guide/2-everyday.md)
-- [Install tools](1-user-guide/3-tools.md)
-- [Log in to your accounts](1-user-guide/4-logins.md)
-- [Troubleshooting](1-user-guide/5-troubleshooting.md)
+- [Deploy apps](1-user-guide/3-apps.md)
+- [Install tools](1-user-guide/4-tools.md)
+- [Log in to your accounts](1-user-guide/5-logins.md)
+- [Troubleshooting](1-user-guide/6-troubleshooting.md)
 
 ## Write a source
 

@@ -21,7 +21,7 @@ export function RunButton({
   command,
   blocked = null,
 }: {
-  command: AgentCommand
+  command: Exclude<AgentCommand, 'deploy'>
   // Why it can't run yet (a value missing): disabled, with this as its tip
   blocked?: string | null
 }) {

@@ -10,9 +10,10 @@ import {
 } from '#ui/components/ui/sheet'
 import { Skeleton } from '#ui/components/ui/skeleton'
 import { CommandBox } from '#ui/features/terminal/command-box'
-import type {
-  SessionState,
-  TerminalSession,
+import {
+  commandLine,
+  type SessionState,
+  type TerminalSession,
 } from '#ui/features/terminal/terminal-session.ts'
 
 // Its own chunk, by path: xterm-view/ has no index.ts, so nothing imports
@@ -36,7 +37,7 @@ function RunBadge({ state }: { state: SessionState }) {
   )
 }
 
-// The terminal of `local-env install` or `update`, run by the dashboard
+// The terminal of `local-env install`, `update` or `deploy`, run by the dashboard
 // agent on this Mac. Closing it doesn't stop the command.
 export function TerminalSheet({
   open,
@@ -48,7 +49,6 @@ export function TerminalSheet({
   session: TerminalSession
 }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot)
-  const command = state.run?.command
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -65,7 +65,7 @@ export function TerminalSheet({
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4">
           {/* What runs, to run it in a terminal instead */}
-          {command ? <CommandBox command={`local-env ${command}`} /> : null}
+          {state.run ? <CommandBox command={commandLine(state.run)} /> : null}
           {state.error ? (
             <Alert variant="destructive">
               <AlertDescription>{state.error}</AlertDescription>

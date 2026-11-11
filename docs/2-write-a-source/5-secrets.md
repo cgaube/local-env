@@ -78,8 +78,14 @@ yourself.
 
 - A secret is named after the variable it fills: letters, digits and `_`, as
   Ansible wants. `local_env…` and `ansible_…` are local-env's and Ansible's own.
-  A Docker stack will use the same rule, with the variable of its compose file
-  (`DB_PASSWORD`).
+  A Docker template uses the same rule, with the variable of its compose file
+  (`DB_PASSWORD`): see [Docker templates](2-docker-templates.md#secrets).
+- The case is yours, it must only match: name a secret as its consumer expects,
+  lowercase for a role's input (`github_token`, as Ansible and Galaxy roles do),
+  UPPERCASE for a compose variable (`DB_PASSWORD`). A secret that a role and a
+  template both need is declared twice, once under each name, with the same
+  `ref`. If your own role and template share it, you can give both one name:
+  Ansible accepts `GITHUB_TOKEN`, but ansible-lint's `var-naming` rule warns.
 - A role gets the secrets of **its own source**: the inputs of its
   `argument_specs.yml` that the `secrets` of the manifest name, and the names
   its `local-env.yml` asks for. A role of another source that declares

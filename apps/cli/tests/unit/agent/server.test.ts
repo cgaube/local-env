@@ -11,6 +11,7 @@ const TOKEN = 'secret-token'
 const SCRIPTS: Record<AgentCommand, string> = {
   install: 'printf "ready\\n"; read answer; echo "answer:$answer"; exit 3',
   update: 'printf "updating %s %s\\n" "$TERM" "$COLORTERM"; sleep 0.2; exit 0',
+  deploy: 'printf "deploying %s\\n" "$*"; exit 0',
 }
 
 const startServer = (onRunExit?: () => void) =>
@@ -18,7 +19,7 @@ const startServer = (onRunExit?: () => void) =>
     port: 0,
     token: TOKEN,
     version: '1.2.3',
-    argv: (command) => ['sh', '-c', SCRIPTS[command]],
+    argv: (command, args) => ['sh', '-c', SCRIPTS[command], command, ...args],
     onRunExit,
   })
 
@@ -100,7 +101,7 @@ describe('agent server', () => {
       port: 0,
       token: TOKEN,
       version: '1.2.3',
-      argv: (command) => ['sh', '-c', SCRIPTS[command]],
+      argv: (command, args) => ['sh', '-c', SCRIPTS[command], command, ...args],
       logins: async () => {
         checks++
         return { logins: [] }
@@ -223,6 +224,47 @@ describe('agent server', () => {
       expect(client.messages).toContainEqual({
         type: 'error',
         message: 'Unknown command',
+      })
+      expect(server.isBusy()).toBe(false)
+    } finally {
+      client.close()
+      await server.stop()
+    }
+  })
+
+  test('deploys the template it is given, without asking first', async () => {
+    const server = startServer()
+    const client = await connect(server.port)
+    try {
+      client.send({ type: 'start', command: 'deploy', template: 'acme/mail' })
+      await client.waitFor(() => lastState(client)?.run?.status === 'exited')
+      expect(client.output()).toContain('deploying acme/mail --yes')
+      expect(lastState(client)?.run).toMatchObject({
+        command: 'deploy',
+        template: 'acme/mail',
+      })
+    } finally {
+      client.close()
+      await server.stop()
+    }
+  })
+
+  test.each([
+    { command: 'deploy' },
+    { command: 'deploy', template: 'acme/mail; rm -rf ~' },
+    { command: 'deploy', template: '--help' },
+    { command: 'install', template: 'acme/mail' },
+  ])('refuses a run with other arguments: %p', async (message) => {
+    const server = startServer()
+    const client = await connect(server.port)
+    try {
+      client.send({ type: 'start', ...message })
+      await client.waitFor(() =>
+        client.messages.some((sent) => sent.type === 'error'),
+      )
+      expect(client.messages).toContainEqual({
+        type: 'error',
+        message: `Not a run of local-env ${message.command}`,
       })
       expect(server.isBusy()).toBe(false)
     } finally {

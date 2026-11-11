@@ -1,9 +1,9 @@
 # Create a source
 
-A template is an app that people install from Dockhand's Templates page with one
-click: a database, a mail catcher, an internal tool. You write templates in a
-git repo, a **source**, and everyone who adds that source gets them, then gets
-your later changes too.
+A template is an app that people deploy from the dashboard with one click: a
+database, a mail catcher, an internal tool. You write templates in a git repo, a
+**source**, and everyone who adds that source gets them, then gets your later
+changes too.
 
 ## A source repo
 
@@ -34,8 +34,8 @@ local-env sources sync   # pulls and offers the changes
 ```
 
 local-env only sees **committed** changes: a source is a clone of the repo, even
-when the repo is on your Mac. `sources sync` pulls it, refreshes Dockhand's
-Templates page and offers the changes to the stacks deployed from your
+when the repo is on your Mac. `sources sync` pulls it, so the dashboard lists
+the new templates, and offers the changes to the stacks deployed from your
 templates. `sources sync <source>` does it for one source only.
 
 ### The manifest

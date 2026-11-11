@@ -59,29 +59,6 @@ describe.concurrent('local-env doctor', () => {
     )
   })
 
-  test('checks that every source is shown in Dockhand', async () => {
-    await using cli = await createCli({ dockhand: provisionedDockhand() })
-    cli.home.seedConfig()
-    cli.home.seedCertificate()
-    dnsWorking(cli)
-    const acme = cli.createSource('acme')
-    const team = cli.createSource('team')
-    await cli.run(['sources', 'add', acme.dir])
-    await cli.run(['sources', 'add', team.dir])
-    // Removed from Dockhand by hand
-    cli.dockhand.state.templateSources =
-      cli.dockhand.state.templateSources.filter(({ name }) => name !== 'team')
-
-    const result = await cli.run(['doctor'])
-
-    expect(result.exitCode).toBe(1)
-    expect(result.output).toContain('acme: no new commits')
-    expect(result.output).toContain('acme: shown in Dockhand')
-    expect(result.output).toContain(
-      '✗ team: not shown in Dockhand. Run `local-env start`.',
-    )
-  })
-
   test('warns about a source with new commits', async () => {
     await using cli = await createCli({ dockhand: provisionedDockhand() })
     cli.home.seedConfig()

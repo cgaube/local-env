@@ -1,13 +1,14 @@
 # Docker templates
 
-A Docker template is a stack that people deploy from Dockhand's Templates page:
-`docker/templates.json` lists them, and each one has its folder in `docker/`.
-[Create a source](1-source-repo.md) first.
+A Docker template is a stack that people deploy from the dashboard's Docker page
+or with `local-env deploy`: `docker/templates.json` lists them, and each one has
+its folder in `docker/`. [Create a source](1-source-repo.md) first.
 
 ## templates.json
 
-A standard Portainer template list, version 3. Portainer and Dockhand can read
-it without local-env too, from a public GitHub repo.
+A standard Portainer template list, version 3. The dashboard shows each stack
+entry: its `title`, `description`, `logo` and `categories`. Portainer and
+Dockhand can read the list without local-env too, from a public GitHub repo.
 
 ```json
 {
@@ -175,6 +176,68 @@ access to the packages of all the organizations of the user.
 Docker keeps one login for each host. Thus, sources that need two different
 accounts on the same host cannot both work.
 
+### Secrets
+
+A template gets secrets from your company's vault the same way as the roles: the
+`secrets` of the manifest say where each one is, by the name of the variable it
+fills, and the compose file uses that variable.
+
+```yaml
+# local-env.yml
+logins:
+  acme-dev: { type: aws, sso: { … } }
+secrets:
+  SMTP_PASSWORD: { login: acme-dev, ref: mail/dev, field: password }
+```
+
+```yaml
+# docker/mail/compose.yaml: plain compose
+services:
+  mail:
+    image: axllent/mailpit
+    environment:
+      - MP_SMTP_AUTH=user:${SMTP_PASSWORD:?the SMTP password}
+```
+
+- local-env reads the secret with the user's session (it logs in first, in the
+  terminal) and saves it in Dockhand as a **secret variable** of the stack:
+  encrypted in Dockhand's database, given to compose through the environment,
+  never in the stack's `.env`. Dockhand uses it again on a restart and an
+  update.
+- When: `local-env deploy` (the dashboard's Deploy button) and
+  `local-env install` (a stack a tool needs) deploy the stack with its secrets,
+  and never ask for them; `sources sync` and `update` read them again before
+  they apply a template change, so a rotated secret reaches the stack then.
+- A stack deployed outside local-env (from Dockhand) has no secrets:
+  `sources sync` says so. The dashboard card shows "From your vault" for each
+  secret a deploy reads.
+- A stack gets the secrets of **its template's own source** only. Prefer a
+  `${NAME:?…}`: without local-env, compose then stops with your message.
+- The name matches the compose variable exactly, its case too: UPPERCASE, as
+  compose files and images expect (`POSTGRES_PASSWORD`). A role's input is
+  usually lowercase: a secret both need is declared under each name (see
+  [Tool secrets](5-secrets.md#the-secrets)).
+- Use the list form of `environment:` for a secret (`- NAME=${SECRET}`), or give
+  the container variable the secret's name
+  (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`). Dockhand then shows `***` in its
+  pages (a container's Compose and Environment tabs). A secret in a map entry of
+  another name (`MP_SMTP_AUTH: user:${SMTP_PASSWORD}`), a command or a label
+  shows in clear there. The dashboard card, `local-env deploy` and
+  `sources sync` say when a template does that. It only hides the value in
+  Dockhand's pages: anyone with Docker access can read the container's
+  environment.
+- The template stays a plain Portainer template: without local-env, the user
+  sets the variable in Dockhand.
+
+### What a deploy asks for
+
+A variable without a default, `${NAME:?help}` or `${NAME?help}`, is asked for
+when the template deploys, with the text after `?` as help, unless it comes from
+the vault. A name with `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD` or `KEY` is typed
+masked and kept by Dockhand as a secret. Give everything else a default
+(`${TZ:-UTC}`): the user changes it in Dockhand if needed. The dashboard card
+lists the variables a deploy asks for.
+
 ## How updates reach users
 
 When you commit a change to a template, users get it with
@@ -222,8 +285,10 @@ Existing Portainer catalogs (Lissy93, portainer/templates, a vendor's list) are
 added in Dockhand rather than as sources: **Settings → Templates → Add source**,
 with the raw URL of their `templates.json`. Dockhand reads any layout, and
 local-env leaves these sources alone. Their stacks get Dockhand's image updates,
-not template updates. local-env removes the catalogs Dockhand ships with, once:
-add back the ones you want this way.
+not template updates. local-env removes the catalogs Dockhand ships with, once,
+and hides Dockhand's Templates page, where your sources' templates are not
+listed: users who want other catalogs show it again in Dockhand's sidebar
+settings ([Deploy apps](../1-user-guide/3-apps.md#other-catalogs)).
 
 ## A complete example
 

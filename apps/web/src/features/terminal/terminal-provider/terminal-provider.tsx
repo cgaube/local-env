@@ -6,8 +6,9 @@ import { TerminalSheet } from '#ui/features/terminal/terminal-sheet'
 import { createTerminalSession } from '#ui/features/terminal/terminal-session.ts'
 
 type TerminalControls = {
-  // Opens the sheet and runs the command, or shows the one that runs
-  run: (command: AgentCommand) => void
+  // Opens the sheet and runs the command (deploy: on this template), or
+  // shows the one that runs
+  run: (command: AgentCommand, template?: string) => void
   // Opens the sheet on the current or last run
   show: () => void
 }
@@ -20,9 +21,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [session] = useState(createTerminalSession)
   const [open, setOpen] = useState(false)
   const [controls] = useState<TerminalControls>(() => ({
-    run: (command) => {
+    run: (command, template) => {
       setOpen(true)
-      session.start(command)
+      session.start(template ? { command, template } : { command })
     },
     show: () => {
       setOpen(true)

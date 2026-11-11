@@ -17,6 +17,18 @@ export type SessionState = {
   error: string | null
 }
 
+// What a run is, as the user would type it: local-env deploy acme/mail
+export const commandLine = ({
+  command,
+  template,
+}: {
+  command: AgentCommand
+  template?: string | null
+}) => `local-env ${command}${template ? ` ${template}` : ''}`
+
+// A command to start, and deploy's template
+export type StartRequest = { command: AgentCommand; template?: string }
+
 // Output for the terminal: reset clears it, for a new run or a replay
 export type OutputEvent = { reset: true } | { reset: false; chunk: Uint8Array }
 
@@ -38,7 +50,7 @@ export const createTerminalSession = (
   let retries = 0
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   // Sent once the agent said what runs: it may already run this command
-  let pendingStart: AgentCommand | null = null
+  let pendingStart: StartRequest | null = null
   let size = { cols: 100, rows: 30 }
 
   const update = (patch: Partial<SessionState>) => {
@@ -58,17 +70,17 @@ export const createTerminalSession = (
     }
   }
 
-  const sendStart = (command: AgentCommand) => {
+  const sendStart = (request: StartRequest) => {
     pendingStart = null
     if (state.run?.status === 'running') {
-      // Attached to it: the same command is what the user asked for
-      if (state.run.command !== command) {
-        update({ error: `local-env ${state.run.command} is already running` })
+      // Attached to it: the same run is what the user asked for
+      if (commandLine(state.run) !== commandLine(request)) {
+        update({ error: `${commandLine(state.run)} is already running` })
       }
       return
     }
     update({ error: null })
-    send({ type: 'start', command, ...size })
+    send({ type: 'start', ...request, ...size })
   }
 
   const onMessage = (event: MessageEvent) => {
@@ -143,15 +155,15 @@ export const createTerminalSession = (
       ws?.close()
       update({ connection: 'idle' })
     },
-    start: (command: AgentCommand) => {
+    start: (request: StartRequest) => {
       open()
       if (
         state.connection === 'open' &&
         socket?.readyState === WebSocket.OPEN
       ) {
-        sendStart(command)
+        sendStart(request)
       } else {
-        pendingStart = command
+        pendingStart = request
       }
     },
     input: (data: string) => send({ type: 'input', data }),

@@ -17,7 +17,8 @@ export type DockhandStack = {
   content: string
   // Unix seconds, like Dockhand's containerDetails
   createdAt: number
-  variables: string[]
+  // Its variables, a secret's value too (Dockhand gives it back as ***)
+  variables: { key: string; value: string; isSecret: boolean }[]
 }
 
 // The result of Dockhand's image check for one container

@@ -41,6 +41,8 @@ import {
   writeVariables,
 } from './tools.js'
 import { tryReadSourceManifest } from './source-manifest.js'
+import { type StacksResponse } from './catalog.js'
+import { listTemplates } from './templates.js'
 import type { LoginsResponse } from './agent-protocol.js'
 
 const ROUTES_FILE = '/routes/routes.json'
@@ -51,6 +53,8 @@ const GALAXY_DIR = join(TOOLS_DIR, GALAXY_FOLDER)
 // The agent's token, mounted read-only: written by the agent when it starts
 const AGENT_DIR = '/agent'
 const AGENT_URL = process.env.AGENT_URL ?? 'http://host.docker.internal:17081'
+// On the core stack's network: the stacks, to show the deployed templates
+const DOCKHAND_URL = process.env.DOCKHAND_URL ?? 'http://dockhand:3000'
 const DOMAIN = process.env.DOMAIN ?? 'dev.test'
 const PORT = 80
 
@@ -178,10 +182,40 @@ const readLogins = async () => {
   return Response.json({ available: false } satisfies LoginsResponse)
 }
 
+// The stacks in Dockhand's local environment, with their state: a template is
+// deployed when a stack has its name, as local-env links them. Streamed while
+// a page is open (below), not available when Dockhand doesn't answer.
+const readStacks = async () => {
+  try {
+    const options = { signal: AbortSignal.timeout(3000) }
+    const environments = (await (
+      await fetch(`${DOCKHAND_URL}/api/environments`, options)
+    ).json()) as { id: number; connectionType: string }[]
+    const local = environments.find(
+      ({ connectionType }) => connectionType === 'socket',
+    )
+    if (!local) throw new Error('No local environment')
+    const stacks = (await (
+      await fetch(`${DOCKHAND_URL}/api/stacks?env=${local.id}`, options)
+    ).json()) as { name: string; status?: string }[]
+    return JSON.stringify({
+      available: true,
+      stacks: stacks.map(({ name, status }) => ({
+        name,
+        status: status ?? 'unknown',
+      })),
+    } satisfies StacksResponse)
+  } catch {
+    return JSON.stringify({ available: false } satisfies StacksResponse)
+  }
+}
+
 const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
   sources: async () => JSON.stringify(listSources()),
+  // The Docker templates of the sources: the Docker page's catalog
+  templates: async () => JSON.stringify(listTemplates(SOURCES_DIR)),
   tools: async () => {
     const roles = listRoles(SOURCES_DIR)
     return JSON.stringify({
@@ -198,6 +232,8 @@ const readers = {
     })
   },
   agent: readAgent,
+  // Last: Dockhand can be slow to answer, the other topics don't wait
+  stacks: readStacks,
 }
 type Topic = keyof typeof readers
 
@@ -222,17 +258,27 @@ const publish = (topic: Topic) => {
     topic,
     setTimeout(async () => {
       const data = await readers[topic]()
+      last.set(topic, data)
       for (const client of clients) send(client, topic, data)
     }, 200),
   )
 }
 
+// What each topic sent last, for the topics asked on a timer
+const last = new Map<Topic, string>()
+
 watch('/routes', (_event, file) => {
-  if (file === 'routes.json') publish('routes')
+  if (file === 'routes.json') {
+    publish('routes')
+    // A stack deployed, stopped or removed changes the routes: ask Dockhand
+    // at once, not at the next tick
+    publish('stacks')
+  }
   if (file === 'services.json') publish('services')
 })
 watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
+  publish('templates')
   publish('tools')
 })
 // picked.json, profile.json and variables.json, written below and by
@@ -241,16 +287,19 @@ watch(TOOLS_DIR, () => publish('tools'))
 // The agent writes its token when it starts and removes it when it stops
 watch(AGENT_DIR, () => publish('agent'))
 
-// A run starts and ends without a file changing here: ask the agent while
-// pages are open, and tell them only what changed
-let lastAgent = ''
-setInterval(async () => {
-  if (clients.size === 0) return
-  const data = await readAgent()
-  if (data === lastAgent) return
-  lastAgent = data
-  for (const client of clients) send(client, 'agent', data)
-}, 3000)
+// What changes without a file changing here, asked while pages are open: a
+// run of the agent starts and ends, a stack is removed in Dockhand. Pages get
+// only what changed.
+const poll = (topic: Topic, every: number) =>
+  setInterval(async () => {
+    if (clients.size === 0) return
+    const data = await readers[topic]()
+    if (data === last.get(topic)) return
+    last.set(topic, data)
+    for (const client of clients) send(client, topic, data)
+  }, every)
+poll('agent', 3000)
+poll('stacks', 5000)
 
 // A PUT of JSON, or the response that refuses it. JSON only: another site
 // can't send it without a CORS preflight, which this server never allows.

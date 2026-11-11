@@ -1,4 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { RoutesPage } from '#ui/features/routes/routes-page'
+import { DockerPage } from '#ui/features/docker/docker-page'
 
-export const Route = createFileRoute('/docker')({ component: RoutesPage })
+export const Route = createFileRoute('/docker')({ component: DockerPage })

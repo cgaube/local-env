@@ -160,14 +160,18 @@ const ROUTES: Record<string, Handler> = {
     } = body as {
       name: string
       compose: string
-      envVars?: { key: string }[]
+      envVars?: { key: string; value: string; isSecret?: boolean }[]
     }
     state.stacks = state.stacks.filter((stack) => stack.name !== name)
     state.stacks.push({
       name,
       content: compose,
       createdAt: Math.floor(Date.now() / 1000),
-      variables: envVars.map(({ key }) => key),
+      variables: envVars.map(({ key, value, isSecret = false }) => ({
+        key,
+        value,
+        isSecret,
+      })),
     })
     return { success: true, started: true }
   },
@@ -181,12 +185,32 @@ const ROUTES: Record<string, Handler> = {
     stack.content = (body as { content: string }).content
     return { success: true }
   },
+  // A secret's value never leaves Dockhand: ***
   'GET /stacks/:name/env': ({ params }, state) => ({
-    variables: (findStack(state, params.name)?.variables ?? []).map((key) => ({
-      key,
-    })),
+    variables: (findStack(state, params.name)?.variables ?? []).map(
+      ({ key, value, isSecret }) => ({
+        key,
+        value: isSecret ? '***' : value,
+        isSecret,
+      }),
+    ),
     injectedSecretKeys: [],
   }),
+  // Replaces the variables. A secret that comes back as *** keeps its value.
+  'PUT /stacks/:name/env': ({ params, body }, state) => {
+    const stack = findStack(state, params.name)
+    if (!stack) return notFound('stack')
+    const { variables } = body as {
+      variables: { key: string; value: string; isSecret: boolean }[]
+    }
+    stack.variables = variables.map((variable) => {
+      const known = stack.variables.find(({ key }) => key === variable.key)
+      return variable.isSecret && variable.value === '***' && known
+        ? { ...variable, value: known.value }
+        : variable
+    })
+    return { success: true, count: variables.length }
+  },
   // Required variables: ${NAME} without a default
   'POST /stacks/:name/env/validate': ({ body }) => {
     const { compose, variables } = body as {

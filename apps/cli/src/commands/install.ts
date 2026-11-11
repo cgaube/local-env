@@ -16,10 +16,8 @@ import {
   saveProfile,
   unpickTools,
 } from '#cli/core/tools.js'
-import {
-  deployRequiredStacks,
-  planRequiredStacks,
-} from '#cli/providers/docker/required-stacks.js'
+import { planRequiredStacks } from '#cli/providers/docker/required-stacks.js'
+import { deployStacks } from '#cli/providers/docker/stack-deploy.js'
 import type { PlaybookSummary } from '#cli/core/playbook-output.js'
 import { hasCommand, logger } from '#cli/utils/index.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
@@ -307,7 +305,7 @@ export const installCommand = new Command('install')
         const ran = describeRun(catalog, profile, picked)
         if (stacks) {
           // Each stack says how it went, in its own group
-          await deployRequiredStacks(stacks)
+          await deployStacks(stacks, 'local-env install')
         }
         showForgotten(forgotten, catalog, left)
         // Last, in green, its counts dimmed: what the install did, in place

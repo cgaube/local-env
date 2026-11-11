@@ -16,13 +16,15 @@ import {
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
-// Under a table: the page size and the pages, first to last
+// Under a table, or a grid of cards: the page size and the pages, first to
+// last
 export function TablePagination({
   page,
   pageCount,
   pageSize,
   onPageChange,
   onPageSizeChange,
+  sizeLabel = 'Rows per page',
 }: {
   // From 0
   page: number
@@ -30,13 +32,14 @@ export function TablePagination({
   pageSize: number
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
+  sizeLabel?: string
 }) {
   const last = Math.max(pageCount - 1, 0)
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 text-sm">
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground" id="rows-per-page">
-          Rows per page
+          {sizeLabel}
         </span>
         <Select
           value={String(pageSize)}

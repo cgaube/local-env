@@ -18,7 +18,7 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('link', { name: 'Docker' }))
     expect(
-      await screen.findByRole('heading', { name: 'Routes', level: 1 }),
+      await screen.findByRole('heading', { name: 'Docker', level: 1 }),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'Tools' }))

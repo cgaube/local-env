@@ -6,9 +6,19 @@ import { logger } from '#cli/utils/logger.js'
 import { askConfirm, askSelect } from '#cli/utils/prompt.js'
 import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
 import {
+  missingStackSecrets,
+  readStackSecrets,
+  reportStackSecrets,
+  stackSecretNames,
+  warnUnmaskedSecrets,
+  writeStackSecrets,
+} from '#cli/providers/docker/stack-secrets.js'
+import {
   applyStackDiff,
   diffStack,
   findTemplatedStacks,
+  readTemplateContent,
+  resolveTemplateCompose,
   unlinkStack,
   updateLink,
   type LinkCandidate,
@@ -103,6 +113,46 @@ const askLink =
     return answer
   }
 
+// Reads the secrets of a stack from the vault and writes them to it in
+// Dockhand. False, said, when they can't be read: the stack is left as it is.
+const saveStackSecrets = async (
+  environmentId: number,
+  stack: string,
+  template: string,
+  names: string[],
+) => {
+  try {
+    const values = await readStackSecrets([{ stack, template, names }])
+    await writeStackSecrets(environmentId, stack, values.get(stack) ?? {})
+    reportStackSecrets(stack, names)
+    return true
+  } catch (error) {
+    logger.warn(`${stack}: ${(error as Error).message}`)
+    return false
+  }
+}
+
+// The secrets of a linked stack that Dockhand shows in clear (the template's
+// fix), and those it lacks: deployed outside local-env (from Dockhand, or
+// before the source gave them). Only said: `local-env deploy` gives them when
+// it deploys.
+const hintStackSecrets = async (
+  environmentId: number,
+  { stack, template }: { stack: string; template: string },
+) => {
+  const path = resolveTemplateCompose(template)
+  if (!path) return
+  const compose = readTemplateContent(template, path)
+  const names = stackSecretNames(template, compose)
+  if (names.length === 0) return
+  warnUnmaskedSecrets(stack, compose, names)
+  const missing = await missingStackSecrets(environmentId, stack, names)
+  if (missing.length === 0) return
+  logger.info(
+    `${stack}: deployed without ${missing.join(', ')} from the vault. Remove it in Dockhand, then run local-env deploy ${template}, or set ${missing.length === 1 ? 'it' : 'them'} in Dockhand.`,
+  )
+}
+
 // Shows each deployed stack's diff with its template and applies it on
 // approval. Returns the names of the redeployed stacks.
 export const syncTemplatedStacks = async ({
@@ -154,10 +204,12 @@ export const syncTemplatedStacks = async ({
 
     if (!diff) {
       logger.success(`${label}: up to date`)
+      await hintStackSecrets(environment.id, linked)
       continue
     }
     if (diff.nextBase === linked.skip) {
       logger.info(`${label}: template version skipped`)
+      await hintStackSecrets(environment.id, linked)
       continue
     }
 
@@ -222,6 +274,20 @@ export const syncTemplatedStacks = async ({
       continue
     }
 
+    // Its secrets read again (a rotated one too), before the redeploy
+    const secrets = stackSecretNames(linked.template, diff.next)
+    if (
+      secrets.length > 0 &&
+      !(await saveStackSecrets(
+        environment.id,
+        linked.stack,
+        linked.template,
+        secrets,
+      ))
+    ) {
+      logger.info(`${linked.stack}: not redeployed, its secrets are missing`)
+      continue
+    }
     await applyStackDiff(environment.id, diff)
     applied.push(linked.stack)
     logger.success(`${linked.stack}: updated and redeployed`)

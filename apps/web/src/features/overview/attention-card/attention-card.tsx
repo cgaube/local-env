@@ -1,11 +1,9 @@
-import { Link } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
 import {
   CircleCheckIcon,
   LoaderCircleIcon,
   TriangleAlertIcon,
 } from 'lucide-react'
-import { Button } from '#ui/components/ui/button'
 import { Card, CardContent } from '#ui/components/ui/card'
 import {
   Empty,
@@ -17,6 +15,7 @@ import {
 } from '#ui/components/ui/empty'
 import { cn } from '#ui/lib/utils'
 import { CodeSnippet } from '#ui/features/copy/code-snippet'
+import { ButtonLink } from '#ui/features/links/button-link'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { useLogins } from '#ui/features/logins/logins.ts'
 import {
@@ -29,9 +28,9 @@ function ItemAction({ action }: Pick<AttentionItem, 'action'>) {
   if (!action) return null
   if (action.kind === 'command') return <CodeSnippet code={action.command} />
   return (
-    <Button variant="outline" size="sm" render={<Link to={action.to} />}>
+    <ButtonLink to={action.to} variant="outline" size="sm">
       {action.label}
-    </Button>
+    </ButtonLink>
   )
 }
 

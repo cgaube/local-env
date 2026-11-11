@@ -49,7 +49,7 @@ export const agentCommand = new Command('agent')
         port,
         token,
         version: packageJson.version,
-        argv: (command) => [...selfArgv(), command],
+        argv: (command, args) => [...selfArgv(), command, ...args],
         logins: buildLoginsReport,
         // Not when it is idle: a run that just ended is what upgraded it
         onRunExit: async (run) => {

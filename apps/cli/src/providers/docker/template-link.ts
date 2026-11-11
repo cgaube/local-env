@@ -59,16 +59,7 @@ export const hashTemplate = (content: string) =>
   createHash('sha256').update(content).digest('hex').slice(0, 12)
 
 // The top-level `name:` of a compose file, which the deployed stack keeps
-export const composeName = (compose: string) => {
-  try {
-    const parsed = Bun.YAML.parse(compose) as { name?: unknown } | null
-    return typeof parsed?.name === 'string' && !parsed.name.startsWith('${')
-      ? parsed.name
-      : null
-  } catch {
-    return null
-  }
-}
+export { composeName } from '#services/dashboard/templates.js'
 
 export type Snapshot = { hash: string; content: string; savedAt: Date }
 

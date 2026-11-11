@@ -1,7 +1,7 @@
 FROM oven/bun:1.4.4-alpine
 
 WORKDIR /app
-COPY server.ts tools.ts role-graph.ts source-manifest.ts ./
+COPY server.ts tools.ts role-graph.ts source-manifest.ts templates.ts catalog.ts ./
 # Built by `bun run compile` from apps/web
 COPY public ./public
 
