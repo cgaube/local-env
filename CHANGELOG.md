@@ -1,5 +1,55 @@
 # local-env
 
+## 0.7.0
+
+### Minor Changes
+
+- 7ac1eb5: Tools can get secrets from AWS Secrets Manager and HashiCorp Vault. A
+  source declares its `aws` and `vault` logins and its `secrets` in its
+  manifest, and `local-env install` logs you in, then gives each role the
+  secrets it declares as inputs, without writing them to the disk.
+- f5e7588: `local-env install --dry-run` shows what would install and the
+  variables it would use, without running anything.
+- cda8278: The dashboard's Overview starts with what needs you: a stopped
+  service or agent, a logged-out account, tools to install, each with what to
+  do. The core services are a compact Health card, and each source lists its
+  logins and their state.
+- d8e0645: Registries of private images move from `docker/registries.json` to
+  the `logins` of the source manifest (`local-env.yml`), as logins of
+  `type: registry`. `local-env sources login` and `logout` take
+  `--login <name>`, the name of the login in the manifest, in place of
+  `--registry <host>`.
+- f5e7588: Tools can take variables, which their role declares in
+  `meta/argument_specs.yml`. Set them in the dashboard (Variables, beside
+  Install) or with `local-env vars set`, and `local-env install` asks for a
+  required one that has no value. A value that your profile sets wins. Secrets
+  (`no_log`) are not supported yet.
+- d8e0645: A source can have a manifest, `local-env.yml` at the root of its
+  repo, with a unique `name` and a `label`. `local-env sources add` names the
+  source after the manifest, the same on every Mac, and skips a repo whose name
+  is already added. `sources list` and the dashboard show the label.
+- e4cfd70: Deploy the Docker templates of your sources from the dashboard's
+  Docker page, or with `local-env deploy`. A deploy asks for the values only you
+  can give, and reads secrets from AWS Secrets Manager or HashiCorp Vault (the
+  source's manifest maps a compose variable to a secret). Dockhand's Templates
+  page is hidden, and your sources are no longer listed there. A template card
+  and `local-env deploy` say when Dockhand would show a secret in clear in its
+  pages.
+
+### Patch Changes
+
+- cda8278: `local-env start` replaces a dashboard agent that runs another
+  local-env (a binary built again, or Homebrew's beside a checkout), not only
+  one of another version.
+- a2550c4: The dashboard shows an error page when a page breaks, in place of a
+  blank screen: a broken logo, the error, and buttons to try again or go back to
+  the overview.
+- d8e0645: `local-env install` lists the tools that left your sources once, at
+  the end with the tools no longer wanted, and no longer lists a profile that
+  left your sources as a tool.
+- f5e7588: `local-env install` shows a line for each item of a loop, as Ansible
+  does.
+
 ## 0.6.1
 
 ### Patch Changes
