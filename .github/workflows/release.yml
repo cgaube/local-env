@@ -1,7 +1,8 @@
 # Versions and releases with changesets, as the release GitHub App:
 # - pending changesets on main: opens or updates the "version packages" PR
 # - that PR merged: tags the version, creates its GitHub Release, attaches the
-#   macOS binary (Apple Silicon) and updates the formula in cgaube/homebrew-tap
+#   macOS binary (Apple Silicon), updates the formula in cgaube/homebrew-tap,
+#   then publishes the docs site (docs.yml)
 # Needs the RELEASE_APP_CLIENT_ID variable and RELEASE_APP_PRIVATE_KEY secret,
 # and the App installed on both repos.
 name: Release
@@ -23,6 +24,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-26.04
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
     steps:
       - name: Create the App token
         id: app-token
@@ -110,3 +113,14 @@ jobs:
             -f content="$(base64 -w0 local-env.rb)" \
             -f sha="$(jq -r .sha formula.json)" > /dev/null
           echo "Formula updated to local-env $VERSION"
+
+  # The docs of the version just released. From main, which the github-pages
+  # environment allows (a release tag would need a rule of its own).
+  docs:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml

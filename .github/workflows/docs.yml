@@ -1,15 +1,12 @@
 # Builds docs/ into the docs site (VitePress, docs/.vitepress/) and publishes
-# it to GitHub Pages on every merge to main. Pull requests build it in CI.
+# it to GitHub Pages with each release: release.yml calls it once the
+# "Version packages" PR is merged and the version released, so the site
+# describes what users can install. Pull requests build it in CI. Run it by
+# hand (from main) to publish without a release.
 name: Docs
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - docs/**
-      - package.json
-      - bun.lock
-      - .github/workflows/docs.yml
+  workflow_call:
   workflow_dispatch:
 
 permissions:

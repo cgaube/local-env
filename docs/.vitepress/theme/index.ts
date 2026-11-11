@@ -1,7 +1,8 @@
-// The default theme, with the Mermaid diagrams drawn in the browser: the
-// config turns each ```mermaid block into <pre class="mermaid">. Mermaid
-// loads only on a page that has one.
+// The default theme in the logo's colors (style.css), with the Mermaid
+// diagrams drawn in the browser: the config turns each ```mermaid block into
+// <pre class="mermaid">. Mermaid loads only on a page that has one.
 import DefaultTheme from 'vitepress/theme'
+import './style.css'
 import { onMounted, watch } from 'vue'
 import { useData, useRoute } from 'vitepress'
 import type { Theme } from 'vitepress'

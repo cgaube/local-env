@@ -1,0 +1,87 @@
+/* The colors of the logo and the dashboard: Dracula purple to pink. In
+   light mode, darker shades of them, readable on white. */
+:root {
+  --vp-c-brand-1: #7c3aed;
+  --vp-c-brand-2: #db2777;
+  --vp-c-brand-3: #7c3aed;
+  --vp-c-brand-soft: rgb(124 58 237 / 0.14);
+
+  --vp-button-brand-bg: #7c3aed;
+  --vp-button-brand-hover-bg: #6d28d9;
+  --vp-button-brand-active-bg: #5b21b6;
+
+  /* The hero: the name in the logo's gradient */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #7c3aed, #db2777);
+}
+
+/* The hero, centred and stacked at every width: the logo, then the name,
+   the tagline and the buttons. .VPHome makes these win over the default
+   theme's rules for a hero with an image. */
+.VPHome .VPHero.has-image .container {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.VPHome .VPHero.has-image .image {
+  order: 1;
+  flex-grow: 0;
+  min-height: 0;
+  margin: 0 0 24px;
+}
+.VPHome .VPHero.has-image .main {
+  order: 2;
+  flex-grow: 0;
+  width: auto;
+  max-width: 640px;
+}
+.VPHome .VPHero.has-image .name,
+.VPHome .VPHero.has-image .text,
+.VPHome .VPHero.has-image .tagline {
+  margin: 0 auto;
+}
+.VPHome .VPHero.has-image .actions {
+  justify-content: center;
+}
+
+/* The logo as it is: no glow, no frame */
+.VPHome .VPHero .image-bg {
+  display: none;
+}
+.VPHome .VPHero .image-container {
+  width: 112px;
+  height: 112px;
+  margin: 0 auto;
+  transform: none;
+}
+.VPHome .VPHero .image-src {
+  max-width: 112px;
+  max-height: 112px;
+}
+
+/* Dracula, as the dashboard in dark mode */
+.dark {
+  --vp-c-bg: #282a36;
+  --vp-c-bg-alt: #21222c;
+  --vp-c-bg-elv: #343746;
+  --vp-c-bg-soft: #343746;
+  --vp-c-divider: #44475a;
+  --vp-c-gutter: #21222c;
+  --vp-c-text-1: #f8f8f2;
+  --vp-c-text-2: #a9abc2;
+
+  --vp-c-brand-1: #bd93f9;
+  --vp-c-brand-2: #ff79c6;
+  --vp-c-brand-3: #bd93f9;
+  --vp-c-brand-soft: rgb(189 147 249 / 0.16);
+
+  /* Dark text: white is not readable on the light purple */
+  --vp-button-brand-text: #282a36;
+  --vp-button-brand-hover-text: #282a36;
+  --vp-button-brand-active-text: #282a36;
+  --vp-button-brand-bg: #bd93f9;
+  --vp-button-brand-hover-bg: #ff79c6;
+  --vp-button-brand-active-bg: #ff79c6;
+
+  --vp-home-hero-name-background: linear-gradient(120deg, #bd93f9, #ff79c6);
+}
