@@ -31,7 +31,7 @@
     },
     "secrets": {
       "type": "object",
-      "description": "Where the values of the secrets of the source are, by the name of the variable each one fills: an input of a role of the source (meta/argument_specs.yml), or a name its local-env.yml asks for. local-env reads a secret only when a tool it installs needs it, with the login's CLI and the user's own session.",
+      "description": "Where the values of the secrets of the source are, by the name of the variable each one fills: an input of a role of the source (meta/argument_specs.yml) or a name its local-env.yml asks for, or a variable of a compose file of the source (${NAME}). local-env reads a secret only when a tool it installs or a stack it deploys needs it, with the login's CLI and the user's own session.",
       "propertyNames": {
         "pattern": "^(?![Ll][Oo][Cc][Aa][Ll]_[Ee][Nn][Vv]|[Aa][Nn][Ss][Ii][Bb][Ll][Ee]_)[A-Za-z_][A-Za-z0-9_]*$"
       },

@@ -15,6 +15,10 @@ import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
 import { registryLoginsStep } from '#cli/logins/registry.js'
 import { readBuildTree } from '#cli/providers/docker/stack-builds.js'
 import {
+  readStackSecrets,
+  stackSecretNames,
+} from '#cli/providers/docker/stack-secrets.js'
+import {
   composeName,
   hashTemplate,
   readLinks,
@@ -80,14 +84,17 @@ const listStackNames = async (environmentId: number) =>
     ),
   )
 
-// Asks for the variables the stack can't start without. null when one is
-// left empty, or can't be asked: the stack isn't deployed.
+// Asks for the variables the stack can't start without, but those its source
+// gives from its vault. null when one is left empty, or can't be asked: the
+// stack isn't deployed.
 const askVariables = async (
   name: string,
   compose: string,
+  fromVault: string[],
 ): Promise<StackVariable[] | null> => {
   const variables: StackVariable[] = []
   for (const { key, help } of requiredVariables(compose)) {
+    if (fromVault.includes(key)) continue
     if (!canAsk()) {
       logger.warn(
         `${name} needs ${key}: not deployed. Run local-env install in a terminal to set it.`,
@@ -188,10 +195,39 @@ export const planRequiredStacks = async (
   // Their private images pull with the logins of their source's registries
   await registryLoginsStep.run()
 
+  // Their secrets from the vault: the logins made ready (asked now, like the
+  // rest), the values read, before anything is deployed
+  const fromVault = new Map(
+    missing.map(({ name, template, compose }) => [
+      name,
+      stackSecretNames(template, compose),
+    ]),
+  )
+  const secrets = await readStackSecrets(
+    missing.map(({ name, template }) => ({
+      stack: name,
+      template,
+      names: fromVault.get(name) ?? [],
+    })),
+  )
+
   const stacks: StackToDeploy[] = []
   for (const candidate of missing) {
-    const variables = await askVariables(candidate.name, candidate.compose)
-    if (variables) stacks.push({ ...candidate, variables })
+    const variables = await askVariables(
+      candidate.name,
+      candidate.compose,
+      fromVault.get(candidate.name) ?? [],
+    )
+    if (!variables) continue
+    stacks.push({
+      ...candidate,
+      variables: [
+        ...variables,
+        ...Object.entries(secrets.get(candidate.name) ?? {}).map(
+          ([key, value]) => ({ key, value, isSecret: true }),
+        ),
+      ],
+    })
   }
   return stacks.length > 0 ? { environmentId, stacks } : null
 }

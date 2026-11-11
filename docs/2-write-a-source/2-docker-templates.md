@@ -175,6 +175,44 @@ access to the packages of all the organizations of the user.
 Docker keeps one login for each host. Thus, sources that need two different
 accounts on the same host cannot both work.
 
+### Secrets
+
+A template gets secrets from your company's vault the same way as the roles: the
+`secrets` of the manifest say where each one is, by the name of the variable it
+fills, and the compose file uses that variable.
+
+```yaml
+# local-env.yml
+logins:
+  acme-dev: { type: aws, sso: { … } }
+secrets:
+  SMTP_PASSWORD: { login: acme-dev, ref: mail/dev, field: password }
+```
+
+```yaml
+# docker/mail/compose.yaml: plain compose
+services:
+  mail:
+    image: axllent/mailpit
+    environment:
+      MP_SMTP_AUTH: user:${SMTP_PASSWORD:?the SMTP password}
+```
+
+- local-env reads the secret with the user's session (it logs in first, in the
+  terminal) and saves it in Dockhand as a **secret variable** of the stack:
+  encrypted in Dockhand's database, given to compose through the environment,
+  never in the stack's `.env`. Dockhand uses it again on a restart and an
+  update.
+- When: `local-env install` deploys a stack that a tool needs with its secrets,
+  and does not ask for them; `sources sync` and `update` read them again before
+  they apply a template change; and `sources sync` gives a linked stack the
+  secrets it lacks (deployed from Dockhand's page, or before the manifest gave
+  them), then redeploys it, after a question (`--yes` skips it).
+- A stack gets the secrets of **its template's own source** only. Prefer a
+  `${NAME:?…}`: without local-env, compose then stops with your message.
+- The template stays a plain Portainer template: without local-env, the user
+  sets the variable in Dockhand.
+
 ## How updates reach users
 
 When you commit a change to a template, users get it with

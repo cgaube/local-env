@@ -138,8 +138,8 @@ flowchart LR
   `secretCommand` (the command that prints one secret, and the keys to take from
   its JSON output).
 - `secrets.ts` reads the `secrets` of a manifest (`login`, `ref`, `field`) and
-  checks the names. It is not tied to roles: Docker stacks will use the same
-  secrets.
+  checks the names. It is not tied to roles: the Docker stacks use the same
+  secrets (`apps/cli/src/providers/docker/stack-secrets.ts`).
 - `session.ts` runs them: `sessionStatus` (`logged-in`, `logged-out`, `no-cli`),
   `logInToSession` and `logOutOfSession` with the terminal handed over, and the
   line that the lists show. `canLogIn` is false without a terminal, and in a run
@@ -232,6 +232,28 @@ local_env:
   sources declare `acme-dev`), the install stops before anything runs. It names
   the roles and the sources. The roles must name the source:
   `acme-platform/acme-dev`.
+
+### The secrets of a stack
+
+A Docker stack gets the secrets of its template's source the same way:
+`stack-secrets.ts` takes the variables of its compose file (`${NAME}`,
+`${NAME:-x}`, `$NAME`, not `$$NAME`) that the `secrets` of the source manifest
+name, makes their logins ready and reads them with `prepare.ts` (the consumer is
+the stack), then saves them in Dockhand as secret variables of the stack.
+
+| When                                                          | What                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `install` deploys a stack a tool needs (`required-stacks.ts`) | the secrets go in the create call (`envVars`, `isSecret`), and are not asked                                |
+| `sources sync`, `update`: a template change (`stack-sync.ts`) | read again and saved (`PUT /stacks/:name/env`) before the compose file is replaced and the stack redeployed |
+| `sources sync`: a linked stack that lacks one                 | saved, then the stack is redeployed (`POST /stacks/:name/deploy`), after a question                         |
+
+- The save sends Dockhand the stack's variables as they are, a secret as `***`
+  (Dockhand keeps its value), then the secrets: the user's own variables stay.
+- Dockhand keeps them encrypted, and gives them to compose through the
+  environment: never in the stack's `.env`. A restart or an image update of the
+  stack keeps them.
+- A secret that cannot be read leaves the stack as it is: it is not redeployed,
+  and the sync goes on.
 
 ### Before the install
 
@@ -473,9 +495,11 @@ filled.
 
 - Only `registry`, `aws` and `vault`. A new type is a new file in
   `apps/cli/src/logins/` and a line in its list.
-- Templates cannot use a secret of a vault yet (`${NAME}` filled from AWS or
-  Vault): the `secrets` of the manifest are ready for it. Only roles read
-  secrets. A registry token cannot come from a vault yet.
+- A registry token cannot come from a vault yet.
+- A secret rotated in the vault reaches a stack when local-env redeploys it (a
+  template change), not before: the stack keeps the value Dockhand saved. A
+  stack deployed from Dockhand's page has its secrets at the next
+  `sources sync`.
 - A role that uses `local_env.logins` runs only with local-env, unless it gives
   a default (`| default({'AWS_PROFILE': 'acme'})`). A role that takes a secret
   as an input runs without local-env with `-e`.

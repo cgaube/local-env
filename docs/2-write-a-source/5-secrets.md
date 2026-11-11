@@ -78,8 +78,8 @@ yourself.
 
 - A secret is named after the variable it fills: letters, digits and `_`, as
   Ansible wants. `local_env…` and `ansible_…` are local-env's and Ansible's own.
-  A Docker stack will use the same rule, with the variable of its compose file
-  (`DB_PASSWORD`).
+  A Docker template uses the same rule, with the variable of its compose file
+  (`DB_PASSWORD`): see [Docker templates](2-docker-templates.md#secrets).
 - A role gets the secrets of **its own source**: the inputs of its
   `argument_specs.yml` that the `secrets` of the manifest name, and the names
   its `local-env.yml` asks for. A role of another source that declares

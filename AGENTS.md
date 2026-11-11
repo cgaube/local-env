@@ -274,9 +274,9 @@ holds what we build:
   status, and the login and logout with the terminal handed over. The manifest
   maps the source's secrets by the name of the variable each fills
   (`secrets: { github_token: { login, ref, field } }`; `src/logins/secrets.ts`
-  checks them; Docker stacks will use the same). A role of the source gets the
-  ones it declares as inputs (`meta/argument_specs.yml`, usually `no_log`) or
-  asks for (`secrets: [npm_token]` in its `local-env.yml`): `Role.secrets` in
+  checks them). A role of the source gets the ones it declares as inputs
+  (`meta/argument_specs.yml`, usually `no_log`) or asks for
+  (`secrets: [npm_token]` in its `local-env.yml`): `Role.secrets` in
   `services/dashboard/tools.ts`, and `role-graph.ts` marks those inputs `vault`
   (never asked, saved or passed by the user; the Variables form shows "From the
   vault", `vars set` refuses them). Only the role's own source gives it secrets.
@@ -293,19 +293,28 @@ holds what we build:
   to log in, except without a terminal or from the dashboard: the agent sets
   `LOCAL_ENV_FROM_DASHBOARD=1`. Then it reads the secrets the roles of the run
   get, once each (the command of the type's `secretCommand`, run by `readSecret`
-  in `session.ts`, the same code that stacks will use); one that cannot be read
-  stops it before anything runs. It passes `local_env.logins` (by the name the
-  roles use: `env`, `profile`/`region` or `address`/`namespace`; no secret) in
-  the extra vars file, and each secret as the variable of its name through a
-  named pipe of the run folder (`src/core/secret-pipe.ts`:
-  `--extra-vars @secrets.yml`, each value `!unsafe`, nothing on the disk; a
-  secret wins over a saved value). The fake `ansible-playbook` reads the pipe
-  like Ansible, and skips it when it checks the files of the run folder.
-  `sources list`, `login`, `logout` and `doctor` show and manage every type
-  (`listing.ts`). The dashboard's Overview shows the logins of each source in
-  the Sources card, and those that wait for you in Needs attention:
-  `/api/logins` asks the dashboard agent's `GET /logins`, which builds the list
-  on the Mac (`report.ts`), on page open and on Check logins, never on a timer.
+  in `session.ts`); one that cannot be read stops it before anything runs. It
+  passes `local_env.logins` (by the name the roles use: `env`,
+  `profile`/`region` or `address`/`namespace`; no secret) in the extra vars
+  file, and each secret as the variable of its name through a named pipe of the
+  run folder (`src/core/secret-pipe.ts`: `--extra-vars @secrets.yml`, each value
+  `!unsafe`, nothing on the disk; a secret wins over a saved value). The fake
+  `ansible-playbook` reads the pipe like Ansible, and skips it when it checks
+  the files of the run folder. `sources list`, `login`, `logout` and `doctor`
+  show and manage every type (`listing.ts`). The dashboard's Overview shows the
+  logins of each source in the Sources card, and those that wait for you in
+  Needs attention: `/api/logins` asks the dashboard agent's `GET /logins`, which
+  builds the list on the Mac (`report.ts`), on page open and on Check logins,
+  never on a timer.
+- A Docker stack gets the `secrets` of its template's source the same way
+  (`src/providers/docker/stack-secrets.ts`): the variables of its compose file
+  that the manifest names, read with `logins/prepare.ts` (the stack is the
+  consumer) and saved in Dockhand as secret variables (`PUT /stacks/:name/env`
+  with the stack's other variables as they are; a secret comes back as `***`,
+  which Dockhand keeps). `install` passes them when it deploys a stack a tool
+  needs; `sources sync` and `update` read them again before a template change
+  redeploys the stack, and `sources sync` gives a linked stack the ones it
+  lacks, then redeploys it.
 - `${HOST_HOME}` in a template is replaced with the Mac home folder in the same
   pass (`catalog-server` gets it as `HOST_HOME: ${HOME}`). Dockhand gives
   compose only each stack's variables, and `~` is Dockhand's own home there.
