@@ -33,11 +33,61 @@ describe('the variables of a compose file', () => {
 
   test('the required ones are those without a default, with their help', () => {
     expect(
-      requiredVariables('a: ${A:?the A} b: ${B?} c: ${C:-x} d: ${A:?again}'),
+      requiredVariables(
+        ['a: ${A:?the A}', 'b: ${B?}', 'c: ${C:-x}', 'd: ${A:?again}'].join(
+          '\n',
+        ),
+      ),
     ).toEqual([
       { key: 'A', help: 'the A' },
       { key: 'B', help: '' },
     ])
+  })
+
+  test('skips the comments, which compose does not interpolate', () => {
+    const compose = [
+      '# set ${GREETING:?the text} in Dockhand',
+      'services:',
+      '  app:',
+      '    image: nginx # ${TAG:-latest} is moving',
+      "    command: ['-text=${TEXT:?the text}'] #${AFTER_FLOW}",
+      '    labels:',
+      "      - 'note=a # in quotes ${QUOTED}'",
+      '      - "it\\"s # ${ESCAPED}"',
+      '      - see#${NO_SPACE}',
+      '',
+    ].join('\n')
+    expect(composeVariables(compose)).toEqual([
+      'TEXT',
+      'QUOTED',
+      'ESCAPED',
+      'NO_SPACE',
+    ])
+    expect(requiredVariables(compose)).toEqual([
+      { key: 'TEXT', help: 'the text' },
+    ])
+  })
+
+  test('finds none in a file that is not valid YAML', () => {
+    expect(composeVariables('a: ${A}\n  - b: ${B}')).toEqual([])
+  })
+
+  test('reads a block scalar as text, comments included', () => {
+    const compose = [
+      'services:',
+      '  app:',
+      '    command: |',
+      '      # echo ${IN_BLOCK:?read}',
+      '      run',
+      '    # ${AFTER_BLOCK:?skipped}',
+      '    environment:',
+      '      - A=${A}',
+      '',
+    ].join('\n')
+    expect(requiredVariables(compose)).toEqual([
+      { key: 'IN_BLOCK', help: 'read' },
+    ])
+    expect(composeVariables(compose)).toEqual(['IN_BLOCK', 'A'])
   })
 })
 
@@ -87,8 +137,9 @@ describe('unmaskedSecrets', () => {
   test('shows a secret under another name, in a command or in a label', () => {
     expect(
       unmasked(
+        '    environment:',
         '      SMTP_PASS: ${SMTP_PASSWORD}',
-        '    command: curl -H "Authorization: ${API_TOKEN}"',
+        "    command: ['curl', '-H', 'Authorization: ${API_TOKEN}']",
       ),
     ).toEqual(['SMTP_PASSWORD', 'API_TOKEN'])
     // Dockhand maps only the braced form

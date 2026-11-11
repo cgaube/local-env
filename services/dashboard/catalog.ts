@@ -1,7 +1,6 @@
 // The Docker page's catalog: what the dashboard streams about each template
-// (templates.ts lists them) and the parsing of compose variables, shared by
-// the dashboard, the CLI and the web app. No imports: the web app loads it
-// too.
+// (templates.ts lists them), shared by the dashboard, the CLI and the web app.
+// No imports: the web app loads it too.
 
 export type CatalogTemplate = {
   // <source>/<folder>
@@ -42,51 +41,3 @@ export type DockhandStack = { name: string; status: string }
 export type StacksResponse =
   | { available: true; stacks: DockhandStack[] }
   | { available: false }
-
-// A variable of a compose file: ${NAME}, ${NAME:-x}, ${NAME?msg} or $NAME.
-// Not $$NAME, which compose writes as a $.
-const VARIABLE =
-  /(?<!\$)\$(?:\{([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*))/g
-
-export const composeVariables = (compose: string) => [
-  ...new Set(
-    [...compose.matchAll(VARIABLE)].map(([, braced, bare]) => braced ?? bare!),
-  ),
-]
-
-// ${NAME:?message} and ${NAME?message}: compose stops without them. Others
-// have a default, or are empty when unset.
-const REQUIRED = /\$\{([A-Za-z_][A-Za-z0-9_]*):?\?([^}]*)\}/g
-
-export const requiredVariables = (compose: string) => {
-  const found = new Map<string, string>()
-  for (const [, key = '', help = ''] of compose.matchAll(REQUIRED)) {
-    if (!found.has(key)) found.set(key, help.trim())
-  }
-  return [...found].map(([key, help]) => ({ key, help }))
-}
-
-const LIST_ITEM = /^\s*-\s*([A-Za-z_][A-Za-z0-9_]*)=/
-const MAP_KEY = /^\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*:/
-const BRACED = /\$\{([A-Za-z_][A-Za-z0-9_]*)/g
-
-// The secrets of a compose file that Dockhand shows in clear in its pages (a
-// container's Compose and Environment tabs). It hides a container variable
-// named like a secret of the stack (SMTP_PASSWORD: ${SMTP_PASSWORD}), or one
-// that the list form maps to one (- SMTP_PASS=${SMTP_PASSWORD}): not
-// SMTP_PASS: ${SMTP_PASSWORD}, nor a secret in a command or a label. Line by
-// line, as Dockhand reads it.
-export const unmaskedSecrets = (compose: string, secrets: string[]) => {
-  const found = new Set<string>()
-  for (const line of compose.split('\n')) {
-    const code = line.replace(/(^|\s)#.*$/, '')
-    const used = composeVariables(code).filter((name) => secrets.includes(name))
-    if (used.length === 0) continue
-    const item = LIST_ITEM.exec(code)?.[1]
-    const masked = item
-      ? new Set([item, ...[...code.matchAll(BRACED)].map(([, name]) => name)])
-      : new Set([MAP_KEY.exec(code)?.[1]])
-    for (const name of used) if (!masked.has(name)) found.add(name)
-  }
-  return [...found]
-}
