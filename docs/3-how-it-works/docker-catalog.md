@@ -55,8 +55,10 @@ sequenceDiagram
   the CLI: the type 3 entries of each source's `docker/templates.json` whose
   `stackfile` is `docker/<folder>/<compose file>`. A template's id is
   `<source>/<folder>`, its stack is the compose `name:`, else the folder.
-  `services/dashboard/catalog.ts` holds its types and the parsing of compose
-  variables, with no imports, for the web app.
+  `services/dashboard/catalog.ts` holds its types, with no imports, for the web
+  app. `services/dashboard/compose-variables.ts` finds the variables of a
+  compose file in the values of its YAML (`Bun.YAML`), as compose does: never in
+  a comment.
 - What a deploy needs, from the compose file: `${NAME:?help}` without a default
   is asked for, unless the source's `secrets` name it (then it is read from the
   vault); the registries are the source's `registry` logins whose host starts an

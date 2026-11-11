@@ -1,22 +1,24 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { CatalogTemplate } from './catalog.js'
 import {
-  type CatalogTemplate,
   composeVariables,
   requiredVariables,
   unmaskedSecrets,
-} from './catalog.js'
+} from './compose-variables.js'
 import { tryReadSourceManifest } from './source-manifest.js'
 
 export {
   appUrls,
   type CatalogTemplate,
-  composeVariables,
   type DockhandStack,
-  requiredVariables,
   type StacksResponse,
-  unmaskedSecrets,
 } from './catalog.js'
+export {
+  composeVariables,
+  requiredVariables,
+  unmaskedSecrets,
+} from './compose-variables.js'
 
 // The Docker templates of every source, as the dashboard's catalog (the
 // Docker page) and `local-env deploy` list them. Shared by the dashboard

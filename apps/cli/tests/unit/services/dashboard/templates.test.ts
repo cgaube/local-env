@@ -33,7 +33,11 @@ describe('the variables of a compose file', () => {
 
   test('the required ones are those without a default, with their help', () => {
     expect(
-      requiredVariables('a: ${A:?the A} b: ${B?} c: ${C:-x} d: ${A:?again}'),
+      requiredVariables(
+        ['a: ${A:?the A}', 'b: ${B?}', 'c: ${C:-x}', 'd: ${A:?again}'].join(
+          '\n',
+        ),
+      ),
     ).toEqual([
       { key: 'A', help: 'the A' },
       { key: 'B', help: '' },
@@ -62,6 +66,10 @@ describe('the variables of a compose file', () => {
     expect(requiredVariables(compose)).toEqual([
       { key: 'TEXT', help: 'the text' },
     ])
+  })
+
+  test('finds none in a file that is not valid YAML', () => {
+    expect(composeVariables('a: ${A}\n  - b: ${B}')).toEqual([])
   })
 
   test('reads a block scalar as text, comments included', () => {
@@ -129,8 +137,9 @@ describe('unmaskedSecrets', () => {
   test('shows a secret under another name, in a command or in a label', () => {
     expect(
       unmasked(
+        '    environment:',
         '      SMTP_PASS: ${SMTP_PASSWORD}',
-        '    command: curl -H "Authorization: ${API_TOKEN}"',
+        "    command: ['curl', '-H', 'Authorization: ${API_TOKEN}']",
       ),
     ).toEqual(['SMTP_PASSWORD', 'API_TOKEN'])
     // Dockhand maps only the braced form

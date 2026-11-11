@@ -257,12 +257,12 @@ the stack), then saves them in Dockhand as secret variables of the stack.
 - Dockhand masks a secret in its pages (a container's Compose and Environment
   tabs) only in a container variable of the secret's name, or one that the list
   form maps to it (`- NAME=${SECRET}`): it does not parse the map form.
-  `unmaskedSecrets` (`services/dashboard/catalog.ts`) finds the others, line by
-  line as Dockhand does, and the dashboard card ("Shown in clear in Dockhand"),
-  `deploy`, `install` and `sources sync` say so: the fix is in the template.
-  Masking only hides the value in Dockhand's pages, as for a stack whose secrets
-  come from Dockhand's own providers: Docker gives the container its environment
-  in clear.
+  `unmaskedSecrets` (`services/dashboard/compose-variables.ts`) finds the
+  others, line by line as Dockhand does, and the dashboard card ("Shown in clear
+  in Dockhand"), `deploy`, `install` and `sources sync` say so: the fix is in
+  the template. Masking only hides the value in Dockhand's pages, as for a stack
+  whose secrets come from Dockhand's own providers: Docker gives the container
+  its environment in clear.
 
 ### Before the install
 
