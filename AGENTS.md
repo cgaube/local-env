@@ -70,12 +70,12 @@ holds what we build:
 - The dashboard agent runs `local-env install` and `update` for the dashboard,
   in a pty (`Bun.Terminal`), on the Mac. `local-env start` spawns
   `local-env agent` (hidden) detached (`src/core/agent.ts`); `stop` and `reset`
-  end it. It listens on `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`) and wants the
-  token it writes to `volumes/agent/token`, which only the dashboard mounts. The
-  dashboard pipes `/api/terminal` (WebSocket, its own Origin only) to it; the
-  page shows it with xterm.js (`features/terminal/`).
-  `services/dashboard/agent-protocol.ts` holds the messages.
-  `docs/3-how-it-works/dashboard-terminal.md` explains why.
+  end it. It listens on `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`; tests give
+  `0`, a free port, which `agent.json` gives) and wants the token it writes to
+  `volumes/agent/token`, which only the dashboard mounts. The dashboard pipes
+  `/api/terminal` (WebSocket, its own Origin only) to it; the page shows it with
+  xterm.js (`features/terminal/`). `services/dashboard/agent-protocol.ts` holds
+  the messages. `docs/3-how-it-works/dashboard-terminal.md` explains why.
 - `services/proxy/` builds the nginx proxy (plain `nginx:alpine`). It includes
   the routes that `proxy-connector` generates into `volumes/proxy/routes.conf`.
   Certificates are generated into `services/proxy/certs/` in the home folder by

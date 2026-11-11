@@ -65,11 +65,15 @@ flowchart LR
 - `apps/cli/src/core/agent.ts` starts and stops the agent. `local-env start`
   calls `ensureAgent()`: it keeps an agent of this version that answers, or
   stops the old one and starts `local-env agent`, detached, in its own session.
-  The agent's output goes to `volumes/agent/agent.log`.
+  The agent's output goes to `volumes/agent/agent.log`. It waits up to 10
+  seconds for the agent to answer, and stops waiting when the agent exits (the
+  port is taken): the error shows the end of the log.
 - `local-env agent` (`apps/cli/src/commands/agent.ts`, hidden from `--help`)
   writes a new random token to `volumes/agent/token` (mode 600) and its pid,
   port and version to `volumes/agent/agent.json`. It listens on
-  `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT` in tests).
+  `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`). Tests give `0`: each agent takes a
+  free port, which `agent.json` gives. A port that a test picked, then passed
+  on, could be taken by another test before the agent listened.
 - The agent answers only requests with its token (`Authorization: Bearer`).
   `GET /status` gives its version and the current or last run. `GET /terminal`
   opens a WebSocket on the run.

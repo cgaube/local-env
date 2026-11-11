@@ -28,7 +28,7 @@ export const AGENT_LOG = join(AGENT_DIR, 'agent.log')
 
 const DEFAULT_PORT = 17081
 
-// Tests give each CLI its own
+// Tests give 0: each agent takes a free port, which agent.json gives
 export const agentPort = () =>
   Number(process.env.LOCAL_ENV_AGENT_PORT ?? DEFAULT_PORT)
 
@@ -158,6 +158,15 @@ export const stopAgent = async () => {
   return running
 }
 
+// The last lines of the agent's output, for an error
+const agentLogTail = (lines = 10) => {
+  try {
+    return readFileSync(AGENT_LOG, 'utf8').trimEnd().split('\n').slice(-lines)
+  } catch {
+    return []
+  }
+}
+
 // Detached, in its own session: it outlives this command and its terminal
 export const spawnAgent = () => {
   const log = openSync(AGENT_LOG, 'a')
@@ -168,7 +177,7 @@ export const spawnAgent = () => {
     env: { ...process.env, LOCAL_ENV_AGENT_PORT: String(agentPort()) },
   })
   child.unref()
-  return child.pid!
+  return child
 }
 
 export type EnsureResult =
@@ -184,7 +193,7 @@ export const ensureAgent = async (): Promise<EnsureResult> => {
     status &&
     status.version === packageJson.version &&
     info!.build === agentBuild() &&
-    info!.port === agentPort()
+    (agentPort() === 0 || info!.port === agentPort())
   ) {
     return { state: 'running' }
   }
@@ -194,14 +203,26 @@ export const ensureAgent = async (): Promise<EnsureResult> => {
 
   const replaced = existsSync(AGENT_INFO)
   await stopAgent()
-  const pid = spawnAgent()
-  const ready = await waitFor(
-    async () =>
-      readAgentInfo()?.pid === pid && (await fetchAgentStatus()) !== null,
-    10_000,
-  )
-  if (!ready) {
-    throw new Error(`The dashboard agent didn't start: see ${AGENT_LOG}`)
+  const child = spawnAgent()
+  const exit = () => child.exitCode ?? child.signalCode
+  // Until it answers, or it exits: it couldn't listen, or it crashed
+  let answered = false
+  await waitFor(async () => {
+    answered =
+      readAgentInfo()?.pid === child.pid && (await fetchAgentStatus()) !== null
+    return answered || exit() !== null
+  }, 10_000)
+  if (!answered) {
+    const why =
+      exit() === null
+        ? 'it gave no answer in 10 seconds'
+        : `it exited with ${exit()}`
+    throw new Error(
+      [
+        `The dashboard agent didn't start: ${why}. The end of ${AGENT_LOG}:`,
+        ...agentLogTail().map((line) => `  ${line}`),
+      ].join('\n'),
+    )
   }
   return { state: replaced ? 'restarted' : 'started' }
 }

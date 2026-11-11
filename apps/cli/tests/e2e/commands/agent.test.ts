@@ -33,8 +33,14 @@ const agentInfo = (cli: Cli) =>
     build?: string
   }
 
+// A first `start`, which must start the agent: its output says why not
+const started = async (cli: Cli) => {
+  const result = await cli.run(['start'])
+  expect(result.output).toContain('Dashboard agent started')
+}
+
 const agentStatus = (cli: Cli, token?: string) =>
-  fetch(`http://127.0.0.1:${cli.agentPort}/status`, {
+  fetch(`http://127.0.0.1:${agentInfo(cli).port}/status`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
 
@@ -49,10 +55,8 @@ describe.concurrent('local-env agent', () => {
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('Dashboard agent started')
     const info = agentInfo(cli)
-    expect(info).toMatchObject({
-      port: cli.agentPort,
-      version: packageJson.version,
-    })
+    expect(info).toMatchObject({ version: packageJson.version })
+    expect(info.port).toBeGreaterThan(0)
     expect(isAlive(info.pid)).toBe(true)
 
     const token = readFileSync(cli.home.path('volumes/agent/token'), 'utf8')
@@ -95,12 +99,15 @@ describe.concurrent('local-env agent', () => {
     await cli.run(['sources', 'add', repo.dir], {
       env: { FAKE_PROMPTS_NO_TTY: '1' },
     })
-    await cli.run(['start'])
+    await started(cli)
     const token = readFileSync(cli.home.path('volumes/agent/token'), 'utf8')
 
-    const response = await fetch(`http://127.0.0.1:${cli.agentPort}/logins`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const response = await fetch(
+      `http://127.0.0.1:${agentInfo(cli).port}/logins`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
 
     expect(await response.json()).toEqual({
       logins: [
@@ -129,9 +136,33 @@ describe.concurrent('local-env agent', () => {
     })
   })
 
+  test('fails at once when it cannot start, with the end of its log', async () => {
+    await using cli = await startedCli()
+    // The agent's own address: macOS lets it listen beside a server on all
+    using taken = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: () => new Response(),
+    })
+
+    const startedAt = Date.now()
+    const result = await cli.run(['start'], {
+      env: { LOCAL_ENV_AGENT_PORT: String(taken.port) },
+    })
+
+    expect(result.exitCode).not.toBe(0)
+    expect(result.output).toContain(
+      "The dashboard agent didn't start: it exited with 1.",
+    )
+    expect(result.output).toContain(
+      `Couldn't listen on 127.0.0.1:${taken.port}`,
+    )
+    expect(Date.now() - startedAt).toBeLessThan(8000)
+  })
+
   test('keeps the running agent on the next `start`', async () => {
     await using cli = await startedCli()
-    await cli.run(['start'])
+    await started(cli)
     const { pid } = agentInfo(cli)
 
     const result = await cli.run(['start'])
@@ -148,7 +179,7 @@ describe.concurrent('local-env agent', () => {
     ['that names no program', { build: undefined }],
   ])('replaces a running agent %s on the next `start`', async (_, change) => {
     await using cli = await startedCli()
-    await cli.run(['start'])
+    await started(cli)
     const before = agentInfo(cli)
     expect(before.build).toBeTruthy()
     cli.home.writeJson('volumes/agent/agent.json', { ...before, ...change })
@@ -166,18 +197,18 @@ describe.concurrent('local-env agent', () => {
     await using cli = await startedCli()
 
     const before = await cli.run(['status', '--services'])
-    await cli.run(['start'])
+    await started(cli)
     const after = await cli.run(['status', '--services'])
 
     expect(before.output).toContain('Dashboard agent not running')
     expect(after.output).toContain(
-      `Dashboard agent ${packageJson.version} on 127.0.0.1:${cli.agentPort}`,
+      `Dashboard agent ${packageJson.version} on 127.0.0.1:${agentInfo(cli).port}`,
     )
   })
 
   test('is stopped by `stop`, its files with it', async () => {
     await using cli = await startedCli()
-    await cli.run(['start'])
+    await started(cli)
     const { pid } = agentInfo(cli)
 
     const result = await cli.run(['stop'])
