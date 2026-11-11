@@ -1,5 +1,16 @@
 # local-env
 
+## 0.7.1
+
+### Patch Changes
+
+- c82c665: When the dashboard agent can't start (its port is taken, or it
+  crashes), `local-env start` says so at once, with the end of the agent's log,
+  instead of waiting 10 seconds and pointing to the log.
+- c77f2bc: A variable in a comment of a compose file (`# set ${GREETING:?…}`) is
+  no longer asked for at deploy, read from the vault or shown on the dashboard
+  card: compose doesn't read comments either.
+
 ## 0.7.0
 
 ### Minor Changes
