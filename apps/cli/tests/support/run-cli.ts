@@ -53,13 +53,6 @@ const cliCommand = () =>
       ]
 
 // A port nothing listens on, for now
-const freePort = () => {
-  const server = Bun.serve({ port: 0, fetch: () => new Response() })
-  const { port } = server
-  server.stop(true)
-  return port!
-}
-
 // The agent a test's `start` left running
 const killAgent = (homeDir: string) => {
   try {
@@ -98,8 +91,6 @@ export const createCli = async ({
   const tmp = join(root, 'tmp')
   mkdirSync(tmp)
   // `start` spawns the dashboard agent: each CLI on its own port
-  const agentPort = freePort()
-
   const normalize = (text: string) =>
     Bun.stripANSI(text)
       .replaceAll(home.dir, '<HOME>')
@@ -142,7 +133,8 @@ export const createCli = async ({
         NO_COLOR: '1',
         LOCAL_ENV_HOME: home.dir,
         LOCAL_ENV_DOCKHAND_URL: dockhand.url,
-        LOCAL_ENV_AGENT_PORT: String(agentPort),
+        // Each agent takes a free port: agent.json gives it
+        LOCAL_ENV_AGENT_PORT: '0',
         // Nothing listens there: the new version check fails at once, and
         // never reaches GitHub. Tests of the check pass their own.
         LOCAL_ENV_FORMULA_URL: 'http://127.0.0.1:9/',
@@ -211,7 +203,6 @@ export const createCli = async ({
       name: string,
       options?: Parameters<typeof createSourceRepo>[1],
     ) => createSourceRepo(join(root, 'repos', name), options),
-    agentPort,
     [Symbol.asyncDispose]: async () => {
       killAgent(home.dir)
       await dockhand.stop()
