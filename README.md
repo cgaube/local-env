@@ -37,10 +37,10 @@ Then set it up and start it:
 ```sh
 local-env setup    # wildcard DNS (dnsmasq) + certificates (mkcert), asks for sudo,
                    # then offers to start: proxy, Dockhand and the catalog server
-local-env sources add ~/Projects/local-env-templates   # or a git URL
+local-env sources add https://github.com/cgaube/local-env-templates-example   # your team's source, or the example
 ```
 
-Open `https://docker.dev.test`, go to Templates and deploy one.
+Open `https://local-env.dev.test/docker` and deploy an app.
 
 `setup` is safe to re-run: it only redoes what changed or broke. With `--yes`,
 it doesn't start local-env: run `local-env start`. local-env keeps its config,
@@ -64,7 +64,9 @@ The [docs site](https://cgaube.github.io/local-env) has everything:
 - [User guide](https://cgaube.github.io/local-env/user-guide/install): every
   command, tools, logins, troubleshooting
 - [Write a source](https://cgaube.github.io/local-env/write-a-source/source-repo):
-  Docker templates, tools, profiles, variables and secrets
+  Docker templates, tools, profiles, variables and secrets. Start from the
+  [template repo](https://github.com/cgaube/local-env-templates-example): **Use
+  this template** on GitHub
 - [How local-env works](https://cgaube.github.io/local-env/how-it-works/): each
   feature, and why it works that way
 

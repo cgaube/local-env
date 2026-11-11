@@ -46,7 +46,9 @@ catalog of apps deployed in [Dockhand](https://github.com/Finsys/dockhand), the
 tools your team installs on every Mac, and a dashboard for all of them.
 
 Your team's **sources** hold the templates and the tools: git repos that you add
-with `local-env sources add`. local-env ships none.
+with `local-env sources add`. local-env ships none. To write one, start from the
+[template](https://github.com/cgaube/local-env-templates-example): see
+[Create a source](2-write-a-source/1-source-repo.md#start-from-the-template).
 
 ## User guide
 
@@ -68,8 +70,8 @@ For the teams that give templates and tools to the others.
 - [Docker templates](2-write-a-source/2-docker-templates.md)
 - [Write tools and profiles](2-write-a-source/3-tools.md)
 - [Tool variables](2-write-a-source/4-variables.md)
-- [Tool secrets](2-write-a-source/5-secrets.md): AWS Secrets Manager and
-  HashiCorp Vault
+- [Secrets](2-write-a-source/5-secrets.md): from AWS Secrets Manager and
+  HashiCorp Vault, for tools and Docker templates
 
 ## How it works
 

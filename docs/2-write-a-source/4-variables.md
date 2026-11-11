@@ -74,8 +74,8 @@ git_sign_commits: false
   before Ansible and names the inputs.
 - local-env never shows, asks for or saves an option with `no_log: true`. Your
   source gives its value from your company's vault: name it in the `secrets` of
-  the manifest (see [Tool secrets](5-secrets.md)). The form shows it as **From
-  the vault**. If a wanted role requires one that no source gives, without a
+  the manifest (see [Secrets](5-secrets.md)). The form shows it as **From the
+  vault**. If a wanted role requires one that no source gives, without a
   default, `local-env install` stops and names it.
 - When a value changes, the dashboard shows the roles that use it as **Update
   available**. A change of `argument_specs.yml` is a new revision of the role.

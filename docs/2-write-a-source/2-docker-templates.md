@@ -178,56 +178,12 @@ accounts on the same host cannot both work.
 
 ### Secrets
 
-A template gets secrets from your company's vault the same way as the roles: the
+A template gets secrets from your company's vault, as the tools do: the
 `secrets` of the manifest say where each one is, by the name of the variable it
-fills, and the compose file uses that variable.
-
-```yaml
-# local-env.yml
-logins:
-  acme-dev: { type: aws, sso: { … } }
-secrets:
-  SMTP_PASSWORD: { login: acme-dev, ref: mail/dev, field: password }
-```
-
-```yaml
-# docker/mail/compose.yaml: plain compose
-services:
-  mail:
-    image: axllent/mailpit
-    environment:
-      - MP_SMTP_AUTH=user:${SMTP_PASSWORD:?the SMTP password}
-```
-
-- local-env reads the secret with the user's session (it logs in first, in the
-  terminal) and saves it in Dockhand as a **secret variable** of the stack:
-  encrypted in Dockhand's database, given to compose through the environment,
-  never in the stack's `.env`. Dockhand uses it again on a restart and an
-  update.
-- When: `local-env deploy` (the dashboard's Deploy button) and
-  `local-env install` (a stack a tool needs) deploy the stack with its secrets,
-  and never ask for them; `sources sync` and `update` read them again before
-  they apply a template change, so a rotated secret reaches the stack then.
-- A stack deployed outside local-env (from Dockhand) has no secrets:
-  `sources sync` says so. The dashboard card shows "From your vault" for each
-  secret a deploy reads.
-- A stack gets the secrets of **its template's own source** only. Prefer a
-  `${NAME:?…}`: without local-env, compose then stops with your message.
-- The name matches the compose variable exactly, its case too: UPPERCASE, as
-  compose files and images expect (`POSTGRES_PASSWORD`). A role's input is
-  usually lowercase: a secret both need is declared under each name (see
-  [Tool secrets](5-secrets.md#the-secrets)).
-- Use the list form of `environment:` for a secret (`- NAME=${SECRET}`), or give
-  the container variable the secret's name
-  (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`). Dockhand then shows `***` in its
-  pages (a container's Compose and Environment tabs). A secret in a map entry of
-  another name (`MP_SMTP_AUTH: user:${SMTP_PASSWORD}`), a command or a label
-  shows in clear there. The dashboard card, `local-env deploy` and
-  `sources sync` say when a template does that. It only hides the value in
-  Dockhand's pages: anyone with Docker access can read the container's
-  environment.
-- The template stays a plain Portainer template: without local-env, the user
-  sets the variable in Dockhand.
+fills, and the compose file uses it in the list form
+(`- MP_SMTP_AUTH=user:${SMTP_PASSWORD:?the SMTP password}`). local-env reads
+them when it deploys the stack and saves them in Dockhand as secret variables.
+See [Secrets](5-secrets.md#in-a-docker-template).
 
 ### What a deploy asks for
 
