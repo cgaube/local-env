@@ -10,6 +10,7 @@ import {
   readStackSecrets,
   reportStackSecrets,
   stackSecretNames,
+  warnUnmaskedSecrets,
   writeStackSecrets,
 } from '#cli/providers/docker/stack-secrets.js'
 import {
@@ -131,17 +132,20 @@ const saveStackSecrets = async (
   }
 }
 
-// A linked stack that lacks some of the secrets of its template's source:
-// deployed outside local-env (from Dockhand, or before the source gave them).
-// Only said: `local-env deploy` gives them when it deploys.
-const hintMissingSecrets = async (
+// The secrets of a linked stack that Dockhand shows in clear (the template's
+// fix), and those it lacks: deployed outside local-env (from Dockhand, or
+// before the source gave them). Only said: `local-env deploy` gives them when
+// it deploys.
+const hintStackSecrets = async (
   environmentId: number,
   { stack, template }: { stack: string; template: string },
 ) => {
   const path = resolveTemplateCompose(template)
   if (!path) return
-  const names = stackSecretNames(template, readTemplateContent(template, path))
+  const compose = readTemplateContent(template, path)
+  const names = stackSecretNames(template, compose)
   if (names.length === 0) return
+  warnUnmaskedSecrets(stack, compose, names)
   const missing = await missingStackSecrets(environmentId, stack, names)
   if (missing.length === 0) return
   logger.info(
@@ -200,12 +204,12 @@ export const syncTemplatedStacks = async ({
 
     if (!diff) {
       logger.success(`${label}: up to date`)
-      await hintMissingSecrets(environment.id, linked)
+      await hintStackSecrets(environment.id, linked)
       continue
     }
     if (diff.nextBase === linked.skip) {
       logger.info(`${label}: template version skipped`)
-      await hintMissingSecrets(environment.id, linked)
+      await hintStackSecrets(environment.id, linked)
       continue
     }
 

@@ -17,6 +17,7 @@ import { readBuildTree } from '#cli/providers/docker/stack-builds.js'
 import {
   readStackSecrets,
   stackSecretNames,
+  warnUnmaskedSecrets,
 } from '#cli/providers/docker/stack-secrets.js'
 import {
   hashTemplate,
@@ -135,6 +136,9 @@ export const prepareStacks = async (
       stackSecretNames(template, compose),
     ]),
   )
+  for (const { name, compose } of candidates) {
+    warnUnmaskedSecrets(name, compose, fromVault.get(name) ?? [])
+  }
   const secrets = await readStackSecrets(
     candidates.map(({ name, template }) => ({
       stack: name,

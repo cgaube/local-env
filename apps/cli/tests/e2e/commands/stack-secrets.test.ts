@@ -133,6 +133,10 @@ describe.concurrent('local-env sources sync, stack secrets', () => {
     expect(result.output).toContain(
       'mail: deployed without SMTP_PASSWORD from the vault. Remove it in Dockhand, then run local-env deploy acme/mail, or set it in Dockhand.',
     )
+    // The template's fix, said too
+    expect(result.output).toContain(
+      'mail: Dockhand shows SMTP_PASSWORD in clear in its pages.',
+    )
     expect(mailStack(cli)?.variables).toEqual([
       { key: 'TZ', value: 'Europe/Paris', isSecret: false },
     ])

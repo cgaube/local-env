@@ -4,6 +4,7 @@ import {
   type CatalogTemplate,
   composeVariables,
   requiredVariables,
+  unmaskedSecrets,
 } from './catalog.js'
 import { tryReadSourceManifest } from './source-manifest.js'
 
@@ -11,8 +12,10 @@ export {
   appUrls,
   type CatalogTemplate,
   composeVariables,
+  type DockhandStack,
   requiredVariables,
   type StacksResponse,
+  unmaskedSecrets,
 } from './catalog.js'
 
 // The Docker templates of every source, as the dashboard's catalog (the
@@ -171,6 +174,7 @@ const listSourceTemplates = (
           ({ key }) => !secrets.includes(key),
         ),
         secrets,
+        unmasked: unmaskedSecrets(compose, secrets),
         registries: registriesOf(
           manifest?.logins ?? {},
           composeImages(compose),

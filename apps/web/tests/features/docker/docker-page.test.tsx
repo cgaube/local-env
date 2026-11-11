@@ -1,6 +1,9 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { buildCatalogTemplate } from '#ui-tests/support/factories.ts'
+import {
+  buildCatalogTemplate,
+  buildRoute,
+} from '#ui-tests/support/factories.ts'
 import { FakeWebSocket } from '#ui-tests/support/fake-web-socket.ts'
 import { renderApp } from '#ui-tests/support/render-app.tsx'
 
@@ -22,6 +25,7 @@ const available = { available: true, version: '0.5.0', run: null }
 const mail = buildCatalogTemplate({
   variables: [{ key: 'ADMIN_PASSWORD', help: 'a password for the web UI' }],
   secrets: ['SMTP_PASSWORD'],
+  unmasked: ['SMTP_PASSWORD'],
   registries: ['ghcr.io'],
 })
 const wiki = buildCatalogTemplate({
@@ -35,15 +39,23 @@ const wiki = buildCatalogTemplate({
   hosts: ['wiki'],
 })
 
+const wikiRoute = buildRoute({
+  hosts: ['wiki.dev.test'],
+  url: 'https://wiki.dev.test',
+  container: 'wiki',
+  stack: 'wiki',
+})
+const running = (name: string) => ({ name, status: 'running' })
+
 const card = (title: string) => screen.getByRole('listitem', { name: title })
 
 describe('Docker page, Templates', () => {
-  test('lists the templates with what a deploy needs, and the deployed ones', async () => {
-    const { events } = await renderApp('/docker', {
-      stacks: { available: true, stacks: ['wiki'] },
-    })
+  test('lists the templates with what a deploy needs, and the running ones', async () => {
+    const { events } = await renderApp('/docker')
     act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
       events.emit('templates', [mail, wiki])
+      events.emit('routes', [wikiRoute])
       events.emit('agent', available)
     })
 
@@ -58,15 +70,21 @@ describe('Docker page, Templates', () => {
     expect(
       within(mailCard).getByText('Private images: your ghcr.io login'),
     ).toBeInTheDocument()
+    // The template's fix: the list form, or the secret's own name
+    expect(
+      within(mailCard).getByText('Shown in clear in Dockhand: SMTP_PASSWORD'),
+    ).toBeInTheDocument()
     expect(
       within(mailCard).getByRole('button', { name: 'Deploy' }),
     ).toBeEnabled()
 
     const wikiCard = card('Wiki')
-    expect(within(wikiCard).getByText('Deployed')).toBeInTheDocument()
-    // Where the app is, once deployed
+    expect(within(wikiCard).getByText('Running')).toBeInTheDocument()
+    // Under the title: where the template comes from
+    expect(within(wikiCard).getByText('team/wiki')).toBeInTheDocument()
+    // Where the app is, from its route
     expect(
-      within(wikiCard).getByRole('link', { name: 'https://wiki.dev.test' }),
+      within(wikiCard).getByRole('link', { name: 'wiki.dev.test' }),
     ).toHaveAttribute('href', 'https://wiki.dev.test')
     expect(
       within(wikiCard).getByRole('link', { name: 'Open in Dockhand' }),
@@ -78,10 +96,12 @@ describe('Docker page, Templates', () => {
 
   test('filters the templates by text, source and status, with chips', async () => {
     const user = userEvent.setup()
-    const { events } = await renderApp('/docker', {
-      stacks: { available: true, stacks: ['wiki'] },
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [mail, wiki])
+      events.emit('routes', [wikiRoute])
     })
-    act(() => events.emit('templates', [mail, wiki]))
 
     await user.type(
       await screen.findByRole('searchbox', { name: 'Filter templates' }),
@@ -112,14 +132,14 @@ describe('Docker page, Templates', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear all' }))
     await user.click(screen.getByRole('button', { name: 'Status' }))
-    await user.click(screen.getByRole('option', { name: /^Deployed/ }))
+    await user.click(screen.getByRole('option', { name: /^Running/ }))
     await user.keyboard('{Escape}')
     expect(await screen.findByRole('listitem', { name: 'Wiki' })).toBeVisible()
     expect(
       screen.queryByRole('listitem', { name: 'Mailpit' }),
     ).not.toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Remove Status: Deployed' }),
+      screen.getByRole('button', { name: 'Remove Status: Running' }),
     ).toBeInTheDocument()
   })
 
@@ -218,16 +238,122 @@ describe('Docker page, Templates', () => {
     expect(await screen.findByText('No templates yet')).toBeVisible()
   })
 
-  test('opens the Routes tab from the address', async () => {
-    const user = userEvent.setup()
-    const { events, router } = await renderApp('/docker')
-    act(() => events.emit('templates', [mail]))
+  test('says a deployed template is stopped while the proxy has no route to it', async () => {
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [wiki])
+      events.emit('routes', [])
+    })
 
-    await user.click(screen.getByRole('tab', { name: 'Routes' }))
-
-    expect(router.state.location.search).toEqual({ tab: 'routes' })
+    const wikiCard = await screen.findByRole('listitem', { name: 'Wiki' })
+    expect(within(wikiCard).getByText('Stopped')).toBeInTheDocument()
     expect(
-      await screen.findByRole('searchbox', { name: 'Filter routes' }),
-    ).toBeVisible()
+      within(wikiCard).queryByRole('link', { name: 'wiki.dev.test' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(wikiCard).getByRole('link', { name: 'Open in Dockhand' }),
+    ).toBeInTheDocument()
+  })
+
+  test("takes Dockhand's state for a template without an address", async () => {
+    const worker = buildCatalogTemplate({
+      id: 'acme/worker',
+      folder: 'worker',
+      title: 'Worker',
+      name: 'worker',
+      hosts: [],
+    })
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', {
+        available: true,
+        stacks: [running('worker'), { name: 'wiki', status: 'stopped' }],
+      })
+      events.emit('templates', [worker, { ...wiki, hosts: [] }])
+      events.emit('routes', [])
+    })
+
+    expect(
+      within(await screen.findByRole('listitem', { name: 'Worker' })).getByText(
+        'Running',
+      ),
+    ).toBeInTheDocument()
+    expect(within(card('Wiki')).getByText('Stopped')).toBeInTheDocument()
+  })
+
+  test('follows Dockhand: a stack removed there makes its template deployable again', async () => {
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [wiki])
+      events.emit('routes', [wikiRoute])
+      events.emit('agent', available)
+    })
+    expect(
+      within(await screen.findByRole('listitem', { name: 'Wiki' })).getByText(
+        'Running',
+      ),
+    ).toBeInTheDocument()
+
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [] })
+      events.emit('routes', [])
+    })
+
+    expect(
+      within(card('Wiki')).getByRole('button', { name: 'Deploy' }),
+    ).toBeEnabled()
+    expect(within(card('Wiki')).queryByText('Running')).not.toBeInTheDocument()
+  })
+})
+
+describe('Docker page, Other apps', () => {
+  test("lists what runs that no template deployed, without local-env's own", async () => {
+    const { events } = await renderApp('/docker')
+    const shop = buildRoute({
+      hosts: ['api.dev.test'],
+      url: 'https://api.dev.test',
+      container: 'shop-api',
+      stack: 'shop',
+    })
+    const dockhand = buildRoute({
+      hosts: ['docker.dev.test'],
+      url: 'https://docker.dev.test',
+      container: 'local-env-dockhand',
+      stack: 'local-env',
+    })
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [wiki])
+      events.emit('routes', [wikiRoute, shop, dockhand])
+    })
+
+    const others = await screen.findByRole('region', { name: 'Other apps' })
+    expect(
+      within(others).getByRole('link', { name: 'https://api.dev.test' }),
+    ).toBeInTheDocument()
+    expect(
+      within(others).queryByRole('link', { name: 'https://wiki.dev.test' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(others).queryByRole('link', { name: 'https://docker.dev.test' }),
+    ).not.toBeInTheDocument()
+    // How to add one, closed
+    expect(within(others).getByText('Add a route')).toBeInTheDocument()
+  })
+
+  test('leaves the section out when every app comes from a template', async () => {
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [wiki])
+      events.emit('routes', [wikiRoute])
+    })
+
+    expect(await screen.findByText('Running')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Other apps' }),
+    ).not.toBeInTheDocument()
   })
 })

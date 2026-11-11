@@ -196,7 +196,7 @@ services:
   mail:
     image: axllent/mailpit
     environment:
-      MP_SMTP_AUTH: user:${SMTP_PASSWORD:?the SMTP password}
+      - MP_SMTP_AUTH=user:${SMTP_PASSWORD:?the SMTP password}
 ```
 
 - local-env reads the secret with the user's session (it logs in first, in the
@@ -217,6 +217,15 @@ services:
   compose files and images expect (`POSTGRES_PASSWORD`). A role's input is
   usually lowercase: a secret both need is declared under each name (see
   [Tool secrets](5-secrets.md#the-secrets)).
+- Use the list form of `environment:` for a secret (`- NAME=${SECRET}`), or give
+  the container variable the secret's name
+  (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`). Dockhand then shows `***` in its
+  pages (a container's Compose and Environment tabs). A secret in a map entry of
+  another name (`MP_SMTP_AUTH: user:${SMTP_PASSWORD}`), a command or a label
+  shows in clear there. The dashboard card, `local-env deploy` and
+  `sources sync` say when a template does that. It only hides the value in
+  Dockhand's pages: anyone with Docker access can read the container's
+  environment.
 - The template stays a plain Portainer template: without local-env, the user
   sets the variable in Dockhand.
 

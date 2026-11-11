@@ -5,9 +5,9 @@ catcher, a database, a wiki. Deploy them from the dashboard or in a terminal.
 
 ## From the dashboard
 
-Open `https://local-env.dev.test/docker`. The **Templates** tab lists the
-templates of every source, as cards. Search them, or filter them by source,
-category and status (deployed or not), as on the Tools page. Each card says what
+Open `https://local-env.dev.test/docker`. The page lists the templates of every
+source, as cards. Search them, or filter them by source, category and status
+(running, stopped or not deployed), as on the Tools page. Each card says what
 the deploy needs:
 
 - **Asks for**: values that only you can give (a password for the app). The
@@ -18,9 +18,11 @@ the deploy needs:
 
 Click **Deploy**. The terminal opens and runs `local-env deploy` on your Mac. It
 asks for the values, logs in to the registry when needed, reads the secrets,
-then deploys the app and prints its address. A card says **Deployed** once its
-stack is in Dockhand, with a link to the app. The **Routes** tab gives the
-address of each app.
+then deploys the app and prints its address. Once its stack is in Dockhand, a
+card says **Running**, with a link to the app, or **Stopped** while the app does
+not run. Under the cards, **Other apps** lists the apps that no template
+deployed: a stack that you made in Dockhand, or a container that you started
+with a `VIRTUAL_HOST`.
 
 The dashboard needs `local-env start` to run things on your Mac. Without it, use
 the terminal.

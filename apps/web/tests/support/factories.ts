@@ -112,6 +112,7 @@ export const buildCatalogTemplate = (
   name: 'mailpit',
   variables: [],
   secrets: [],
+  unmasked: [],
   registries: [],
   hosts: ['mail'],
   ...overrides,

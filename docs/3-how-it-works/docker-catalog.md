@@ -6,17 +6,20 @@ their secrets from the vault.
 
 ## What it does
 
-- The dashboard's **Docker** page has two tabs. **Templates** lists the stack
-  templates of every source as cards: the title, description, logo and
-  categories of `templates.json`, and what a deploy needs (the variables it asks
-  for, the secrets it reads from the vault, the registries of its private
-  images). Like the Tools table, a filter bar (a search, then Source, Category
-  and Status, with a chip for each active filter) narrows the cards, and pages
-  of 12 to 96 cards follow. **Routes** is the list of routes (`?tab=routes`).
-- A card shows **Deploy**, or **Deployed** with a link to Dockhand once a stack
-  of the template's name exists. **Deploy** opens the terminal sheet and runs
-  `local-env deploy <source>/<folder>` on the Mac
-  ([Dashboard terminal](dashboard-terminal.md)).
+- The dashboard's **Docker** page lists the stack templates of every source as
+  cards: the title, description, logo and categories of `templates.json`, and
+  what a deploy needs (the variables it asks for, the secrets it reads from the
+  vault, the registries of its private images). Like the Tools table, a filter
+  bar (a search, then Source, Category and Status, with a chip for each active
+  filter) narrows the cards, and pages of 10 to 100 cards follow (50 by
+  default).
+- A card shows **Deploy**, or once a stack of the template's name exists,
+  **Running** with a link to the app, or **Stopped**, and a link to Dockhand.
+- Under the cards, **Other apps** lists the routes that no template deployed (a
+  stack made in Dockhand, a container started with a `VIRTUAL_HOST`), with how
+  to add one. It is not there when every route comes from a template. **Deploy**
+  opens the terminal sheet and runs `local-env deploy <source>/<folder>` on the
+  Mac ([Dashboard terminal](dashboard-terminal.md)).
 - `local-env deploy [template]` does the same in a terminal: a template id, a
   folder or stack name that only one source has, or a pick in a list. `--yes`
   skips the confirmation.
@@ -34,8 +37,10 @@ sequenceDiagram
   participant Vault as vault CLI (aws, vault)
   participant DH as Dockhand
   Dash->>Page: templates topic (listTemplates of /sources)
-  Page->>Dash: GET /api/stacks
-  Dash->>DH: GET /api/stacks (the names)
+  loop every 5 s while a page is open, and when the routes change
+    Dash->>DH: GET /api/stacks (names and states)
+    Dash->>Page: stacks topic, when it changed
+  end
   Page->>Dash: Deploy: start deploy acme/mail (WebSocket)
   Dash->>Agent: start deploy acme/mail
   Agent->>CLI: local-env deploy acme/mail --yes (pty)
@@ -44,7 +49,6 @@ sequenceDiagram
   CLI->>Page: asks for the variables (terminal)
   CLI->>DH: POST /api/stacks (compose, envVars)
   CLI->>CLI: snapshot and template link
-  Page->>Dash: GET /api/stacks, after the run
 ```
 
 - `services/dashboard/templates.ts` lists the templates, for the dashboard and
@@ -58,12 +62,18 @@ sequenceDiagram
   vault); the registries are the source's `registry` logins whose host starts an
   image.
 - Deployed is a stack of the template's name in Dockhand's local environment:
-  the same rule as the template links. The dashboard asks Dockhand on its
-  network (`http://dockhand:3000`) when the page opens and when a deploy run
-  ends, never on a timer.
+  the same rule as the template links. The dashboard server asks Dockhand on its
+  network (`http://dockhand:3000`) and streams the answer as the `stacks` topic
+  of `/api/events`: every 5 seconds while a page is open, sent only when it
+  changed, and at once when the routes change (a stack deployed, stopped or
+  removed). A stack removed in Dockhand makes its card deployable again within
+  seconds.
+- Running or Stopped (`templateStates` in `features/docker/docker.ts`): a
+  template with a `VIRTUAL_HOST` runs while the routes, which stream live, have
+  one for its stack, and the card links to that route's address. A template
+  without one takes Dockhand's state of the stack.
 - After a deploy, the CLI prints the app's addresses: its `VIRTUAL_HOST` values,
-  with the domain added to a short one, as proxy-connector does. A Deployed card
-  links to the first one.
+  with the domain added to a short one, as proxy-connector does.
 - `apps/cli/src/commands/deploy.ts` resolves the template, stops when its stack
   exists, then uses `apps/cli/src/providers/docker/stack-deploy.ts`, shared with
   `install` for the stacks a tool needs: `prepareStacks` (registry logins,
@@ -98,6 +108,15 @@ sequenceDiagram
 - **Deploy once.** A second copy of a template would have the same name, which
   links stacks to templates. To deploy again, the user removes the stack in
   Dockhand.
+- **Dockhand polled, while a page is open.** Dockhand has no event stream, and a
+  stack removed there must not still show as deployed. One request every 5
+  seconds, only while a page listens, as for the dashboard agent; the routes,
+  which proxy-connector writes from Docker's events, make the common cases
+  immediate.
+- **The status on the card, no Routes tab.** A list of routes beside the cards
+  showed the same apps twice. The card says whether the app runs and where, and
+  only what no template deployed gets a list of its own.
+  `local-env proxy routes` still lists every route.
 - **Hidden, not removed.** Dockhand's Templates page stays one click away for
   other catalogs, which local-env leaves alone.
 
@@ -110,3 +129,5 @@ sequenceDiagram
 - A stack deployed outside local-env, from Dockhand, has no secrets:
   `sources sync` says so.
 - The sidebar step does not hide Templates in a sidebar the user changed.
+- A change in Dockhand that touches no route (a template without a
+  `VIRTUAL_HOST`) reaches the card at the next tick: up to 5 seconds.

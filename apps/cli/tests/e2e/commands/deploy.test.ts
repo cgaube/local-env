@@ -108,6 +108,10 @@ describe.concurrent('local-env deploy', () => {
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('mailpit deployed')
+      // MP_SMTP_AUTH: user:${SMTP_PASSWORD} is a map entry of another name
+      expect(result.output).toContain(
+        'mailpit: Dockhand shows SMTP_PASSWORD in clear in its pages. The template hides it in the list form of environment: - NAME=${SMTP_PASSWORD}.',
+      )
       expect(stackNamed(cli, 'mailpit')?.variables).toEqual([
         { key: 'ADMIN_PASSWORD', value: 'admin-pw', isSecret: true },
         { key: 'SMTP_PASSWORD', value: 's3cret', isSecret: true },

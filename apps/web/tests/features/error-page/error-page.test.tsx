@@ -23,8 +23,9 @@ const logo = () => document.querySelector('svg[data-variant]')
 describe('Error page', () => {
   beforeEach(() => {
     broken.page = true
-    // React logs the error it caught
+    // React logs the error it caught, and the router warns about it
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
   afterEach(() => vi.restoreAllMocks())
 

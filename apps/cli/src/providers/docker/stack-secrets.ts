@@ -1,7 +1,10 @@
 import { resolveInside } from '#cli/core/paths.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
-import { composeVariables } from '#services/dashboard/templates.js'
+import {
+  composeVariables,
+  unmaskedSecrets,
+} from '#services/dashboard/templates.js'
 import { logger } from '#cli/utils/logger.js'
 import { dockhandApi, dockhandPut } from '#cli/providers/docker/api.js'
 import {
@@ -32,6 +35,20 @@ export const stackSecretNames = (template: string, compose: string) => {
   )
   const declared = new Set(Object.keys(manifest?.secrets ?? {}))
   return composeVariables(compose).filter((name) => declared.has(name))
+}
+
+// Says which secrets Dockhand will show in clear in its pages, and how the
+// template hides them: the author's fix, the stack still gets them
+export const warnUnmaskedSecrets = (
+  stack: string,
+  compose: string,
+  names: string[],
+) => {
+  const unmasked = unmaskedSecrets(compose, names)
+  if (unmasked.length === 0) return
+  logger.warn(
+    `${stack}: Dockhand shows ${unmasked.join(', ')} in clear in its pages. The template hides ${unmasked.length === 1 ? 'it' : 'them'} in the list form of environment: - NAME=\${${unmasked[0]}}.`,
+  )
 }
 
 export type StackSecrets = { stack: string; template: string; names: string[] }

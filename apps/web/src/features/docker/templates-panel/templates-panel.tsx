@@ -1,5 +1,5 @@
 import { ContainerIcon, SearchIcon } from 'lucide-react'
-import { useDeferredValue, useEffect, useState } from 'react'
+import { useDeferredValue, useState } from 'react'
 import { Alert, AlertDescription } from '#ui/components/ui/alert'
 import { Card, CardContent } from '#ui/components/ui/card'
 import {
@@ -23,7 +23,7 @@ import {
   STATUS_LABELS,
   type TemplateFilters,
   type TemplateStatus,
-  useStacks,
+  templateStates,
 } from '#ui/features/docker/docker.ts'
 import { TemplateCard } from '#ui/features/docker/template-card'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
@@ -32,26 +32,16 @@ import { type FilterChip, FilterChips } from '#ui/features/tools/filter-chips'
 import { TablePagination } from '#ui/features/tools/table-pagination'
 import { plural } from '#ui/lib/plural.ts'
 
-// The Templates tab of the Docker page: the templates of every source as
-// cards, filtered and paged like the Tools table, each with Deploy, or
-// Deployed once Dockhand has a stack of its name
+// The templates of every source as cards, filtered and paged like the Tools
+// table, each with Deploy, or Running or Stopped once Dockhand has a stack of
+// its name
 export function TemplatesPanel() {
-  const { templates, agent } = useLiveData()
+  const { templates, routes, stacks } = useLiveData()
   const domain = useDomain()
-  const stacks = useStacks()
   const [filters, setFilters] = useState<TemplateFilters>(NO_FILTERS)
   const query = useDeferredValue(filters.query)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(50)
-
-  // A deploy that ends adds a stack: ask Dockhand again
-  const run = agent?.run
-  const { refetch } = stacks
-  const ended =
-    run?.command === 'deploy' && run.status === 'exited' ? run.startedAt : null
-  useEffect(() => {
-    if (ended) void refetch()
-  }, [ended, refetch])
 
   if (!templates) {
     return (
@@ -80,9 +70,13 @@ export function TemplatesPanel() {
     )
   }
 
-  const deployed = stacks.data?.available ? new Set(stacks.data.stacks) : null
+  const states = templateStates(
+    templates,
+    stacks?.available ? stacks.stacks : null,
+    routes,
+  )
   const applied = { ...filters, query }
-  const matching = filterTemplates(templates, applied, deployed)
+  const matching = filterTemplates(templates, applied, states)
   const pageCount = Math.max(Math.ceil(matching.length / pageSize), 1)
   // A filter that leaves fewer pages shows the last one
   const current = Math.min(page, pageCount - 1)
@@ -94,7 +88,7 @@ export function TemplatesPanel() {
     setPage(0)
   }
   const facet = (name: 'sources' | 'categories' | 'statuses') =>
-    facetOptions(templates, applied, deployed, name)
+    facetOptions(templates, applied, states, name)
   const categories = facet('categories')
   const chips: FilterChip[] = [
     ...(filters.query
@@ -161,7 +155,7 @@ export function TemplatesPanel() {
                 onChange={(picked) => change({ categories: picked })}
               />
             ) : null}
-            {deployed ? (
+            {states ? (
               <FacetedFilter
                 title="Status"
                 options={facet('statuses')}
@@ -181,7 +175,7 @@ export function TemplatesPanel() {
         </CardContent>
       </Card>
 
-      {stacks.data && !stacks.data.available ? (
+      {stacks && !stacks.available ? (
         <Alert>
           <AlertDescription>
             Dockhand doesn&apos;t answer: run local-env start to see which
@@ -199,7 +193,7 @@ export function TemplatesPanel() {
             <li key={template.id} aria-label={template.title} className="flex">
               <TemplateCard
                 template={template}
-                deployed={deployed ? deployed.has(template.name) : null}
+                state={states?.get(template.name) ?? null}
                 domain={domain ?? null}
               />
             </li>

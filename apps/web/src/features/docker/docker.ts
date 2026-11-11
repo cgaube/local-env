@@ -1,26 +1,59 @@
-import { useQuery } from '@tanstack/react-query'
-import type { StacksResponse } from '#services/dashboard/catalog.ts'
-import type { CatalogTemplate } from '#ui/features/live-data/live-data.ts'
+import type { DockhandStack } from '#services/dashboard/catalog.ts'
+import type {
+  CatalogTemplate,
+  Route,
+} from '#ui/features/live-data/live-data.ts'
+import { userRoutes } from '#ui/features/routes/routes.ts'
 
-// The names of the stacks in Dockhand, to show which templates are deployed.
-// Asked when the page opens and after a deploy, never on a timer.
-export const useStacks = () =>
-  useQuery({
-    queryKey: ['stacks'],
-    queryFn: async () => {
-      const response = await fetch('/api/stacks')
-      if (!response.ok) throw new Error(`/api/stacks: ${response.status}`)
-      return (await response.json()) as StacksResponse
-    },
-    refetchOnWindowFocus: false,
-    retry: false,
-  })
-
-export type TemplateStatus = 'deployed' | 'not-deployed'
+export type TemplateStatus = 'running' | 'stopped' | 'not-deployed'
 
 export const STATUS_LABELS: Record<TemplateStatus, string> = {
-  deployed: 'Deployed',
+  running: 'Running',
+  stopped: 'Stopped',
   'not-deployed': 'Not deployed',
+}
+
+// What a template's card shows: its status, and the address of its app while
+// it runs
+export type TemplateState = { status: TemplateStatus; url: string | null }
+
+// The state of each template, by its stack name: deployed when Dockhand has a
+// stack of that name. A template with a VIRTUAL_HOST runs while the proxy
+// routes to its stack: the routes stream live, Dockhand's list doesn't.
+// Without one, Dockhand's state. null while Dockhand or the routes are
+// loading, or when Dockhand doesn't answer: no status then.
+export const templateStates = (
+  templates: CatalogTemplate[],
+  stacks: DockhandStack[] | null,
+  routes: Route[] | null,
+): Map<string, TemplateState> | null => {
+  if (!stacks || !routes) return null
+  const byName = new Map(stacks.map((stack) => [stack.name, stack]))
+  const states = new Map<string, TemplateState>()
+  for (const { name, hosts } of templates) {
+    const stack = byName.get(name)
+    const route = routes.find((candidate) => candidate.stack === name)
+    states.set(
+      name,
+      !stack
+        ? { status: 'not-deployed', url: null }
+        : route
+          ? { status: 'running', url: route.url }
+          : hosts.length === 0 && stack.status === 'running'
+            ? { status: 'running', url: null }
+            : { status: 'stopped', url: null },
+    )
+  }
+  return states
+}
+
+// The routes of what no template deployed: stacks made in Dockhand, or
+// containers started by hand with a VIRTUAL_HOST. Not local-env's own.
+export const otherRoutes = (routes: Route[], templates: CatalogTemplate[]) => {
+  const names = new Set(templates.map(({ name }) => name))
+  return userRoutes(routes).filter(
+    (route) => !route.stack || !names.has(route.stack),
+  )
 }
 
 // The filters of the catalog: none picked in a facet keeps every template
@@ -38,23 +71,21 @@ export const NO_FILTERS: TemplateFilters = {
   statuses: [],
 }
 
-// null while Dockhand is asked, or when it can't be: no status then
-const statusOf = (
-  template: CatalogTemplate,
-  deployed: Set<string> | null,
-): TemplateStatus | null =>
-  deployed ? (deployed.has(template.name) ? 'deployed' : 'not-deployed') : null
+type States = Map<string, TemplateState> | null
+
+const statusOf = (template: CatalogTemplate, states: States) =>
+  states?.get(template.name)?.status ?? null
 
 type Facet = 'sources' | 'categories' | 'statuses'
 
 const matches = (
   template: CatalogTemplate,
   filters: TemplateFilters,
-  deployed: Set<string> | null,
+  states: States,
   skip?: Facet,
 ) => {
   const needle = filters.query.trim().toLowerCase()
-  const status = statusOf(template, deployed)
+  const status = statusOf(template, states)
   return (
     (!needle ||
       [
@@ -84,26 +115,26 @@ const matches = (
 export const filterTemplates = (
   templates: CatalogTemplate[],
   filters: TemplateFilters,
-  deployed: Set<string> | null,
-) => templates.filter((template) => matches(template, filters, deployed))
+  states: States,
+) => templates.filter((template) => matches(template, filters, states))
 
 // The values of a facet, each with the number of templates that have it
 // among those the other filters keep
 export const facetOptions = (
   templates: CatalogTemplate[],
   filters: TemplateFilters,
-  deployed: Set<string> | null,
+  states: States,
   facet: Facet,
 ) => {
   const valuesOf = (template: CatalogTemplate): string[] => {
     if (facet === 'sources') return [template.source]
     if (facet === 'categories') return template.categories
-    const status = statusOf(template, deployed)
+    const status = statusOf(template, states)
     return status ? [status] : []
   }
   const all = [...new Set(templates.flatMap(valuesOf))]
   const kept = templates.filter((template) =>
-    matches(template, filters, deployed, facet),
+    matches(template, filters, states, facet),
   )
   const counts = new Map<string, number>()
   for (const value of kept.flatMap(valuesOf)) {

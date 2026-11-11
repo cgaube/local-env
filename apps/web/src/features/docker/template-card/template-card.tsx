@@ -1,13 +1,14 @@
 import {
   ContainerIcon,
   ExternalLinkIcon,
+  GlobeIcon,
   KeyRoundIcon,
   LockIcon,
   TextCursorInputIcon,
+  TriangleAlertIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Badge } from '#ui/components/ui/badge'
-import { buttonVariants } from '#ui/components/ui/button'
 import {
   Card,
   CardAction,
@@ -17,13 +18,24 @@ import {
   CardHeader,
   CardTitle,
 } from '#ui/components/ui/card'
-import { appUrls } from '#services/dashboard/catalog.ts'
+import {
+  STATUS_LABELS,
+  type TemplateState,
+} from '#ui/features/docker/docker.ts'
 import { DeployButton } from '#ui/features/docker/deploy-button'
-import { ExternalLink } from '#ui/features/links/external-link'
+import { ButtonLink } from '#ui/features/links/button-link'
+import { cn } from '#ui/lib/utils'
 import type { CatalogTemplate } from '#ui/features/live-data/live-data.ts'
 
 // What a deploy needs from the user: each with its icon
-const needsOf = ({ variables, secrets, registries }: CatalogTemplate) =>
+type Need = { icon: LucideIcon; text: string; warning?: boolean }
+
+const needsOf = ({
+  variables,
+  secrets,
+  unmasked,
+  registries,
+}: CatalogTemplate) =>
   [
     variables.length > 0
       ? {
@@ -37,28 +49,38 @@ const needsOf = ({ variables, secrets, registries }: CatalogTemplate) =>
           text: `From your vault: ${secrets.join(', ')}`,
         }
       : null,
+    // The template's fix: a container variable named like the secret
+    unmasked.length > 0
+      ? {
+          icon: TriangleAlertIcon,
+          text: `Shown in clear in Dockhand: ${unmasked.join(', ')}`,
+          warning: true,
+        }
+      : null,
     registries.length > 0
       ? {
           icon: LockIcon,
           text: `Private images: your ${registries.join(', ')} login`,
         }
       : null,
-  ].filter((need): need is { icon: LucideIcon; text: string } => need !== null)
+  ].filter((need): need is Need => need !== null)
 
 // A template of the sources: what it is and what a deploy needs, then
-// Deploy, or its address and a link to its stack in Dockhand once deployed
-// (deployed: null while Dockhand is asked, or when it can't be)
+// Deploy, or once deployed, whether it runs, its address while it does and a
+// link to its stack in Dockhand (state: null while Dockhand or the routes are
+// loading, or when Dockhand doesn't answer)
 export function TemplateCard({
   template,
-  deployed,
+  state,
   domain,
 }: {
   template: CatalogTemplate
-  deployed: boolean | null
+  state: TemplateState | null
   domain: string | null
 }) {
   const needs = needsOf(template)
-  const url = domain ? appUrls(template.hosts, domain)[0] : undefined
+  const deployed = state !== null && state.status !== 'not-deployed'
+  const url = state?.url
   const dockhandUrl = domain ? `https://docker.${domain}` : null
   return (
     <Card className="w-full gap-4">
@@ -75,15 +97,24 @@ export function TemplateCard({
               <ContainerIcon className="size-4" />
             </div>
           )}
-          <CardTitle className="truncate">{template.title}</CardTitle>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <CardTitle className="truncate">{template.title}</CardTitle>
+            <span className="text-muted-foreground truncate font-mono text-xs">
+              {template.id}
+            </span>
+          </div>
         </div>
         {deployed ? (
           <CardAction>
-            <Badge variant="success">Deployed</Badge>
+            <Badge
+              variant={state.status === 'running' ? 'success' : 'secondary'}
+            >
+              {STATUS_LABELS[state.status]}
+            </Badge>
           </CardAction>
         ) : null}
         {template.description ? (
-          <CardDescription className="line-clamp-3">
+          <CardDescription className="mt-2 line-clamp-3">
             {template.description}
           </CardDescription>
         ) : null}
@@ -91,8 +122,14 @@ export function TemplateCard({
       {needs.length > 0 ? (
         <CardContent>
           <ul className="text-muted-foreground flex flex-col gap-1.5 text-xs">
-            {needs.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-2">
+            {needs.map(({ icon: Icon, text, warning }) => (
+              <li
+                key={text}
+                className={cn(
+                  'flex items-start gap-2',
+                  warning && 'text-warning',
+                )}
+              >
                 <Icon className="mt-0.5 size-3.5 shrink-0" />
                 <span className="break-all">{text}</span>
               </li>
@@ -100,27 +137,28 @@ export function TemplateCard({
           </ul>
         </CardContent>
       ) : null}
-      <CardFooter className="mt-auto justify-between gap-2">
-        {deployed && url ? (
-          <ExternalLink href={url} className="truncate text-xs">
-            {url}
-          </ExternalLink>
-        ) : (
-          <span className="text-muted-foreground truncate text-xs">
-            {template.id}
-          </span>
-        )}
+      <CardFooter className="mt-auto flex-wrap justify-end gap-2">
+        {url ? (
+          <ButtonLink
+            href={url}
+            variant="outline"
+            size="sm"
+            className="min-w-0"
+          >
+            <GlobeIcon data-icon="inline-start" />
+            <span className="truncate">{new URL(url).host}</span>
+          </ButtonLink>
+        ) : null}
         {deployed ? (
           dockhandUrl ? (
-            <a
+            <ButtonLink
               href={`${dockhandUrl}/stacks`}
-              target="_blank"
-              rel="noopener"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              variant="outline"
+              size="sm"
             >
               <ExternalLinkIcon data-icon="inline-start" />
               Open in Dockhand
-            </a>
+            </ButtonLink>
           ) : null
         ) : (
           <DeployButton template={template.id} />

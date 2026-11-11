@@ -88,13 +88,14 @@ holds what we build:
   `volumes/proxy/routes.json` (like `local-env proxy routes`), the core
   services, the sources' content counts, their Docker templates
   (`services/dashboard/templates.ts`), the tools and whether the dashboard agent
-  runs. The Docker page (`features/docker/`) has two tabs (`?tab=routes`):
-  **Templates**, the catalog of the sources' stack templates (what a deploy asks
-  for, reads from the vault and logs in to; **Deployed** when Dockhand has a
-  stack of its name, from `GET /api/stacks`, which the server asks Dockhand on
-  its network), whose **Deploy** runs `local-env deploy <source>/<folder>`
-  through the dashboard agent; and **Routes**. `local-env deploy`
-  (`src/commands/deploy.ts`) deploys one template once, with
+  runs. The Docker page (`features/docker/`) is the catalog of the sources'
+  stack templates (what a deploy asks for, reads from the vault and logs in to;
+  **Running** or **Stopped** once Dockhand has a stack of its name, from the
+  `stacks` topic, which the server asks Dockhand on its network every 5 seconds
+  while a page is open and when the routes change, and the live routes), whose
+  **Deploy** runs `local-env deploy <source>/<folder>` through the dashboard
+  agent, then **Other apps**, the routes no template deployed.
+  `local-env deploy` (`src/commands/deploy.ts`) deploys one template once, with
   `src/providers/docker/stack-deploy.ts` (shared with `install`: registry
   logins, vault secrets, asked `${NAME:?help}` variables, `POST /stacks`, the
   link). `docs/3-how-it-works/docker-catalog.md` explains why. The Overview

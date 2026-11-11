@@ -6,6 +6,7 @@ import {
   composeVariables,
   listTemplates,
   requiredVariables,
+  unmaskedSecrets,
 } from '#services/dashboard/templates.js'
 
 describe('the variables of a compose file', () => {
@@ -66,6 +67,40 @@ describe('appUrls', () => {
       'https://mail.dev.test',
       'https://mail.acme.example',
     ])
+  })
+})
+
+describe('unmaskedSecrets', () => {
+  const unmasked = (...lines: string[]) =>
+    unmaskedSecrets(lines.join('\n'), ['SMTP_PASSWORD', 'API_TOKEN'])
+
+  test('hides a container variable named like the secret', () => {
+    expect(unmasked('      SMTP_PASSWORD: ${SMTP_PASSWORD:?help}')).toEqual([])
+    expect(unmasked("      'SMTP_PASSWORD': $SMTP_PASSWORD")).toEqual([])
+    expect(unmasked('      - SMTP_PASSWORD=$SMTP_PASSWORD')).toEqual([])
+  })
+
+  test('hides one that the list form maps to a secret', () => {
+    expect(unmasked('      - SMTP_PASS=${SMTP_PASSWORD}')).toEqual([])
+  })
+
+  test('shows a secret under another name, in a command or in a label', () => {
+    expect(
+      unmasked(
+        '      SMTP_PASS: ${SMTP_PASSWORD}',
+        '    command: curl -H "Authorization: ${API_TOKEN}"',
+      ),
+    ).toEqual(['SMTP_PASSWORD', 'API_TOKEN'])
+    // Dockhand maps only the braced form
+    expect(unmasked('      - SMTP_PASS=$SMTP_PASSWORD')).toEqual([
+      'SMTP_PASSWORD',
+    ])
+  })
+
+  test('skips comments and the variables that are not secrets', () => {
+    expect(
+      unmasked('# read $SMTP_PASSWORD in the container', '      TZ: ${TZ}'),
+    ).toEqual([])
   })
 })
 
@@ -134,6 +169,8 @@ describe('listTemplates', () => {
           { key: 'ADMIN_PASSWORD', help: 'a password for the web UI' },
         ],
         secrets: ['SMTP_PASSWORD'],
+        // In MP_SMTP_AUTH: Dockhand shows it
+        unmasked: ['SMTP_PASSWORD'],
         registries: ['ghcr.io'],
         hosts: ['mail', 'mail.acme.example'],
       },
@@ -148,6 +185,7 @@ describe('listTemplates', () => {
         name: 'wiki',
         variables: [],
         secrets: [],
+        unmasked: [],
         registries: [],
         hosts: ['wiki'],
       },

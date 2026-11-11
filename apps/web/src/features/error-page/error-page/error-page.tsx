@@ -1,8 +1,9 @@
-import { Link, useRouter } from '@tanstack/react-router'
+import { useRouter } from '@tanstack/react-router'
 import type { ErrorComponentProps } from '@tanstack/react-router'
 import { ChevronDownIcon, RotateCwIcon } from 'lucide-react'
 import { useState } from 'react'
-import { Button, buttonVariants } from '#ui/components/ui/button'
+import { Button } from '#ui/components/ui/button'
+import { ButtonLink } from '#ui/features/links/button-link'
 import {
   Collapsible,
   CollapsibleContent,
@@ -89,10 +90,9 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
             <RotateCwIcon data-icon="inline-start" />
             Try again
           </Button>
-          {/* A link, which a Base UI button would turn into a button */}
-          <Link to="/" className={buttonVariants({ variant: 'outline' })}>
+          <ButtonLink to="/" variant="outline">
             Back to the overview
-          </Link>
+          </ButtonLink>
         </div>
         <Collapsible className="w-full">
           <CollapsibleTrigger

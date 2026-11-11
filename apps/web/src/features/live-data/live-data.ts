@@ -1,10 +1,13 @@
 // What services/dashboard/server.ts streams on /api/events: proxy-connector's
 // routes and core services, the sources' content counts, their Docker
 // templates (services/dashboard/templates.ts), the tools
-// (services/dashboard/tools.ts) and the dashboard agent
+// (services/dashboard/tools.ts), the dashboard agent and Dockhand's stacks
 import type { AgentState } from '#services/dashboard/agent-protocol.ts'
 import type { GalaxyRole, RoleInput } from '#services/dashboard/role-graph.ts'
-import type { CatalogTemplate } from '#services/dashboard/catalog.ts'
+import type {
+  CatalogTemplate,
+  StacksResponse,
+} from '#services/dashboard/catalog.ts'
 
 export type { AgentState, CatalogTemplate, GalaxyRole, RoleInput }
 
@@ -109,6 +112,8 @@ export type LiveData = {
   tools: Tools | null
   // Whether install and update can run from here, and the current run
   agent: AgentState | null
+  // The stacks in Dockhand, asked while the page is open
+  stacks: StacksResponse | null
   connected: boolean
   updatedAt: Date | null
 }
@@ -120,6 +125,7 @@ const TOPICS = [
   'templates',
   'tools',
   'agent',
+  'stacks',
 ] as const
 
 type Listener = () => void
@@ -137,6 +143,7 @@ export const createLiveDataStore = (
     templates: null,
     tools: null,
     agent: null,
+    stacks: null,
     connected: false,
     updatedAt: null,
   }

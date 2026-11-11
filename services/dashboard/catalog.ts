@@ -18,6 +18,8 @@ export type CatalogTemplate = {
   variables: { key: string; help: string }[]
   // What a deploy reads from the vault: the source's `secrets` it uses
   secrets: string[]
+  // Those that Dockhand shows in clear in its pages (unmaskedSecrets)
+  unmasked: string[]
   // The registries of its private images: the source's registry logins
   registries: string[]
   // Its VIRTUAL_HOST values, as written: a short one gets the domain
@@ -32,10 +34,13 @@ export const appUrls = (hosts: string[], domain: string) =>
     (host) => `https://${host.includes('.') ? host : `${host}.${domain}`}`,
   )
 
-// GET /api/stacks of the dashboard: the names of the stacks in Dockhand, or
+// A stack in Dockhand: its name and its state (running, stopped, partial…)
+export type DockhandStack = { name: string; status: string }
+
+// The stacks topic of the dashboard's /api/events: the stacks in Dockhand, or
 // not available when Dockhand doesn't answer
 export type StacksResponse =
-  | { available: true; stacks: string[] }
+  | { available: true; stacks: DockhandStack[] }
   | { available: false }
 
 // A variable of a compose file: ${NAME}, ${NAME:-x}, ${NAME?msg} or $NAME.
@@ -59,4 +64,29 @@ export const requiredVariables = (compose: string) => {
     if (!found.has(key)) found.set(key, help.trim())
   }
   return [...found].map(([key, help]) => ({ key, help }))
+}
+
+const LIST_ITEM = /^\s*-\s*([A-Za-z_][A-Za-z0-9_]*)=/
+const MAP_KEY = /^\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*:/
+const BRACED = /\$\{([A-Za-z_][A-Za-z0-9_]*)/g
+
+// The secrets of a compose file that Dockhand shows in clear in its pages (a
+// container's Compose and Environment tabs). It hides a container variable
+// named like a secret of the stack (SMTP_PASSWORD: ${SMTP_PASSWORD}), or one
+// that the list form maps to one (- SMTP_PASS=${SMTP_PASSWORD}): not
+// SMTP_PASS: ${SMTP_PASSWORD}, nor a secret in a command or a label. Line by
+// line, as Dockhand reads it.
+export const unmaskedSecrets = (compose: string, secrets: string[]) => {
+  const found = new Set<string>()
+  for (const line of compose.split('\n')) {
+    const code = line.replace(/(^|\s)#.*$/, '')
+    const used = composeVariables(code).filter((name) => secrets.includes(name))
+    if (used.length === 0) continue
+    const item = LIST_ITEM.exec(code)?.[1]
+    const masked = item
+      ? new Set([item, ...[...code.matchAll(BRACED)].map(([, name]) => name)])
+      : new Set([MAP_KEY.exec(code)?.[1]])
+    for (const name of used) if (!masked.has(name)) found.add(name)
+  }
+  return [...found]
 }
