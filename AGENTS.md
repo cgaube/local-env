@@ -194,14 +194,17 @@ holds what we build:
   guide for source authors) and `3-how-it-works/` (one file for each feature);
   `index.md` is its home. VitePress builds it (`docs/.vitepress/`: `config.ts`,
   and `sidebar.ts`, which builds the sidebar from the folders), and
-  `.github/workflows/docs.yml` publishes it to GitHub Pages on every merge to
-  `main`. A page is named by its `# ` title; a number before a dash orders the
-  folders and files and is not in the URLs (`1-user-guide/1-install.md` is
-  `/user-guide/install`). Links between pages are relative links to the `.md`
-  files, numbers included, so they work on GitHub too. `bun run docs:dev` serves
-  it with hot reload; `bun run docs:build` (in CI) fails on a link to a page
-  that does not exist. Write `{{ }}` only in code: VitePress reads it as Vue
-  elsewhere.
+  `.github/workflows/docs.yml` publishes it to GitHub Pages with each release
+  (`release.yml` calls it once the version is released, so a merged docs change
+  waits for the next release; run it by hand to publish sooner). Its theme
+  (`theme/style.css`) takes the logo's colors, and the logo is
+  `docs/public/logo.svg`, a copy of `.github/logo.svg`. A page is named by its
+  `# ` title; a number before a dash orders the folders and files and is not in
+  the URLs (`1-user-guide/1-install.md` is `/user-guide/install`). Links between
+  pages are relative links to the `.md` files, numbers included, so they work on
+  GitHub too. `bun run docs:dev` serves it with hot reload; `bun run docs:build`
+  (in CI) fails on a link to a page that does not exist. Write `{{ }}` only in
+  code: VitePress reads it as Vue elsewhere.
 - A change that users or source authors see updates their guide in the same pull
   request.
 

@@ -1,4 +1,5 @@
-// The docs site, published to GitHub Pages by .github/workflows/docs.yml.
+// The docs site, published to GitHub Pages by .github/workflows/docs.yml with
+// each release.
 // `bun run docs:dev` serves it with hot reload. Relative imports: VitePress
 // loads this file without the aliases of tsconfig.base.json.
 import { readdirSync, readFileSync } from 'fs'
@@ -28,6 +29,13 @@ export default defineConfig({
   title: 'local-env',
   description: 'A local development environment for macOS',
   base: '/local-env/',
+  // head is not prefixed with base: the logo of docs/public, as the tab icon
+  head: [
+    [
+      'link',
+      { rel: 'icon', type: 'image/svg+xml', href: '/local-env/logo.svg' },
+    ],
+  ],
   cleanUrls: true,
   lastUpdated: true,
   // The numbers order the files, not the URLs
@@ -65,6 +73,8 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    // From docs/public: the logo of the repo (.github/logo.svg)
+    logo: '/logo.svg',
     nav: [
       { text: 'User guide', link: '/user-guide/install' },
       { text: 'Write a source', link: '/write-a-source/source-repo' },
