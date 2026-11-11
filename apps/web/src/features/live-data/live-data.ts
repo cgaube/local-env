@@ -1,10 +1,12 @@
 // What services/dashboard/server.ts streams on /api/events: proxy-connector's
-// routes and core services, the sources' content counts, the tools
+// routes and core services, the sources' content counts, their Docker
+// templates (services/dashboard/templates.ts), the tools
 // (services/dashboard/tools.ts) and the dashboard agent
 import type { AgentState } from '#services/dashboard/agent-protocol.ts'
 import type { GalaxyRole, RoleInput } from '#services/dashboard/role-graph.ts'
+import type { CatalogTemplate } from '#services/dashboard/catalog.ts'
 
-export type { AgentState, GalaxyRole, RoleInput }
+export type { AgentState, CatalogTemplate, GalaxyRole, RoleInput }
 
 export type Route = {
   hosts: string[]
@@ -103,6 +105,7 @@ export type LiveData = {
   routes: Route[] | null
   services: Service[] | null
   sources: Source[] | null
+  templates: CatalogTemplate[] | null
   tools: Tools | null
   // Whether install and update can run from here, and the current run
   agent: AgentState | null
@@ -110,7 +113,14 @@ export type LiveData = {
   updatedAt: Date | null
 }
 
-const TOPICS = ['routes', 'services', 'sources', 'tools', 'agent'] as const
+const TOPICS = [
+  'routes',
+  'services',
+  'sources',
+  'templates',
+  'tools',
+  'agent',
+] as const
 
 type Listener = () => void
 
@@ -124,6 +134,7 @@ export const createLiveDataStore = (
     routes: null,
     services: null,
     sources: null,
+    templates: null,
     tools: null,
     agent: null,
     connected: false,

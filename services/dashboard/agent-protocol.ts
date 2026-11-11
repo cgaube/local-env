@@ -2,11 +2,29 @@
 // each other over /api/terminal, which the dashboard server pipes through.
 // No imports: the web app loads it too.
 
-export const AGENT_COMMANDS = ['install', 'update'] as const
+export const AGENT_COMMANDS = ['install', 'update', 'deploy'] as const
 export type AgentCommand = (typeof AGENT_COMMANDS)[number]
+
+// A template of the sources: <source>/<folder>
+const TEMPLATE_ID = /^[a-z0-9][a-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+// The arguments of a run, after the command: deploy takes a template, and
+// asks nothing first (the page's Deploy button was the question). null when
+// the command can't take what was given: the page never runs anything else.
+export const runArguments = (
+  command: AgentCommand,
+  template: unknown,
+): string[] | null => {
+  if (command !== 'deploy') return template === undefined ? [] : null
+  return typeof template === 'string' && TEMPLATE_ID.test(template)
+    ? [template, '--yes']
+    : null
+}
 
 export type RunState = {
   command: AgentCommand
+  // deploy's template, else null
+  template: string | null
   status: 'running' | 'exited'
   exitCode: number | null
   startedAt: string
@@ -26,7 +44,14 @@ export type AgentState =
 
 // From the page, as JSON text
 export type ClientMessage =
-  | { type: 'start'; command: AgentCommand; cols?: number; rows?: number }
+  | {
+      type: 'start'
+      command: AgentCommand
+      // deploy only: the template to deploy
+      template?: string
+      cols?: number
+      rows?: number
+    }
   | { type: 'input'; data: string }
   | { type: 'resize'; cols: number; rows: number }
 

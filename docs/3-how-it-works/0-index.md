@@ -5,12 +5,13 @@ how it works, and why it works that way. These pages are for the people who
 change local-env. The guides for users and source authors are the other sections
 of this site.
 
-| Feature                                     | What it does                                                     |
-| ------------------------------------------- | ---------------------------------------------------------------- |
-| [Tools and profiles](tools-and-profiles.md) | Installs the Ansible roles of the sources on the Mac, by profile |
-| [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install` and `update` from the dashboard         |
-| [Source manifest](source-manifest.md)       | `local-env.yml` at a source's root: its name, label and logins   |
-| [Logins](logins.md)                         | Registries and secret managers that the sources need             |
+| Feature                                     | What it does                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| [Tools and profiles](tools-and-profiles.md) | Installs the Ansible roles of the sources on the Mac, by profile   |
+| [Docker catalog](docker-catalog.md)         | Deploys the sources' Docker templates from the dashboard           |
+| [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install`, `update` and `deploy` from the dashboard |
+| [Source manifest](source-manifest.md)       | `local-env.yml` at a source's root: its name, label and logins     |
+| [Logins](logins.md)                         | Registries and secret managers that the sources need               |
 
 ## Write a feature page
 

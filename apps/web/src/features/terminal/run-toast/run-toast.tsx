@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { RunState } from '#services/dashboard/agent-protocol.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
-import type { TerminalSession } from '#ui/features/terminal/terminal-session.ts'
+import {
+  commandLine,
+  type TerminalSession,
+} from '#ui/features/terminal/terminal-session.ts'
 
 // Tells the end of each run once, if it was seen running here: not the last
 // run, ended before the page loaded
@@ -18,7 +21,7 @@ const createRunNotifier = (onShow: () => void, isShown: () => boolean) => {
     }
     if (!running.has(run.startedAt) || told.has(run.startedAt)) return
     told.add(run.startedAt)
-    const title = `local-env ${run.command}`
+    const title = commandLine(run)
     // No Show while the terminal is on screen already
     const action = isShown() ? undefined : { label: 'Show', onClick: onShow }
     if (run.exitCode === 0) {

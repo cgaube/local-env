@@ -17,9 +17,9 @@ const dockhand = buildRoute({
   stack: 'local-env',
 })
 
-describe('Routes page', () => {
+describe('Docker page, Routes', () => {
   test("lists the routes, without local-env's own", async () => {
-    const { events } = await renderApp('/docker')
+    const { events } = await renderApp('/docker?tab=routes')
 
     act(() => events.emit('routes', [mail, api, dockhand]))
 
@@ -37,7 +37,7 @@ describe('Routes page', () => {
 
   test('filters the routes', async () => {
     const user = userEvent.setup()
-    const { events } = await renderApp('/docker')
+    const { events } = await renderApp('/docker?tab=routes')
     act(() => events.emit('routes', [mail, api]))
 
     await user.type(
@@ -55,7 +55,7 @@ describe('Routes page', () => {
 
   test('says when no route matches the filter', async () => {
     const user = userEvent.setup()
-    const { events } = await renderApp('/docker')
+    const { events } = await renderApp('/docker?tab=routes')
     act(() => events.emit('routes', [mail]))
 
     await user.type(
@@ -69,7 +69,7 @@ describe('Routes page', () => {
   })
 
   test('opens the help to add a route while there is none', async () => {
-    const { events } = await renderApp('/docker')
+    const { events } = await renderApp('/docker?tab=routes')
 
     act(() => events.emit('routes', [dockhand]))
 

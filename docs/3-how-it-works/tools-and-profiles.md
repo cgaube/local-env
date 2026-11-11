@@ -393,14 +393,15 @@ sequenceDiagram
 ```
 
 - `apps/cli/src/providers/docker/required-stacks.ts` plans the stacks before the
-  playbook and deploys them after it. The user answers all the questions first,
-  then the install runs without the user.
+  playbook, and `stack-deploy.ts` (which `local-env deploy` uses too) deploys
+  them after it. The user answers all the questions first, then the install runs
+  without the user.
 - The compose file is the same as the file that `catalog-server` gives to
   Dockhand: `build:` points to the build server and `${HOST_HOME}` is the home
   folder. The name of the stack is the compose `name:`, else the folder.
 - The CLI links the stack to its template (`how: 'name'`) and saves the version
   as the base of the three-way merge. `update` and `sources sync` then update
-  the stack like a stack from the Templates page of Dockhand.
+  the stack like a stack that `local-env deploy` deployed.
 - A variable in the form `${NAME:?help}` or `${NAME?help}` is required. The CLI
   asks for it. A name with `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD` or `KEY` is
   masked and goes to Dockhand as a secret (`isSecret`).

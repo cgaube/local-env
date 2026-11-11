@@ -104,8 +104,10 @@ describe.concurrent('local-env install, stack secrets', () => {
 })
 
 describe.concurrent('local-env sources sync, stack secrets', () => {
-  // A stack deployed from Dockhand's own page: without the secret
-  const deployedByHand = async () => {
+  // A stack in Dockhand, linked to the mail template by its name
+  const withMailStack = async (
+    variables: { key: string; value: string; isSecret: boolean }[],
+  ) => {
     const cli = await createStacksCli()
     cli.bin.on(
       'aws',
@@ -114,40 +116,33 @@ describe.concurrent('local-env sources sync, stack secrets', () => {
     )
     const repo = await addAcme(cli)
     cli.dockhand.state.stacks.push(
-      buildDockhandStack({
-        name: 'mail',
-        content: MAIL('v1'),
-        variables: [{ key: 'TZ', value: 'Europe/Paris', isSecret: false }],
-      }),
+      buildDockhandStack({ name: 'mail', content: MAIL('v1'), variables }),
     )
     return { cli, repo }
   }
 
-  test('gives a linked stack the secret it lacks, and redeploys it', async () => {
-    const { cli } = await deployedByHand()
+  test('says when a stack was deployed without its secret, and leaves it', async () => {
+    const { cli } = await withMailStack([
+      { key: 'TZ', value: 'Europe/Paris', isSecret: false },
+    ])
     await using _ = cli
 
     const result = await cli.run(['sources', 'sync', '--yes'])
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(
-      'mail: its secret from the vault, saved in Dockhand (SMTP_PASSWORD)',
+      'mail: deployed without SMTP_PASSWORD from the vault. Remove it in Dockhand, then run local-env deploy acme/mail, or set it in Dockhand.',
     )
-    expect(result.output).toContain('mail: redeployed with its secrets')
-    // Its own variable stays
     expect(mailStack(cli)?.variables).toEqual([
       { key: 'TZ', value: 'Europe/Paris', isSecret: false },
-      { key: 'SMTP_PASSWORD', value: 'first', isSecret: true },
     ])
-    expect(cli.dockhand.state.builtStacks).toContain('mail')
-
-    // Once: the next sync finds it has it
-    const again = await cli.run(['sources', 'sync', '--yes'])
-    expect(again.output).not.toContain('redeployed with its secrets')
+    expect(cli.dockhand.state.builtStacks).not.toContain('mail')
   })
 
   test('reads the secret again before a template change redeploys the stack', async () => {
-    const { cli, repo } = await deployedByHand()
+    const { cli, repo } = await withMailStack([
+      { key: 'SMTP_PASSWORD', value: 'first', isSecret: true },
+    ])
     await using _ = cli
     await cli.run(['sources', 'sync', '--yes'])
     // Rotated in the vault, then a new version of the template
@@ -178,15 +173,16 @@ describe.concurrent('local-env sources sync, stack secrets', () => {
   })
 
   test('leaves a stack as it is when its secret cannot be read', async () => {
-    await using cli = await createStacksCli()
+    const { cli, repo } = await withMailStack([
+      { key: 'SMTP_PASSWORD', value: 'first', isSecret: true },
+    ])
+    await using _ = cli
+    await cli.run(['sources', 'sync', '--yes'])
     cli.bin.on('aws', ['secretsmanager', 'get-secret-value'], {
       exitCode: 254,
       stderr: 'An error occurred (AccessDeniedException): not authorized',
     })
-    await addAcme(cli)
-    cli.dockhand.state.stacks.push(
-      buildDockhandStack({ name: 'mail', content: MAIL('v1') }),
-    )
+    repo.commit({ 'docker/mail/compose.yaml': MAIL('v2') }, 'v2')
 
     const result = await cli.run(['sources', 'sync', '--yes'])
 
@@ -194,7 +190,12 @@ describe.concurrent('local-env sources sync, stack secrets', () => {
     expect(result.output).toContain(
       'mail: the secret SMTP_PASSWORD (mail/dev password, acme-dev) could not be read: An error occurred (AccessDeniedException): not authorized',
     )
-    expect(mailStack(cli)?.variables).toEqual([])
-    expect(cli.dockhand.state.builtStacks).not.toContain('mail')
+    expect(result.output).toContain(
+      'mail: not redeployed, its secrets are missing',
+    )
+    expect(mailStack(cli)?.content).toBe(MAIL('v1'))
+    expect(mailStack(cli)?.variables).toEqual([
+      { key: 'SMTP_PASSWORD', value: 'first', isSecret: true },
+    ])
   })
 })

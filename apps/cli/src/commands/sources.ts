@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import { homedir } from 'os'
 import { provisionProviders } from '#cli/providers/index.js'
-import { refreshTemplateSources } from '#cli/providers/docker/index.js'
+import { refreshDockhand } from '#cli/providers/docker/index.js'
 import { getRegistries, sourcesNeedingLogin } from '#cli/logins/registry.js'
 import { createStatusCache, sourceLoginLines } from '#cli/logins/listing.js'
 import { pruneUnusedLogins } from '#cli/logins/wanted.js'
@@ -133,7 +133,7 @@ const syncCommand = new Command('sync')
           await pullSources(source ? [source] : undefined)
           // Points Dockhand at the new template lists; a dry run skips it, as
           // it may start Dockhand
-          if (!options.dryRun) await refreshTemplateSources()
+          if (!options.dryRun) await refreshDockhand()
         }
         logger.group('Stacks')
         const { applied, rebuilt } = await syncStacks({ ...options, source })

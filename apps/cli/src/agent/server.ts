@@ -1,9 +1,9 @@
-// The agent's server: runs `local-env install` or `local-env update` in a pty
+// The agent's server: runs `local-env install`, `update` or `deploy` in a pty
 // for the dashboard, which can't run anything on the Mac itself. Only the
 // dashboard holds the token (volumes/agent/token, mounted into it alone).
 //   GET /status   -> the version and the current or last run
 //   GET /terminal -> a WebSocket on that run. The client sends JSON:
-//                    { type: 'start', command, cols, rows }
+//                    { type: 'start', command, template?, cols, rows }
 //                    { type: 'input', data }
 //                    { type: 'resize', cols, rows }
 //                    and gets the pty's output as binary frames, and JSON
@@ -18,6 +18,7 @@ import {
   type AgentStatus,
   type LoginsReport,
   type RunState,
+  runArguments,
   type ServerMessage,
 } from '#services/dashboard/agent-protocol.js'
 
@@ -52,8 +53,9 @@ export const startAgentServer = ({
   hostname?: string
   token: string
   version: string
-  // The process for a command: local-env itself, a script in tests
-  argv: (command: AgentCommand) => string[]
+  // The process for a command and its arguments: local-env itself, a script
+  // in tests
+  argv: (command: AgentCommand, args: string[]) => string[]
   env?: Record<string, string>
   onRunExit?: (run: RunState) => void
   // GET /logins: the logins of the sources and their state
@@ -88,8 +90,11 @@ export const startAgentServer = ({
     }
     if (!isCommand(message.command)) return { error: 'Unknown command' }
     const command = message.command
+    const args = runArguments(command, message.template)
+    if (!args) return { error: `Not a run of local-env ${command}` }
     run = {
       command,
+      template: command === 'deploy' ? args[0]! : null,
       status: 'running',
       exitCode: null,
       startedAt: new Date().toISOString(),
@@ -109,7 +114,7 @@ export const startAgentServer = ({
       },
     })
     terminal = pty
-    const proc = Bun.spawn(argv(command), {
+    const proc = Bun.spawn(argv(command, args), {
       terminal: pty,
       // What xterm.js draws: 256 colors, and 24-bit ones, which the title's
       // gradient needs (utils/brand.ts)

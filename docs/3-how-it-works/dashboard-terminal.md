@@ -1,6 +1,6 @@
 # Dashboard terminal
 
-Status: done. `local-env install` and `local-env update`, started from the
+Status: done. `local-env install`, `update` and `deploy`, started from the
 dashboard and shown in a terminal in the page.
 
 ## What it does
@@ -15,6 +15,8 @@ dashboard and shown in a terminal in the page.
   **Update** badge, and the menu's **Update to v…** opens a dialog: the new
   version, the command, and an **Update** button. Otherwise, **Update** runs at
   once: it also pulls the sources and refreshes the stacks.
+- The Docker page's **Deploy** button, on each template, runs
+  `local-env deploy <template>` ([Docker catalog](docker-catalog.md)).
 - Each of these opens a terminal in a side sheet and runs the command on the
   Mac. Above the terminal, the sheet shows the command, to copy and run in a
   terminal instead.
@@ -50,7 +52,7 @@ flowchart LR
   nginx["nginx-proxy"]
   dashboard["dashboard<br/>services/dashboard/server.ts"]
   agent["dashboard agent, on the Mac<br/>apps/cli/src/agent/server.ts"]
-  pty["pty<br/>local-env install | update"]
+  pty["pty<br/>local-env install | update | deploy"]
   files["volumes/agent/<br/>agent.json, token, agent.log"]
 
   browser -- "wss /api/terminal" --> nginx --> dashboard
@@ -149,8 +151,11 @@ behind the link, and `brew cleanup` removes the old Cellar folder.
   Its questions, its spinners and the sudo password work as they do in a
   terminal. The dashboard needs no copy of the prompts of `install` and
   `update`.
-- **Two commands only.** The agent runs `install` or `update`, never a command
-  that the page sends. A page that gets the socket cannot run a shell.
+- **Three commands only.** The agent runs `install`, `update` or `deploy`, never
+  a command that the page sends. `deploy` takes one argument, a template id that
+  `runArguments` (`services/dashboard/agent-protocol.ts`) checks against
+  `<source>/<folder>`, and the agent adds `--yes` (the Deploy button was the
+  question). A page that gets the socket cannot run a shell.
 - **A token and an Origin check.** Browsers do not apply CORS to WebSockets, so
   any web site could open a socket to the dashboard: the dashboard checks the
   `Origin`. Any container can reach `host.docker.internal`, so the agent wants

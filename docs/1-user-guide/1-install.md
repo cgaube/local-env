@@ -41,13 +41,14 @@ local-env sources add https://github.com/acme/local-env-templates
 
 Your team gives you the URL. A source can also be a git repo on your Mac
 (`~/Projects/my-templates`). If the source needs a login (a registry of private
-images), local-env asks for it now: see [Log in to your accounts](4-logins.md).
+images), local-env asks for it now: see [Log in to your accounts](5-logins.md).
 
 Then:
 
-- Open `https://docker.dev.test`, go to **Templates**, and deploy an app.
+- Open `https://local-env.dev.test/docker`, and deploy an app: see
+  [Deploy apps](3-apps.md).
 - Open `https://local-env.dev.test/profiles`, and pick the profile of your job.
-  Then run `local-env install`: see [Install tools](3-tools.md).
+  Then run `local-env install`: see [Install tools](4-tools.md).
 
 ## Where local-env keeps its files
 

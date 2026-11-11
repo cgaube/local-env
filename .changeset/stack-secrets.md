@@ -2,6 +2,8 @@
 'local-env': minor
 ---
 
-Docker templates can get secrets from AWS Secrets Manager and HashiCorp Vault:
-the source's manifest maps a compose variable to a secret, and local-env saves
-the value in Dockhand as a secret variable when it deploys or syncs the stack.
+Deploy the Docker templates of your sources from the dashboard's Docker page, or
+with `local-env deploy`. A deploy asks for the values only you can give, and
+reads secrets from AWS Secrets Manager or HashiCorp Vault (the source's manifest
+maps a compose variable to a secret). Dockhand's Templates page is hidden, and
+your sources are no longer listed there.

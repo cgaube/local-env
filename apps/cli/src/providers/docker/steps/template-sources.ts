@@ -1,21 +1,15 @@
-import { execa } from 'execa'
-import { resolveInside } from '#cli/core/paths.js'
-import {
-  dockhandApi,
-  dockhandPost,
-  dockhandPut,
-} from '#cli/providers/docker/api.js'
-import { listSources, SOURCES_DIR } from '#cli/sources/sources.js'
-import type {
-  DockhandStep,
-  DockhandStepResult,
-} from '#cli/providers/docker/types.js'
+import { dockhandApi } from '#cli/providers/docker/api.js'
+import type { DockhandStep } from '#cli/providers/docker/types.js'
 
-// Served by the catalog-server compose service: /<name> is the docker/ folder
-// of the source cloned in volumes/sources/<name>
-const CATALOG_URL = 'http://catalog-server:8080'
-// Sources registered by older versions, removed on the next provisioning
-const LEGACY_URLS = ['http://templates-server:8080']
+// Our sources' templates are deployed from the dashboard (local-env deploy),
+// not from Dockhand's Templates page, which can't give them their secrets or
+// their links: local-env no longer lists them there, and hides the page
+// (steps/sidebar.ts). catalog-server still serves them, at these addresses,
+// which local-env registered in Dockhand before.
+const CATALOG_URLS = [
+  'http://catalog-server:8080',
+  'http://templates-server:8080',
+]
 
 type TemplateSource = {
   id: number
@@ -26,54 +20,6 @@ type TemplateSource = {
 }
 
 const getSources = () => dockhandApi<TemplateSource[]>('/templates/sources')
-
-// The list's address without its ?v= version
-const listPath = (url: string) => url.split('?')[0]
-
-const ensureSource = async (
-  sources: TemplateSource[],
-  name: string,
-  url: string,
-): Promise<DockhandStepResult> => {
-  const existing = sources.find(
-    (source) => listPath(source.url) === listPath(url),
-  )
-
-  if (!existing) {
-    await dockhandPost('/templates/sources', { name, url })
-    return 'created'
-  }
-
-  if (!existing.enabled || existing.url !== url) {
-    await dockhandPut('/templates/sources', {
-      id: existing.id,
-      enabled: true,
-      url,
-    })
-    return 'updated'
-  }
-
-  return 'unchanged'
-}
-
-// Dockhand keeps each template list for an hour, by address. The version of
-// the source's docker/ folder in the address makes it fetch a changed list
-// right away.
-const listUrl = async (name: string) => {
-  const url = `${CATALOG_URL}/${name}/templates.json`
-  const { stdout, exitCode } = await execa(
-    'git',
-    ['-C', resolveInside(SOURCES_DIR, name), 'rev-parse', 'HEAD:docker'],
-    { reject: false },
-  )
-  return exitCode === 0 ? `${url}?v=${stdout.trim().slice(0, 12)}` : url
-}
-
-const mergeResults = (results: DockhandStepResult[]): DockhandStepResult => {
-  if (results.includes('created')) return 'created'
-  if (results.includes('updated')) return 'updated'
-  return 'unchanged'
-}
 
 // Dockhand adds its built-in catalogs (Lissy93, LinuxServer.io…) only while
 // its list of sources is empty: deleted once, they stay deleted, and users
@@ -95,34 +41,20 @@ export const removeBuiltinTemplatesStep: DockhandStep = {
   },
 }
 
-export const templateSourcesStep: DockhandStep = {
+// The template lists of our sources that local-env registered in Dockhand
+export const ownTemplateSourcesStep: DockhandStep = {
   name: 'Template sources',
   run: async () => {
-    const desired = await Promise.all(
-      listSources().map(async (name) => ({ name, url: await listUrl(name) })),
+    const own = (await getSources()).filter((source) =>
+      CATALOG_URLS.some((url) => source.url.startsWith(`${url}/`)),
     )
 
-    const sources = await getSources()
-    const results: DockhandStepResult[] = []
-
-    // Drop sources we manage whose repo was removed
-    const stale = sources.filter(
-      (source) =>
-        [CATALOG_URL, ...LEGACY_URLS].some((url) =>
-          source.url.startsWith(`${url}/`),
-        ) && !desired.some(({ url }) => listPath(url) === listPath(source.url)),
-    )
-    for (const source of stale) {
+    for (const source of own) {
       await dockhandApi(`/templates/sources?id=${source.id}`, {
         method: 'DELETE',
       })
-      results.push('updated')
     }
 
-    for (const { name, url } of desired) {
-      results.push(await ensureSource(sources, name, url))
-    }
-
-    return mergeResults(results)
+    return own.length > 0 ? 'updated' : 'unchanged'
   },
 }

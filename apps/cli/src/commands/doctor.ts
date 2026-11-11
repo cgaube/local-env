@@ -8,7 +8,6 @@ import { checkCertificate, describeCertificate } from '#cli/core/certificate.js'
 import { isValidDomain, normalizeDomain, readConfig } from '#cli/core/config.js'
 import { COMPOSE_FILE } from '#cli/core/paths.js'
 import { checkBuildPort, findFreePort } from '#cli/core/settings/build-port.js'
-import { dockhandApi } from '#cli/providers/docker/api.js'
 import {
   findLogin,
   getRegistries,
@@ -46,21 +45,6 @@ type CheckLevel = 'pass' | 'warn' | 'fail'
 interface CheckResult {
   level: CheckLevel
   message: string
-}
-
-// The URLs Dockhand reads templates from, or null when it isn't reachable
-const readDockhandSourceUrls = async () => {
-  try {
-    const sources =
-      await dockhandApi<{ url: string; enabled: boolean }[]>(
-        '/templates/sources',
-      )
-    return sources
-      .filter((source) => source.enabled)
-      .map((source) => source.url)
-  } catch {
-    return null
-  }
 }
 
 // HEAD of the clone and of its remote; a different remote HEAD means new
@@ -217,7 +201,6 @@ const checkSources = async (): Promise<CheckResult[]> => {
     ]
   }
 
-  const dockhandUrls = await readDockhandSourceUrls()
   for (const name of names) {
     results.push(await checkRemote(name))
 
@@ -233,20 +216,6 @@ const checkSources = async (): Promise<CheckResult[]> => {
             message: `${name}: no Docker templates or Ansible roles found`,
           },
     )
-
-    if (dockhandUrls && content.docker.length) {
-      results.push(
-        // Without the ?v= version that makes Dockhand refetch a changed list
-        dockhandUrls.some((url) =>
-          url.split('?')[0]!.endsWith(`/${name}/templates.json`),
-        )
-          ? { level: 'pass', message: `${name}: shown in Dockhand` }
-          : {
-              level: 'fail',
-              message: `${name}: not shown in Dockhand. Run \`local-env start\`.`,
-            },
-      )
-    }
   }
   return results
 }

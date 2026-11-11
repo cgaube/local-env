@@ -1,5 +1,6 @@
 import type { LoginRow } from '#services/dashboard/agent-protocol.ts'
 import type {
+  CatalogTemplate,
   Role,
   RoleInput,
   Route,
@@ -95,5 +96,23 @@ export const buildLogin = (overrides: Partial<LoginRow> = {}): LoginRow => ({
   detail: 'as arn:aws:sts::123456789012:assumed-role/Dev/octocat',
   command: null,
   help: null,
+  ...overrides,
+})
+
+export const buildCatalogTemplate = (
+  overrides: Partial<CatalogTemplate> = {},
+): CatalogTemplate => ({
+  id: 'acme/mail',
+  source: 'acme',
+  folder: 'mail',
+  title: 'Mailpit',
+  description: 'Catches the emails your apps send.',
+  logo: null,
+  categories: ['mail'],
+  name: 'mailpit',
+  variables: [],
+  secrets: [],
+  registries: [],
+  hosts: ['mail'],
   ...overrides,
 })

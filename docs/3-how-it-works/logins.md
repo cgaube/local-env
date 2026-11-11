@@ -241,11 +241,11 @@ A Docker stack gets the secrets of its template's source the same way:
 name, makes their logins ready and reads them with `prepare.ts` (the consumer is
 the stack), then saves them in Dockhand as secret variables of the stack.
 
-| When                                                          | What                                                                                                        |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `install` deploys a stack a tool needs (`required-stacks.ts`) | the secrets go in the create call (`envVars`, `isSecret`), and are not asked                                |
-| `sources sync`, `update`: a template change (`stack-sync.ts`) | read again and saved (`PUT /stacks/:name/env`) before the compose file is replaced and the stack redeployed |
-| `sources sync`: a linked stack that lacks one                 | saved, then the stack is redeployed (`POST /stacks/:name/deploy`), after a question                         |
+| When                                                                 | What                                                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `deploy`, and `install` for a stack a tool needs (`stack-deploy.ts`) | the secrets go in the create call (`envVars`, `isSecret`), and are not asked                                |
+| `sources sync`, `update`: a template change (`stack-sync.ts`)        | read again and saved (`PUT /stacks/:name/env`) before the compose file is replaced and the stack redeployed |
+| `sources sync`: a linked stack that lacks one                        | only said: it was deployed outside local-env, from Dockhand                                                 |
 
 - The save sends Dockhand the stack's variables as they are, a secret as `***`
   (Dockhand keeps its value), then the secrets: the user's own variables stay.
@@ -498,8 +498,9 @@ filled.
 - A registry token cannot come from a vault yet.
 - A secret rotated in the vault reaches a stack when local-env redeploys it (a
   template change), not before: the stack keeps the value Dockhand saved. A
-  stack deployed from Dockhand's page has its secrets at the next
-  `sources sync`.
+  stack deployed from Dockhand, not with local-env, has no secrets: Dockhand's
+  Templates page can't give them, which is why it is hidden
+  ([Docker catalog](docker-catalog.md)).
 - A role that uses `local_env.logins` runs only with local-env, unless it gives
   a default (`| default({'AWS_PROFILE': 'acme'})`). A role that takes a secret
   as an input runs without local-env with `-e`.

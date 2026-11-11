@@ -1,5 +1,6 @@
 import { agentCommand } from '#cli/commands/agent.js'
 import { configCommand } from '#cli/commands/config.js'
+import { deployCommand } from '#cli/commands/deploy.js'
 import { doctorCommand } from '#cli/commands/doctor.js'
 import { installCommand } from '#cli/commands/install.js'
 import { proxyCommand } from '#cli/commands/proxy.js'
@@ -22,6 +23,7 @@ export const commands = [
   updateCommand,
   sourcesCommand,
   installCommand,
+  deployCommand,
   varsCommand,
   proxyCommand,
   doctorCommand,

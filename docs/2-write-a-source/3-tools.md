@@ -145,8 +145,8 @@ stacks:
 - `local-env install` deploys the stacks of every tool it installs, profiles and
   their dependencies included, after asking once. `--yes` doesn't ask.
 - Each stack is deployed once, from its stack template (`"type": 3`), and linked
-  to it: it gets template updates like a stack deployed from Dockhand. A stack
-  the user removes stays removed.
+  to it: it gets template updates like a stack deployed from the dashboard. A
+  stack the user removes stays removed.
 - A stack of the same name that is already deployed is left as it is.
 - A variable without a default (`${NGROK_AUTHTOKEN:?Your ngrok token}`) is asked
   for first. The text after `?` is shown with the question. A name with `TOKEN`,

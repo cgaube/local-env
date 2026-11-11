@@ -15,8 +15,8 @@ import { exposureWarningStep } from '#cli/providers/docker/steps/exposure-warnin
 import { localEnvironmentStep } from '#cli/providers/docker/steps/local-environment.js'
 import { sidebarStep } from '#cli/providers/docker/steps/sidebar.js'
 import {
+  ownTemplateSourcesStep,
   removeBuiltinTemplatesStep,
-  templateSourcesStep,
 } from '#cli/providers/docker/steps/template-sources.js'
 import type { DockhandStep } from '#cli/providers/docker/types.js'
 
@@ -27,7 +27,7 @@ const steps: DockhandStep[] = [
   autoUpdateStep,
   sidebarStep,
   removeBuiltinTemplatesStep,
-  templateSourcesStep,
+  ownTemplateSourcesStep,
   // Last: it may ask questions, after the steps that need none
   registryLoginsStep,
 ]
@@ -59,9 +59,8 @@ const provision = async () => {
 
 // For `sources sync`, after the pull: the part of provisioning a template
 // change needs, printed only when it does something. Starts Dockhand and
-// catalog-server if needed (the sync uses them), and points Dockhand at the
-// new template lists, so its Templates page shows the new versions.
-export const refreshTemplateSources = async () => {
+// catalog-server if needed (the sync uses them).
+export const refreshDockhand = async () => {
   const { stdout } = await execCompose(
     ['ps', '--status', 'running', '--services', ...DOCKHAND_SERVICES],
     { capture: true },
@@ -73,9 +72,6 @@ export const refreshTemplateSources = async () => {
       ['up', '-d', '--wait', ...DOCKHAND_SERVICES],
       { done: 'Dockhand running' },
     )
-  }
-  if ((await templateSourcesStep.run()) !== 'unchanged') {
-    logger.success('Dockhand lists the new templates')
   }
   // A pulled source can need a new registry login
   if ((await registryLoginsStep.run()) !== 'unchanged') {

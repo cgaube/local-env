@@ -41,14 +41,8 @@ describe.concurrent('local-env sources add', () => {
     )
     // The build context catalog-server serves to Docker's builder
     expect(cli.home.exists('volumes/build-contexts/acme.git')).toBe(true)
-    expect(cli.dockhand.state.templateSources).toEqual([
-      expect.objectContaining({
-        name: 'acme',
-        url: expect.stringMatching(
-          /^http:\/\/catalog-server:8080\/acme\/templates\.json\?v=[0-9a-f]{12}$/,
-        ),
-      }),
-    ])
+    // Deployed from the dashboard: not listed in Dockhand's Templates page
+    expect(cli.dockhand.state.templateSources).toEqual([])
   })
 
   test('names the source after its manifest', async () => {
@@ -244,7 +238,7 @@ describe('local-env sources list', () => {
 })
 
 describe.concurrent('local-env sources remove', () => {
-  test('deletes the clone and unregisters it from Dockhand', async () => {
+  test('deletes the clone and its build context', async () => {
     await using cli = await createProvisionedCli()
     cli.home.seedConfig()
     dockerRunning(cli.bin)

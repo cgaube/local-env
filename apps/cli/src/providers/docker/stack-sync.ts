@@ -3,8 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { logger } from '#cli/utils/logger.js'
-import { askConfirm, askSelect, canAsk } from '#cli/utils/prompt.js'
-import { dockhandPost } from '#cli/providers/docker/api.js'
+import { askConfirm, askSelect } from '#cli/utils/prompt.js'
 import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
 import {
   missingStackSecrets,
@@ -132,53 +131,22 @@ const saveStackSecrets = async (
   }
 }
 
-// A linked stack that lacks some of the secrets of its template's source (it
-// was deployed from Dockhand's own page, or before the source gave them):
-// written and redeployed on approval. True when it was.
-const fillMissingSecrets = async (
+// A linked stack that lacks some of the secrets of its template's source:
+// deployed outside local-env (from Dockhand, or before the source gave them).
+// Only said: `local-env deploy` gives them when it deploys.
+const hintMissingSecrets = async (
   environmentId: number,
   { stack, template }: { stack: string; template: string },
-  { yes, dryRun }: { yes?: boolean; dryRun?: boolean },
 ) => {
   const path = resolveTemplateCompose(template)
-  if (!path) return false
+  if (!path) return
   const names = stackSecretNames(template, readTemplateContent(template, path))
-  if (names.length === 0) return false
+  if (names.length === 0) return
   const missing = await missingStackSecrets(environmentId, stack, names)
-  if (missing.length === 0) return false
-
-  const what = `${missing.length === 1 ? 'a secret' : `${missing.length} secrets`} from the vault (${missing.join(', ')})`
-  if (dryRun) {
-    logger.info(`${stack}: would get ${what}`)
-    return false
-  }
-  if (!yes && !canAsk()) {
-    logger.info(
-      `${stack}: lacks ${what}. Run local-env sources sync in a terminal to give ${missing.length === 1 ? 'it' : 'them'}.`,
-    )
-    return false
-  }
-  if (
-    !yes &&
-    !(await askConfirm(`${stack} lacks ${what}. Save and redeploy it?`, true))
-  ) {
-    logger.info(`${stack}: left without ${missing.join(', ')}`)
-    return false
-  }
-  if (!(await saveStackSecrets(environmentId, stack, template, missing))) {
-    return false
-  }
-  // Dockhand gives the secrets to compose when it deploys
-  const result = await dockhandPost<{ success?: boolean; error?: string }>(
-    `/stacks/${encodeURIComponent(stack)}/deploy?env=${environmentId}`,
-    {},
+  if (missing.length === 0) return
+  logger.info(
+    `${stack}: deployed without ${missing.join(', ')} from the vault. Remove it in Dockhand, then run local-env deploy ${template}, or set ${missing.length === 1 ? 'it' : 'them'} in Dockhand.`,
   )
-  if (result.success === false) {
-    logger.warn(`${stack}: redeploy failed: ${result.error ?? 'unknown'}`)
-    return false
-  }
-  logger.success(`${stack}: redeployed with its secrets`)
-  return true
 }
 
 // Shows each deployed stack's diff with its template and applies it on
@@ -232,16 +200,12 @@ export const syncTemplatedStacks = async ({
 
     if (!diff) {
       logger.success(`${label}: up to date`)
-      if (await fillMissingSecrets(environment.id, linked, { yes, dryRun })) {
-        applied.push(linked.stack)
-      }
+      await hintMissingSecrets(environment.id, linked)
       continue
     }
     if (diff.nextBase === linked.skip) {
       logger.info(`${label}: template version skipped`)
-      if (await fillMissingSecrets(environment.id, linked, { yes, dryRun })) {
-        applied.push(linked.stack)
-      }
+      await hintMissingSecrets(environment.id, linked)
       continue
     }
 

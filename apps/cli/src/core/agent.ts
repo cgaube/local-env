@@ -8,7 +8,14 @@
 //   volumes/agent/token      -> what the dashboard sends it (mounted there)
 //   volumes/agent/agent.log  -> its output
 import { spawn } from 'node:child_process'
-import { existsSync, openSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import packageJson from '#package.json' with { type: 'json' }
 import type { AgentStatus } from '#services/dashboard/agent-protocol.js'
@@ -52,13 +59,31 @@ export const selfArgv = () => {
   ]
 }
 
+// The code a checkout runs: the CLI's source and the services it imports
+const CHECKOUT_CODE = ['apps/cli/src', 'services/dashboard']
+
+// The time of the newest file of a checkout's code: it changes with each edit
+const checkoutStamp = () =>
+  Math.round(
+    Math.max(
+      0,
+      ...CHECKOUT_CODE.flatMap((folder) => {
+        const dir = join(CHECKOUT_DIR!, folder)
+        if (!existsSync(dir)) return []
+        return readdirSync(dir, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+          .map((entry) => statSync(join(entry.parentPath, entry.name)).mtimeMs)
+      }),
+    ),
+  )
+
 // Which program this is: the command that runs local-env, and for a binary,
-// the size and the time of its file. The version alone is not enough: a
-// checkout and Homebrew have the same one until a release, and a binary built
-// again keeps it.
+// the size and the time of its file; for a checkout, the time of its newest
+// source file. The version alone is not enough: a checkout and Homebrew have
+// the same one until a release, and a binary built again keeps it.
 export const agentBuild = () => {
   const command = selfArgv().join(' ')
-  if (!IS_COMPILED) return command
+  if (!IS_COMPILED) return `${command} ${checkoutStamp()}`
   const { size, mtimeMs } = statSync(process.execPath)
   return `${command} ${size}:${Math.round(mtimeMs)}`
 }

@@ -41,6 +41,8 @@ import {
   writeVariables,
 } from './tools.js'
 import { tryReadSourceManifest } from './source-manifest.js'
+import { type StacksResponse } from './catalog.js'
+import { listTemplates } from './templates.js'
 import type { LoginsResponse } from './agent-protocol.js'
 
 const ROUTES_FILE = '/routes/routes.json'
@@ -51,6 +53,8 @@ const GALAXY_DIR = join(TOOLS_DIR, GALAXY_FOLDER)
 // The agent's token, mounted read-only: written by the agent when it starts
 const AGENT_DIR = '/agent'
 const AGENT_URL = process.env.AGENT_URL ?? 'http://host.docker.internal:17081'
+// On the core stack's network: the stacks, to show the deployed templates
+const DOCKHAND_URL = process.env.DOCKHAND_URL ?? 'http://dockhand:3000'
 const DOMAIN = process.env.DOMAIN ?? 'dev.test'
 const PORT = 80
 
@@ -182,6 +186,8 @@ const readers = {
   routes: () => readList(ROUTES_FILE),
   services: () => readList(SERVICES_FILE),
   sources: async () => JSON.stringify(listSources()),
+  // The Docker templates of the sources: the Docker page's catalog
+  templates: async () => JSON.stringify(listTemplates(SOURCES_DIR)),
   tools: async () => {
     const roles = listRoles(SOURCES_DIR)
     return JSON.stringify({
@@ -233,6 +239,7 @@ watch('/routes', (_event, file) => {
 })
 watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
+  publish('templates')
   publish('tools')
 })
 // picked.json, profile.json and variables.json, written below and by
@@ -251,6 +258,31 @@ setInterval(async () => {
   lastAgent = data
   for (const client of clients) send(client, 'agent', data)
 }, 3000)
+
+// The names of the stacks in Dockhand's local environment: a template is
+// deployed when a stack has its name, as local-env links them. Asked by the
+// Docker page when it opens and after a deploy, not streamed.
+const readStacks = async () => {
+  try {
+    const options = { signal: AbortSignal.timeout(5000) }
+    const environments = (await (
+      await fetch(`${DOCKHAND_URL}/api/environments`, options)
+    ).json()) as { id: number; connectionType: string }[]
+    const local = environments.find(
+      ({ connectionType }) => connectionType === 'socket',
+    )
+    if (!local) throw new Error('No local environment')
+    const stacks = (await (
+      await fetch(`${DOCKHAND_URL}/api/stacks?env=${local.id}`, options)
+    ).json()) as { name: string }[]
+    return Response.json({
+      available: true,
+      stacks: stacks.map(({ name }) => name),
+    } satisfies StacksResponse)
+  } catch {
+    return Response.json({ available: false } satisfies StacksResponse)
+  }
+}
 
 // A PUT of JSON, or the response that refuses it. JSON only: another site
 // can't send it without a CORS preflight, which this server never allows.
@@ -419,6 +451,7 @@ Bun.serve<TerminalSocket>({
     }
     if (pathname === '/api/config') return Response.json({ domain: DOMAIN })
     if (pathname === '/api/logins') return readLogins()
+    if (pathname === '/api/stacks') return readStacks()
     if (pathname === '/api/tools/picked') return pickTools(request)
     if (pathname === '/api/tools/profile') return chooseProfile(request)
     if (pathname === '/api/tools/variables') return saveVariables(request)

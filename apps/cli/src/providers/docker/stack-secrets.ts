@@ -1,6 +1,7 @@
 import { resolveInside } from '#cli/core/paths.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
+import { composeVariables } from '#services/dashboard/templates.js'
 import { logger } from '#cli/utils/logger.js'
 import { dockhandApi, dockhandPut } from '#cli/providers/docker/api.js'
 import {
@@ -18,17 +19,6 @@ import {
 // encrypted in its database, given to compose through the environment, never
 // in the stack's .env. Dockhand uses them again on a restart or an update
 // (docs/3-how-it-works/logins.md).
-
-// A variable of a compose file: ${NAME}, ${NAME:-x}, ${NAME?msg} or $NAME.
-// Not $$NAME, which compose writes as a $.
-const VARIABLE =
-  /(?<!\$)\$(?:\{([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*))/g
-
-export const composeVariables = (compose: string) => [
-  ...new Set(
-    [...compose.matchAll(VARIABLE)].map(([, braced, bare]) => braced ?? bare!),
-  ),
-]
 
 // <source>/<folder> -> <source>
 const sourceOf = (template: string) => template.split('/')[0] ?? ''

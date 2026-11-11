@@ -35,10 +35,11 @@ local-env tells you when a new version is out, at most once a day.
 - **Profiles**: the sets of tools for each job. Pick yours there.
 - **Tools**: every tool of your sources. Pick the ones you want, set their
   variables, and install them.
-- **Docker**: every route of the proxy, with a link to each app.
+- **Docker**: the templates of your sources, to deploy (see
+  [Deploy apps](3-apps.md)), and every route of the proxy, with a link to each
+  app.
 
-Dockhand, at `https://docker.dev.test`, manages your containers and deploys the
-templates.
+Dockhand, at `https://docker.dev.test`, manages your containers and stacks.
 
 ## Sources
 
@@ -64,6 +65,7 @@ it too, with everything else.
 | `sources sync [source]`             | Pull the sources and apply the changes of templates    |
 | `sources links`                     | Show the deployed stacks and their templates           |
 | `sources login` / `logout [source]` | Log in to the accounts that a source needs, or log out |
+| `deploy [template]`                 | Deploy a template of your sources in Docker            |
 | `install [profile]`                 | Install your profile and the tools you picked          |
 | `vars` (`list`, `set`, `unset`)     | Show or set the variables of your tools                |
 | `proxy routes`                      | Show the hosts that the proxy serves                   |

@@ -15,13 +15,14 @@ import {
 import { Skeleton } from '#ui/components/ui/skeleton'
 import { useDomain } from '#ui/features/config/use-domain.ts'
 import { useLiveData } from '#ui/features/live-data/live-data-provider'
-import { PageHeader } from '#ui/features/page-header/page-header'
 import { plural } from '#ui/lib/plural.ts'
 import { AddRouteHelp } from '#ui/features/routes/add-route-help'
 import { filterRoutes, userRoutes } from '#ui/features/routes/routes.ts'
 import { RoutesTable } from '#ui/features/routes/routes-table'
 
-export function RoutesPage() {
+// The Routes tab of the Docker page: the addresses of the running
+// containers, filtered by host, container or stack
+export function RoutesPanel() {
   const { routes: all, connected, updatedAt } = useLiveData()
   const domain = useDomain()
   const [query, setQuery] = useState('')
@@ -31,17 +32,15 @@ export function RoutesPage() {
   const visible = routes ? filterRoutes(routes, deferredQuery) : []
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Routes"
-        description={
-          !connected && routes
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-muted-foreground text-sm">
+          {!connected && routes
             ? 'Reconnecting…'
             : routes
               ? `${plural(routes.length, 'route')} · updated ${updatedAt?.toLocaleTimeString()}`
-              : 'Loading…'
-        }
-      >
+              : 'Loading…'}
+        </p>
         <InputGroup className="w-full sm:w-72">
           <InputGroupAddon>
             <SearchIcon />
@@ -54,7 +53,7 @@ export function RoutesPage() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </InputGroup>
-      </PageHeader>
+      </div>
 
       {routes ? (
         <AddRouteHelp domain={domain} defaultOpen={routes.length === 0} />
