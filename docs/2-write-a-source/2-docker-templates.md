@@ -210,6 +210,10 @@ services:
   them), then redeploys it, after a question (`--yes` skips it).
 - A stack gets the secrets of **its template's own source** only. Prefer a
   `${NAME:?…}`: without local-env, compose then stops with your message.
+- The name matches the compose variable exactly, its case too: UPPERCASE, as
+  compose files and images expect (`POSTGRES_PASSWORD`). A role's input is
+  usually lowercase: a secret both need is declared under each name (see
+  [Tool secrets](5-secrets.md#the-secrets)).
 - The template stays a plain Portainer template: without local-env, the user
   sets the variable in Dockhand.
 
