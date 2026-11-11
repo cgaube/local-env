@@ -40,8 +40,11 @@ local-env sources add https://github.com/acme/local-env-templates
 ```
 
 Your team gives you the URL. A source can also be a git repo on your Mac
-(`~/Projects/my-templates`). If the source needs a login (a registry of private
-images), local-env asks for it now: see [Log in to your accounts](5-logins.md).
+(`~/Projects/my-templates`). To try local-env without one, add the example
+source:
+`local-env sources add https://github.com/cgaube/local-env-templates-example`.
+If the source needs a login (a registry of private images), local-env asks for
+it now: see [Log in to your accounts](5-logins.md).
 
 Then:
 
