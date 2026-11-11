@@ -39,6 +39,48 @@ describe('the variables of a compose file', () => {
       { key: 'B', help: '' },
     ])
   })
+
+  test('skips the comments, which compose does not interpolate', () => {
+    const compose = [
+      '# set ${GREETING:?the text} in Dockhand',
+      'services:',
+      '  app:',
+      '    image: nginx # ${TAG:-latest} is moving',
+      "    command: ['-text=${TEXT:?the text}'] #${AFTER_FLOW}",
+      '    labels:',
+      "      - 'note=a # in quotes ${QUOTED}'",
+      '      - "it\\"s # ${ESCAPED}"',
+      '      - see#${NO_SPACE}',
+      '',
+    ].join('\n')
+    expect(composeVariables(compose)).toEqual([
+      'TEXT',
+      'QUOTED',
+      'ESCAPED',
+      'NO_SPACE',
+    ])
+    expect(requiredVariables(compose)).toEqual([
+      { key: 'TEXT', help: 'the text' },
+    ])
+  })
+
+  test('reads a block scalar as text, comments included', () => {
+    const compose = [
+      'services:',
+      '  app:',
+      '    command: |',
+      '      # echo ${IN_BLOCK:?read}',
+      '      run',
+      '    # ${AFTER_BLOCK:?skipped}',
+      '    environment:',
+      '      - A=${A}',
+      '',
+    ].join('\n')
+    expect(requiredVariables(compose)).toEqual([
+      { key: 'IN_BLOCK', help: 'read' },
+    ])
+    expect(composeVariables(compose)).toEqual(['IN_BLOCK', 'A'])
+  })
 })
 
 // A sources folder with these files, by path
