@@ -1,9 +1,13 @@
+import { mkdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import {
   dockerRunning,
   dockerStopped,
   machineReady,
 } from '#cli-tests/support/machine.js'
 import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
+
+const IS_MAC = process.platform === 'darwin'
 
 // A stack Dockhand deployed, and a container of another project that
 // proxy-connector attached to the local-env network
@@ -91,6 +95,29 @@ describe.concurrent('local-env reset', () => {
       'Docker is not running: containers and images are skipped',
     )
     expect(cli.home.exists('')).toBe(false)
+  })
+
+  test.skipIf(!IS_MAC)('stops dnsmasq, which runs as the user', async () => {
+    await using cli = await createCli()
+    cli.home.seedConfig()
+    machineReady(cli)
+    dockerStopped(cli.bin)
+    const configDir = join(cli.root, 'brew/etc/dnsmasq.d')
+    mkdirSync(configDir, { recursive: true })
+    writeFileSync(join(configDir, 'local-env.conf'), 'port=53535\n')
+
+    const result = await cli.run(['reset', '--yes'])
+
+    expect(result.exitCode).toBe(0)
+    expect(
+      cli.bin
+        .calls('brew')
+        .filter((call) => call.args[0] === 'services')
+        .map((call) => call.args),
+    ).toEqual([['services', 'stop', 'dnsmasq']])
+    expect(
+      cli.bin.calls('sudo').filter((call) => call.args.includes('services')),
+    ).toEqual([])
   })
 
   test.skipIf(COMPILED)('keeps everything when not confirmed', async () => {

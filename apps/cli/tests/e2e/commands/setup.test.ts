@@ -42,15 +42,29 @@ describe.concurrent('local-env setup', () => {
     dockerRunning(cli.bin)
     mkcertInstalled(cli.bin)
     const { prefix } = brewInstalled(cli)
+    cli.bin.on('brew', ['services', 'restart', 'dnsmasq'], {
+      stderr:
+        'Warning: `dnsmasq` must be run as root to start at system startup!\n',
+    })
 
-    await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
+    const result = await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
 
+    // Homebrew's warning is about port 53: hidden
+    expect(result.output).not.toContain('must be run as root')
+    // The CA was already trusted: Firefox has nothing new to read
+    expect(result.output).not.toContain('Restart Firefox')
     const config = await Bun.file(
       join(prefix, 'etc/dnsmasq.d/local-env.conf'),
     ).text()
     expect(config).toContain(`address=/${TEST_DOMAIN}/127.0.0.1`)
+    // dnsmasq runs as the user: sudo only writes the resolver file
+    expect(
+      cli.bin
+        .calls('brew')
+        .filter((call) => call.args[0] === 'services')
+        .map((call) => call.args),
+    ).toEqual([['services', 'restart', 'dnsmasq']])
     expect(cli.bin.calls('sudo').map((call) => call.args)).toEqual([
-      [join(prefix, 'bin/brew'), 'services', 'restart', 'dnsmasq'],
       ['mkdir', '-p', '/etc/resolver'],
       ['cp', expect.any(String), `/etc/resolver/${TEST_DOMAIN}`],
     ])
@@ -222,6 +236,7 @@ describe.concurrent('local-env setup', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('Local certificate authority trusted')
+    expect(result.output).toContain('Restart Firefox if it is open')
     expect(cli.bin.calls('security').map((call) => call.args)).toEqual([
       ['verify-cert', '-c', expect.stringContaining('rootCA.pem')],
       [

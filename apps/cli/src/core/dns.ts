@@ -8,7 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'fs'
-import { homedir, tmpdir } from 'os'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { getBrewPrefix } from '#cli/utils/brew.js'
 import {
@@ -78,29 +78,13 @@ const isDnsConfigured = async (domain: string, brewPrefix: string) => {
   )
 }
 
-const restartDnsmasqService = async (brewPrefix: string) => {
-  const brewBinary = join(brewPrefix, 'bin', 'brew')
-  const userLaunchAgentPath = join(
-    homedir(),
-    'Library',
-    'LaunchAgents',
-    'homebrew.mxcl.dnsmasq.plist',
-  )
-
-  // dnsmasq must run as root; a per-user service would hold the port
-  if (existsSync(userLaunchAgentPath)) {
-    logger.warn('Stopping the per-user dnsmasq service')
-    await execa('brew', ['services', 'stop', 'dnsmasq'], {
-      reject: false,
-      stdio: 'ignore',
-    })
-  }
-
-  await execa('sudo', [brewBinary, 'services', 'restart', 'dnsmasq'], {
-    stdin: 'inherit',
-    stdout: 'ignore',
-    stderr: 'inherit',
-  })
+// A service of the user, started at login: port 53535 needs no root, and a
+// root service would leave root-owned files in Homebrew, which then can't
+// uninstall dnsmasq. Homebrew's output stays hidden unless it fails: it warns
+// that dnsmasq "must be run as root to start at system startup", which is
+// true of port 53 only.
+const restartDnsmasqService = async () => {
+  await execa('brew', ['services', 'restart', 'dnsmasq'], { stdio: 'pipe' })
 }
 
 // Disables other dnsmasq.d configs that set `port`, which would stop dnsmasq
@@ -168,8 +152,8 @@ export const ensureWildcardDns = async (domain: string, yes: boolean) => {
     throw new Error(`Invalid dnsmasq config: ${configTest.output}`)
   }
 
+  await restartDnsmasqService()
   logger.info('Configuring DNS (may ask for your password)')
-  await restartDnsmasqService(brewPrefix)
   await writeResolver(domain)
   logger.success(`*.${domain} resolves to 127.0.0.1`)
 }
@@ -205,11 +189,10 @@ export const removeWildcardDns = async (domain: string) => {
   const othersRemain = readdirSync(configDir).some((name) =>
     name.endsWith('.conf'),
   )
-  const brewBinary = join(brewPrefix, 'bin', 'brew')
   await execa(
-    'sudo',
-    [brewBinary, 'services', othersRemain ? 'restart' : 'stop', 'dnsmasq'],
-    { stdin: 'inherit', stdout: 'ignore', stderr: 'inherit', reject: false },
+    'brew',
+    ['services', othersRemain ? 'restart' : 'stop', 'dnsmasq'],
+    { stdio: 'pipe', reject: false },
   )
   logger.success(othersRemain ? 'Restarted dnsmasq' : 'Stopped dnsmasq')
 }
