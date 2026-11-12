@@ -1,5 +1,13 @@
 # local-env
 
+## 0.8.1
+
+### Patch Changes
+
+- 86fc24c: `local-env stop` keeps the `local-env` network. It removed it before,
+  and the apps that were stopped then could no longer start ("network … not
+  found"). `local-env reset` still removes it.
+
 ## 0.8.0
 
 ### Minor Changes
