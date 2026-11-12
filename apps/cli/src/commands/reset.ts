@@ -3,6 +3,7 @@ import { execa } from 'execa'
 import { existsSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { stopAgent } from '#cli/core/agent.js'
+import { PROXY_NETWORK } from '#cli/core/network.js'
 import { uninstallLocalCa } from '#cli/core/certificate.js'
 import { CONFIG_PATH, readConfig } from '#cli/core/config.js'
 import { removeWildcardDns } from '#cli/core/dns.js'
@@ -15,7 +16,8 @@ import {
 } from '#cli/utils/index.js'
 
 const PROJECT = 'local-env'
-const NETWORK = 'local-env'
+// Created by the CLI before each `up`: compose's down leaves it
+const NETWORK = PROXY_NETWORK
 // Created by proxy-connector: routed host names for calls between containers
 const HOSTS_NETWORK = 'local-env-hosts'
 // Built or pulled only for local-env. The shared base images (nginx:alpine,
@@ -226,12 +228,16 @@ export const resetCommand = new Command('reset')
           'Removing the core services',
           'docker',
           ['compose', '-p', PROJECT, 'down', '--volumes', '--remove-orphans'],
-          { done: `Removed the core services and the ${NETWORK} network` },
+          { done: 'Removed the core services' },
         )
-        await execa('docker', ['network', 'rm', HOSTS_NETWORK], {
-          reject: false,
-          stdio: 'ignore',
-        })
+        // Neither is compose's: down leaves them
+        for (const network of [NETWORK, HOSTS_NETWORK]) {
+          await execa('docker', ['network', 'rm', network], {
+            reject: false,
+            stdio: 'ignore',
+          })
+        }
+        logger.success(`Removed the ${NETWORK} and ${HOSTS_NETWORK} networks`)
         for (const image of plan.images) {
           const { exitCode } = await execa('docker', ['image', 'rm', image], {
             reject: false,

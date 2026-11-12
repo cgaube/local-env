@@ -11,6 +11,47 @@ const composeUp = (args: string[]) =>
   args.includes('up') && args.includes('--remove-orphans')
 
 describe.concurrent('local-env start', () => {
+  test('creates the proxy network when it is missing, outside compose', async () => {
+    await using cli = await createCli({ dockhand: provisionedDockhand() })
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    machineReady(cli)
+    // The network doesn't exist yet: the last rule wins
+    cli.bin.on('docker', ['network', 'inspect', 'local-env'], { exitCode: 1 })
+    cli.bin.on('docker', ['network', 'create'])
+
+    const result = await cli.run(['start'])
+
+    expect(result.exitCode).toBe(0)
+    const docker = cli.bin.calls('docker').map((call) => call.args)
+    const create = docker.findIndex((args) => args[1] === 'create')
+    expect(docker[create]).toEqual([
+      'network',
+      'create',
+      '--driver',
+      'bridge',
+      '--label',
+      'local-env=proxy',
+      'local-env',
+    ])
+    // Before compose needs it
+    expect(create).toBeLessThan(docker.findIndex(composeUp))
+  })
+
+  test('keeps the proxy network when it exists', async () => {
+    await using cli = await createCli({ dockhand: provisionedDockhand() })
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    machineReady(cli)
+
+    const result = await cli.run(['start'])
+
+    expect(result.exitCode).toBe(0)
+    expect(
+      cli.bin.calls('docker').some((call) => call.args[1] === 'create'),
+    ).toBe(false)
+  })
+
   test('starts the core stack and provisions Dockhand', async () => {
     await using cli = await createCli()
     cli.home.seedConfig()

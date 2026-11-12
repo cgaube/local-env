@@ -19,6 +19,20 @@ templates and your logins. Each problem comes with what to do.
 - **The page says "502" or does not load:** the container is stopped, or it does
   not listen on its `VIRTUAL_PORT`. Look at it in Dockhand.
 
+## An app does not start: "network … not found"
+
+Older versions of local-env removed their `local-env` network on
+`local-env stop`. A container that was stopped then still points to the network
+that was removed. Run `local-env start`, then remove the old network from the
+container, and start it:
+
+```sh
+docker network disconnect -f local-env <container>
+docker start <container>
+```
+
+local-env attaches it to the network again when it starts.
+
 ## "Outdated core services"
 
 The services of local-env run an older version than the CLI: you updated

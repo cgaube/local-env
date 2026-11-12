@@ -9,6 +9,8 @@ import type { Cli } from '#cli-tests/support/run-cli.js'
 // Docker Desktop is running and every compose command succeeds
 export const dockerRunning = (bin: FakeBin) => {
   bin.on('docker', ['info'])
+  // The proxy network exists: no `network create`
+  bin.on('docker', ['network', 'inspect'])
   bin.on('docker', ['compose'])
   bin.on('docker', ['ps'])
   bin.on('docker', ['images'])
