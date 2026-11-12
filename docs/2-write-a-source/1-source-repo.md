@@ -19,7 +19,7 @@ changes too.
    [The manifest](#the-manifest)).
 3. Replace the examples with your own templates, roles and profiles, and remove
    what you don't need. Give your collections your own `namespace:`, not `acme`,
-   and set `SOURCE_URL` in `onboarding.sh` to your repo.
+   and set `LOCAL_ENV_SOURCE_URL` in `onboarding.sh` to your repo.
 4. Add your repo: `local-env sources add <your repo URL>`.
 
 What it holds:

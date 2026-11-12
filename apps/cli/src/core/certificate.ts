@@ -143,7 +143,8 @@ export const installLocalCa = async () => {
     )
   }
 
-  if (!(await isTrustedForUser(caFile))) {
+  const newlyTrusted = !(await isTrustedForUser(caFile))
+  if (newlyTrusted) {
     try {
       await trustCaForUser(caFile)
     } catch (error) {
@@ -153,6 +154,9 @@ export const installLocalCa = async () => {
 
   if (failed.length === 0) {
     logger.success('Local certificate authority trusted')
+    // Firefox reads the trusted CAs, its own and the keychain's, when it
+    // starts: until then it shows a warning for local-env sites
+    if (newlyTrusted) logger.info('Restart Firefox if it is open')
     return
   }
   logger.callout(
