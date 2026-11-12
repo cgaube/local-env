@@ -16,12 +16,17 @@ in the template source: a source made from the template has it already (see
 ## Set it up
 
 1. In `onboarding.sh`, set the values at the top:
-   - `SOURCE_URL`: the git repo of your source.
-   - `DOMAIN`: the domain of the local apps, `dev.test` by default. The script
-     sets it on the first run only.
-   - `PROFILE`: the profile to install, by name. Empty, the employee picks one.
-   - `DOCKER_CASK`: the Homebrew cask of your Docker engine (`orbstack`,
-     `docker-desktop`). Empty, the script asks the employee to install one.
+   - `LOCAL_ENV_SOURCE_URL`: the git repo of your source.
+   - `LOCAL_ENV_DOMAIN`: the domain of the local apps, `dev.test` by default.
+     The script sets it on the first run only.
+   - `LOCAL_ENV_PROFILE`: the profile to install, by name. Empty, the employee
+     picks one.
+
+   They are defaults: an environment variable of the same name wins, so a script
+   of yours that runs this one can set them
+   (`LOCAL_ENV_PROFILE=backend /bin/bash -c "$(curl …)"`, or
+   `export LOCAL_ENV_PROFILE=backend`).
+
 2. Serve it where a new Mac can download it without a login. A public repo can
    use the raw URL of the file
    (`https://raw.githubusercontent.com/<owner>/<repo>/main/onboarding.sh`). The
@@ -40,8 +45,11 @@ To try it with the template source:
 1. It checks the Mac: macOS on Apple Silicon, in a terminal.
 2. It installs Homebrew when it is missing, and adds it to `~/.zprofile` for the
    next terminals.
-3. It checks the Docker engine: installed, with Docker Compose v2, and running.
-   With `DOCKER_CASK` set, it installs your company's engine with Homebrew.
+3. It checks that Docker runs. A Docker engine that runs is kept. Otherwise, it
+   installs Colima (free) with Homebrew's `docker` CLI, Docker Compose and
+   Buildx, and starts it. To use another engine (OrbStack, Docker Desktop),
+   install and start it before the script, from a script of yours that then runs
+   this one, or change `ensure_docker` in your copy.
 4. It installs local-env with Homebrew, or upgrades it.
 5. It hands over to `local-env onboard <source> --domain <domain>`
    (`--profile <profile>` when you set one), which does the rest in one flow:
