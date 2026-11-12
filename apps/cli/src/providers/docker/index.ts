@@ -45,16 +45,13 @@ const provision = async () => {
     { done: 'Dockhand running' },
   )
 
-  const changes: string[] = []
+  // One line, only when a step changed something: which settings did is
+  // detail for the people who change local-env
+  let changed = false
   for (const step of steps) {
-    const result = await step.run()
-    if (result !== 'unchanged') changes.push(`${step.name} ${result}`)
+    if ((await step.run()) !== 'unchanged') changed = true
   }
-  logger.success(
-    changes.length
-      ? `Configured: ${changes.join(', ')}`
-      : 'Configuration up to date',
-  )
+  if (changed) logger.success('Dockhand set up for local-env')
 }
 
 // For `sources sync`, after the pull: the part of provisioning a template

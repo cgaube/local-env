@@ -143,7 +143,7 @@ describe.concurrent('local-env start, registry logins', () => {
     const result = await cli.run(['start'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Configuration up to date')
+    expect(result.output).not.toContain('Dockhand set up for local-env')
     expect(registryWrites(cli)).toEqual([])
   })
 

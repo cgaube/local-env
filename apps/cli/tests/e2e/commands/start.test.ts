@@ -22,6 +22,7 @@ describe.concurrent('local-env start', () => {
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(`*.${TEST_DOMAIN} valid until 2126`)
     expect(result.output).toContain('local-env is running')
+    expect(result.output).toContain('Dockhand set up for local-env')
     expect(result.output).toContain(
       `Dashboard: https://local-env.${TEST_DOMAIN}`,
     )
@@ -95,7 +96,7 @@ describe.concurrent('local-env start', () => {
     const result = await cli.run(['start'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Configuration up to date')
+    expect(result.output).not.toContain('Dockhand set up for local-env')
     const writes = cli.dockhand.requests.filter(
       (request) => request.method !== 'GET',
     )
