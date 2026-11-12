@@ -1,5 +1,20 @@
 # local-env
 
+## 0.8.0
+
+### Minor Changes
+
+- bc184f8: Add `local-env onboard <source>`, for a company's onboarding script:
+  it sets up local-env, adds the team's source, starts it and installs a profile
+  (`--profile`, or picked), in one run. It is hidden from `--help`. The template
+  source has an example script, `onboarding.sh`.
+
+### Patch Changes
+
+- bc184f8: `start` says "Dockhand set up for local-env" in place of the list of
+  the Dockhand settings it changed, and nothing more when they are up to date.
+  `stop` shows its steps in groups, as `start` does.
+
 ## 0.7.1
 
 ### Patch Changes
