@@ -71,7 +71,10 @@ holds what we build:
 - `compose.yaml` defines the core stack: `nginx-proxy`, `dockhand`,
   `catalog-server`, `proxy-connector`, `dashboard`. The CLI always passes
   `-f <home>/compose.yaml`. The core services have `restart: 'no'`: after a
-  reboot, `local-env start` brings them back with the dashboard agent.
+  reboot, `local-env start` brings them back with the dashboard agent. Its
+  network, `local-env`, is `external`: `runCompose` creates it before each `up`
+  (`src/core/network.ts`), so `stop` (`compose down`) leaves it, and the stopped
+  apps attached to it can still start. `reset` removes it.
 - The dashboard agent runs `local-env install` and `update` for the dashboard,
   in a pty (`Bun.Terminal`), on the Mac. `local-env start` spawns
   `local-env agent` (hidden) detached (`src/core/agent.ts`); `stop` and `reset`

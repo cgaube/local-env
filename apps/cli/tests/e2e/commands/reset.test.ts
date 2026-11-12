@@ -63,6 +63,9 @@ describe.concurrent('local-env reset', () => {
         'compose -p mail down --volumes --remove-orphans --rmi local',
         'network disconnect -f local-env shop-web-1',
         'compose -p local-env down --volumes --remove-orphans',
+        // Not compose's: removed after it
+        'network rm local-env',
+        'network rm local-env-hosts',
         'image rm fnsys/dockhand',
       ]),
     )

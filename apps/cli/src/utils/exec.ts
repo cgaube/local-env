@@ -1,6 +1,7 @@
 import { execa } from 'execa'
 import { agentPort } from '#cli/core/agent.js'
 import { readConfig } from '#cli/core/config.js'
+import { ensureProxyNetwork } from '#cli/core/network.js'
 import { COMPOSE_FILE } from '#cli/core/paths.js'
 import {
   listBuiltServices,
@@ -34,15 +35,19 @@ export const execCompose = async (args: string[], { capture = false } = {}) => {
   })
 }
 
-// Same, with the output folded into a clack task log. Before `up`, rebuilds
-// the core images whose code changed: `up` recreates their containers anyway
+// Same, with the output folded into a clack task log. Before `up`, creates
+// the proxy network, which compose.yaml declares external, and rebuilds the
+// core images whose code changed: `up` recreates their containers anyway
 // (their revision label changed), and would otherwise reuse the old image.
 export const runCompose = async (
   title: string,
   args: string[],
   options?: { done?: string },
 ) => {
-  if (args[0] === 'up') await buildChangedServices()
+  if (args[0] === 'up') {
+    await ensureProxyNetwork()
+    await buildChangedServices()
+  }
   return runTask(title, 'docker', ['compose', '-f', COMPOSE_FILE, ...args], {
     ...options,
     env: composeEnv(),

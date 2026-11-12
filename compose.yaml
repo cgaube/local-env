@@ -1,9 +1,13 @@
 name: local-env
 
+# Where proxy-connector attaches every routed container. The CLI creates it
+# before each `up` (apps/cli/src/core/network.ts), not compose: `local-env
+# stop` runs `down`, which would remove it, and the stopped apps attached to
+# it could no longer start ("network ... not found"). `reset` removes it.
 networks:
   default:
     name: local-env
-    driver: bridge
+    external: true
 
 # The core services don't restart on their own (`restart: 'no'`): after a
 # reboot, `local-env start` brings them back with the dashboard agent, a
