@@ -7,8 +7,16 @@ import { logger, runCompose } from '#cli/utils/index.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 
 // Starts the core stack, configures Dockhand and the dashboard agent. Run by
-// `local-env start`, and by `local-env setup` when the user accepts to start.
-export const runStart = async ({ build }: { build: boolean }) => {
+// `local-env start`, by `local-env setup` when the user accepts to start, and
+// by `local-env onboard`, which says where to go next itself (`summary:
+// false`).
+export const runStart = async ({
+  build,
+  summary = true,
+}: {
+  build: boolean
+  summary?: boolean
+}) => {
   const { domain } = readConfig()
 
   // Renewed here too, so an expired certificate never lingers
@@ -46,6 +54,7 @@ export const runStart = async ({ build }: { build: boolean }) => {
     )
   }
 
+  if (!summary) return
   // Last, in green, in place of "Done": where to go next
   closeFrameWithCallout(
     'success',

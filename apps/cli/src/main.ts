@@ -43,6 +43,7 @@ const TITLES: Record<string, string> = {
   'proxy routes': 'Proxy routes',
   doctor: 'Doctor',
   reset: 'Reset local-env',
+  onboard: 'Welcome to local-env',
 }
 
 // Set once the frame is open, so it is closed whichever way the command ends
@@ -110,8 +111,8 @@ if (
   command !== 'agent'
 ) {
   await prepareHome()
-  // start and update recreate them anyway
-  if (!['start', 'update'].includes(command)) {
+  // start, update and onboard recreate them anyway
+  if (!['start', 'update', 'onboard'].includes(command)) {
     outdated = await findOutdatedServices()
   }
   // A checkout is behind or ahead on purpose, and brew doesn't update it.

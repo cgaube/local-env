@@ -3,6 +3,7 @@ import { configCommand } from '#cli/commands/config.js'
 import { deployCommand } from '#cli/commands/deploy.js'
 import { doctorCommand } from '#cli/commands/doctor.js'
 import { installCommand } from '#cli/commands/install.js'
+import { onboardCommand } from '#cli/commands/onboard.js'
 import { proxyCommand } from '#cli/commands/proxy.js'
 import { resetCommand } from '#cli/commands/reset.js'
 import { setupCommand } from '#cli/commands/setup.js'
@@ -30,7 +31,9 @@ export const commands = [
   resetCommand,
   uiCommand,
   agentCommand,
+  onboardCommand,
 ]
 
-// For working on local-env, not in --help
-export const hiddenCommands = new Set([uiCommand, agentCommand])
+// Not in --help: for working on local-env, or run once, by a company's
+// onboarding script
+export const hiddenCommands = new Set([uiCommand, agentCommand, onboardCommand])

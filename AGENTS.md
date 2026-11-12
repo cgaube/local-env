@@ -26,15 +26,20 @@ holds what we build:
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
   `update`, `sources` (add, list, remove, sync, links, login, logout),
-  `install`, `deploy`, `vars` (list, set, unset), `proxy routes`, `doctor`.
-  `update` first upgrades local-env with Homebrew when a newer version is out,
-  then hands over to the new version (`src/core/self-update.ts`; a checkout
-  skips it). It refreshes the core stack and the sources, then lists the stacks
-  whose template changed and offers to run the `sources sync` flow. Last, it
-  upgrades the Galaxy collections of the wanted tools
-  (`upgradeGalaxyCollections`), without running the playbook. `sources sync`
-  pulls the sources first (`--no-pull` to skip): it is the everyday command
-  after a template change, `update` refreshes everything.
+  `install`, `deploy`, `vars` (list, set, unset), `proxy routes`, `doctor`, and
+  `onboard` (hidden): a company's onboarding script runs it once Homebrew and
+  local-env are installed. It chains `setup --yes` (its `--domain` on the first
+  setup only), `sources add`, `start` and `install` (`--profile`, else the
+  profile select), with one summary at the end
+  (`docs/2-write-a-source/6-onboard-your-team.md`; the script is `onboarding.sh`
+  in the template source). `update` first upgrades local-env with Homebrew when
+  a newer version is out, then hands over to the new version
+  (`src/core/self-update.ts`; a checkout skips it). It refreshes the core stack
+  and the sources, then lists the stacks whose template changed and offers to
+  run the `sources sync` flow. Last, it upgrades the Galaxy collections of the
+  wanted tools (`upgradeGalaxyCollections`), without running the playbook.
+  `sources sync` pulls the sources first (`--no-pull` to skip): it is the
+  everyday command after a template change, `update` refreshes everything.
 - `~/.local-env` (or `$LOCAL_ENV_HOME`) is the home folder: `HOME_DIR` in
   `src/core/paths.ts`. Before each command, `src/core/home.ts` writes the
   shipped files (`compose.yaml`, `services/`) there. The

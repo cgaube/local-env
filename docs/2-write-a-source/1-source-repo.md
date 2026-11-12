@@ -18,7 +18,8 @@ changes too.
 2. In `local-env.yml`, set `name:` and `label:` (see
    [The manifest](#the-manifest)).
 3. Replace the examples with your own templates, roles and profiles, and remove
-   what you don't need. Give your collections your own `namespace:`, not `acme`.
+   what you don't need. Give your collections your own `namespace:`, not `acme`,
+   and set `SOURCE_URL` in `onboarding.sh` to your repo.
 4. Add your repo: `local-env sources add <your repo URL>`.
 
 What it holds:
@@ -35,6 +36,8 @@ What it holds:
   `mise run ansible:check` tries the roles with `--check`.
 - **Prebuilt images:** a GitHub workflow that builds an image and pushes it to
   ghcr.io, run by hand until you turn on its triggers.
+- **Onboarding:** `onboarding.sh`, which sets up a new employee's Mac with one
+  command ([Onboard your team](6-onboard-your-team.md)).
 
 > [!TIP]
 > To try it as it is, add it as a source:

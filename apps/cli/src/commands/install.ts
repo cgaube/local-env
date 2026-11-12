@@ -183,10 +183,130 @@ const showDryRun = (catalog: Role[], roots: Role[], ran: string) => {
   for (const line of describeInputs(inputs)) logger.log(line)
 }
 
+export type InstallOptions = {
+  save: boolean
+  verbose: boolean
+  yes?: boolean
+  dryRun: boolean
+}
+
+// What an install ran: "the Backend profile", and the counts of its tasks
+// (none with --verbose: Ansible's recap says them)
+export type Installed = { ran: string; summary: PlaybookSummary | null }
+
+// The lines of the closing callout: what the install did, its counts dimmed
+export const describeInstalled = ({ ran, summary }: Installed) => [
+  `Installed ${ran}`,
+  ...(summary ? [describeTasks(summary)] : []),
+]
+
 // Tools are picked in the dashboard, which can't run anything on the Mac:
 // this runs what was picked, with the profile. A profile named here, or
 // picked in the select when there is nothing to install, is saved as yours,
-// unless --no-save.
+// unless --no-save. Returns what it installed, or null when it ran nothing
+// (nothing picked, --dry-run, a switch declined). Exits on errors. Run by
+// `local-env install` and `local-env onboard`, which close the frame.
+export const runInstall = async (
+  name: string | undefined,
+  options: InstallOptions,
+): Promise<Installed | null> => {
+  // A dry run writes nothing: as --no-save, and nothing unpicked or
+  // forgotten
+  const write = !options.dryRun
+  let forgotten: string[] = []
+  let catalog: Role[] = []
+  const left: LeftSources = { profile: null, picks: [] }
+  try {
+    catalog = listCatalog()
+    const saved = readSavedProfile(catalog)
+    // Said now: it changes what this install runs. The picks that left
+    // are in the list of the end, with the tools no longer wanted.
+    if (saved.gone) {
+      left.profile = saved.gone
+      logger.warn(
+        `Your profile, ${shortName(saved.gone)}, is no longer in your sources: local-env no longer installs it.`,
+      )
+    }
+    const { roles: picked, missing } = readPickedTools(catalog)
+    if (missing.length > 0 && write) {
+      unpickTools(catalog, missing)
+      left.picks = missing
+    }
+
+    // Named here, or picked in the select when there is nothing else
+    // to install
+    const named =
+      (name ? findProfile(catalog, name) : null) ??
+      (write && !saved.profile && picked.length === 0
+        ? await askProfile(catalog)
+        : null)
+    // Named here, another than yours: asked first, as it changes what
+    // every later install runs
+    if (
+      write &&
+      name &&
+      named &&
+      options.save &&
+      saved.profile &&
+      named.id !== saved.profile.id &&
+      !(await confirmSwitch(saved.profile, named, options))
+    ) {
+      return null
+    }
+    if (named && options.save && write) saveProfile(named)
+    const profile = named ?? saved.profile
+    if (profile) {
+      showProfile(profile, {
+        saved: saved.profile,
+        once: named !== null && !options.save,
+        switched:
+          write &&
+          named !== null &&
+          options.save &&
+          named.id !== saved.profile?.id,
+      })
+    }
+    const roots = [
+      ...(profile ? [profile] : []),
+      ...picked.filter(({ id }) => id !== profile?.id),
+    ]
+    // A profile run once (--no-save) leaves the saved one wanted
+    const kept = named && !options.save ? saved.profile : null
+    if (write) {
+      forgotten = forgetUnwanted(catalog, [...roots, ...(kept ? [kept] : [])])
+    }
+    if (roots.length === 0) {
+      showNothingPicked(catalog)
+      showForgotten(forgotten, catalog, left)
+      return null
+    }
+    if (options.dryRun) {
+      showDryRun(catalog, roots, describeRun(catalog, profile, picked))
+      return null
+    }
+    if (!(await hasCommand('ansible-playbook'))) {
+      throw new Error(
+        'Ansible is not installed. Run `local-env setup`, or `brew install ansible`.',
+      )
+    }
+
+    // Asked first: the install then runs alone
+    const stacks = await planRequiredStacks(catalog, roots, options)
+    const summary = await runPlaybook(catalog, roots, options)
+    const ran = describeRun(catalog, profile, picked)
+    if (stacks) {
+      // Each stack says how it went, in its own group
+      await deployStacks(stacks, 'local-env install')
+    }
+    showForgotten(forgotten, catalog, left)
+    return { ran, summary }
+  } catch (error) {
+    logger.error('Error installing tools:', error)
+    showForgotten(forgotten, catalog, left)
+    process.exit(1)
+  }
+}
+
 export const installCommand = new Command('install')
   .description(
     'Install your profile and the tools picked in the dashboard (Tools)',
@@ -206,122 +326,16 @@ export const installCommand = new Command('install')
     'Show what would install and the values your tools need, without running anything',
     false,
   )
-  .action(
-    async (
-      name: string | undefined,
-      options: {
-        save: boolean
-        verbose: boolean
-        yes?: boolean
-        dryRun: boolean
-      },
-    ) => {
-      // A dry run writes nothing: as --no-save, and nothing unpicked or
-      // forgotten
-      const write = !options.dryRun
-      let forgotten: string[] = []
-      let catalog: Role[] = []
-      const left: LeftSources = { profile: null, picks: [] }
-      try {
-        catalog = listCatalog()
-        const saved = readSavedProfile(catalog)
-        // Said now: it changes what this install runs. The picks that left
-        // are in the list of the end, with the tools no longer wanted.
-        if (saved.gone) {
-          left.profile = saved.gone
-          logger.warn(
-            `Your profile, ${shortName(saved.gone)}, is no longer in your sources: local-env no longer installs it.`,
-          )
-        }
-        const { roles: picked, missing } = readPickedTools(catalog)
-        if (missing.length > 0 && write) {
-          unpickTools(catalog, missing)
-          left.picks = missing
-        }
-
-        // Named here, or picked in the select when there is nothing else
-        // to install
-        const named =
-          (name ? findProfile(catalog, name) : null) ??
-          (write && !saved.profile && picked.length === 0
-            ? await askProfile(catalog)
-            : null)
-        // Named here, another than yours: asked first, as it changes what
-        // every later install runs
-        if (
-          write &&
-          name &&
-          named &&
-          options.save &&
-          saved.profile &&
-          named.id !== saved.profile.id &&
-          !(await confirmSwitch(saved.profile, named, options))
-        ) {
-          return
-        }
-        if (named && options.save && write) saveProfile(named)
-        const profile = named ?? saved.profile
-        if (profile) {
-          showProfile(profile, {
-            saved: saved.profile,
-            once: named !== null && !options.save,
-            switched:
-              write &&
-              named !== null &&
-              options.save &&
-              named.id !== saved.profile?.id,
-          })
-        }
-        const roots = [
-          ...(profile ? [profile] : []),
-          ...picked.filter(({ id }) => id !== profile?.id),
-        ]
-        // A profile run once (--no-save) leaves the saved one wanted
-        const kept = named && !options.save ? saved.profile : null
-        if (write) {
-          forgotten = forgetUnwanted(catalog, [
-            ...roots,
-            ...(kept ? [kept] : []),
-          ])
-        }
-        if (roots.length === 0) {
-          showNothingPicked(catalog)
-          showForgotten(forgotten, catalog, left)
-          return
-        }
-        if (options.dryRun) {
-          showDryRun(catalog, roots, describeRun(catalog, profile, picked))
-          return
-        }
-        if (!(await hasCommand('ansible-playbook'))) {
-          throw new Error(
-            'Ansible is not installed. Run `local-env setup`, or `brew install ansible`.',
-          )
-        }
-
-        // Asked first: the install then runs alone
-        const stacks = await planRequiredStacks(catalog, roots, options)
-        const summary = await runPlaybook(catalog, roots, options)
-        const ran = describeRun(catalog, profile, picked)
-        if (stacks) {
-          // Each stack says how it went, in its own group
-          await deployStacks(stacks, 'local-env install')
-        }
-        showForgotten(forgotten, catalog, left)
-        // Last, in green, its counts dimmed: what the install did, in place
-        // of "Done". Without a summary (--verbose), Ansible's recap says it.
-        closeFrameWithCallout(
-          'success',
-          [
-            `Installed ${ran}`,
-            ...(summary ? [describeTasks(summary)] : []),
-          ].join('\n'),
-          { tinted: true },
-        )
-      } catch (error) {
-        logger.error('Error installing tools:', error)
-        showForgotten(forgotten, catalog, left)
-        process.exit(1)
-      }
-    },
-  )
+  .action(async (name: string | undefined, options: InstallOptions) => {
+    const installed = await runInstall(name, options)
+    // Last, in green, in place of "Done"
+    if (installed) {
+      closeFrameWithCallout(
+        'success',
+        describeInstalled(installed).join('\n'),
+        {
+          tinted: true,
+        },
+      )
+    }
+  })
