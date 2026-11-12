@@ -16,6 +16,10 @@ Any Docker engine for macOS works when it gives:
 
 ## Install and set up
 
+> [!TIP]
+> Your company may give you one command that does all of this page: it installs
+> Homebrew and local-env, adds your team's source and asks for your profile.
+
 ```sh
 brew install cgaube/tap/local-env
 local-env setup

@@ -8,11 +8,16 @@ export const stopCommand = new Command('stop')
   .alias('down')
   .action(async () => {
     try {
+      // As start: a group, then the tasks
+      logger.group('Core stack')
       await runCompose('Stopping services', ['down'], {
         done: 'Services stopped',
       })
       // With the services: `start` brings both back
-      if (await stopAgent()) logger.success('Dashboard agent stopped')
+      if (await stopAgent()) {
+        logger.group('Dashboard agent')
+        logger.success('Dashboard agent stopped')
+      }
     } catch (error) {
       logger.error('Error stopping services:', error)
       process.exit(1)
