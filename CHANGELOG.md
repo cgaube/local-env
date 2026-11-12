@@ -1,5 +1,19 @@
 # local-env
 
+## 0.8.2
+
+### Patch Changes
+
+- 417821d: dnsmasq runs as your own Homebrew service, started at login, not as
+  root. `local-env setup` asks for your password only to write `/etc/resolver`,
+  and `brew uninstall local-env` no longer fails with "Could not remove dnsmasq
+  keg". If an older setup left dnsmasq running as root, stop it once with
+  `sudo brew services stop dnsmasq`, then run `local-env setup`.
+- fa9f1ed: Update dependencies.
+- 417821d: When `local-env setup` trusts the local certificate authority, it
+  says to restart Firefox if it is open: Firefox reads the trusted certificates
+  when it starts, and shows a warning for local-env sites until then.
+
 ## 0.8.1
 
 ### Patch Changes
