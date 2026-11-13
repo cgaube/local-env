@@ -12,12 +12,17 @@ import {
   findLogin,
   getRegistries,
   isIgnored,
+  isTokenExpired,
   listDeclaredRegistries,
   testRegistryLogin,
 } from '#cli/logins/registry.js'
 import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
 import { checkManifest, SESSION_TYPES } from '#cli/logins/index.js'
-import { listAccounts, loginCommandFor } from '#cli/logins/declared.js'
+import {
+  listAccounts,
+  loginCommandFor,
+  loginRef,
+} from '#cli/logins/declared.js'
 import { sessionStatus } from '#cli/logins/session.js'
 import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
 import {
@@ -122,9 +127,11 @@ const checkRegistries = async (): Promise<CheckResult[]> => {
     } else {
       results.push({
         level: 'fail',
-        message: from
-          ? `${host}: the registry rejects the token from ${from}, which has expired. Run \`${loginCommandFor(source, name)}\` for a new one.`
-          : `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(source, name)}\`.`,
+        message: !from
+          ? `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(source, name)}\`.`
+          : isTokenExpired(host)
+            ? `${host}: the token from ${from} has expired. Run \`${loginCommandFor(source, name)}\` for a new one.`
+            : `${host}: the registry rejects the token from ${from}: ${test.message}. Check that ${from} is logged in to the account of ${host}, then run \`${loginCommandFor(source, name)}\`.`,
       })
     }
   }
@@ -151,7 +158,7 @@ const checkLogins = async (): Promise<CheckResult[]> => {
   )
   for (const { type, account } of accounts) {
     const { login } = account
-    const title = `${login.name} (${type.title(login.config)})`
+    const title = `${loginRef(login.source, login.name)} (${type.title(login.config)})`
     const status = await sessionStatus(type, login)
     if (status.state === 'logged-in') {
       results.push({
@@ -357,8 +364,20 @@ const checkHttpsProbe = async (host: string): Promise<CheckResult> => {
   }
 }
 
-// ${HOST_HOME}/dev/app.ini, $HOST_HOME/dev: the path after the home folder
-const HOST_HOME_PATH = /\$\{?HOST_HOME\}?(\/[^\s:'"]*)/g
+// ${HOST_HOME}/dev/app.ini, $HOST_HOME/dev: the path after the home folder.
+// A ${...} in it is one piece: its :- holds a default, not the end of the path.
+const HOST_HOME_PATH = /\$\{?HOST_HOME\}?(\/(?:\$\{[^}]*\}|[^\s:'"])*)/g
+
+// The path with each ${NAME:-default} and ${NAME-default} as its default.
+// Undefined when a variable has none: its value is the stack's, which only
+// Dockhand knows.
+const withDefaults = (path: string) => {
+  const resolved = path.replace(
+    /\$\{[A-Za-z_][A-Za-z0-9_]*:?-([^}]*)\}/g,
+    (_, value: string) => value,
+  )
+  return resolved.includes('$') ? undefined : resolved
+}
 
 // What templates need to deploy: the build port, each source's build-context
 // repo, and the Mac files they mount
@@ -400,8 +419,9 @@ const checkTemplates = async (): Promise<CheckResult[]> => {
       const path = resolveTemplateCompose(`${name}/${folder}`)
       if (!path) continue
       const compose = readFileSync(path, 'utf8')
-      for (const [, rest] of compose.matchAll(HOST_HOME_PATH)) {
-        if (existsSync(join(homedir(), rest!))) continue
+      for (const [, raw] of compose.matchAll(HOST_HOME_PATH)) {
+        const rest = withDefaults(raw!)
+        if (!rest || existsSync(join(homedir(), rest))) continue
         results.push({
           level: 'warn',
           message: `${name}/${folder} mounts ~${rest}, which doesn't exist: Docker would create an empty folder there. Create it before deploying.`,
@@ -538,11 +558,12 @@ export const doctorCommand = new Command('doctor')
       logger.group('Templates')
       for (const result of await checkTemplates()) addResult(result)
 
-      logger.group('Registries')
-      for (const result of await checkRegistries()) addResult(result)
-
+      // Before the registries: their tokens come from the logins' sessions
       logger.group('Logins')
       for (const result of await checkLogins()) addResult(result)
+
+      logger.group('Registries')
+      for (const result of await checkRegistries()) addResult(result)
 
       logger.group('Summary')
       logger.success(

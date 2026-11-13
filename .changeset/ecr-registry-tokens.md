@@ -13,3 +13,8 @@ registry logins, ECR tokens). `local-env login acme/ghcr` logs in to one login
 again, and `local-env logout acme/ghcr` replaces
 `sources logout acme --login ghcr`. Every message names logins as
 `<source>/<name>`.
+
+`local-env doctor` checks the logins before the registries, and says a token has
+expired only when it has: otherwise it shows why the registry rejects it. A
+mounted Mac path like `${HOST_HOME}/${CONFIG_DIR:-.config/app}` is checked with
+the default of its variable, and skipped when the variable has none.
