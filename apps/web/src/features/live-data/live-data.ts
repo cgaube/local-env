@@ -77,6 +77,19 @@ export type Role = {
   secrets?: string[]
 }
 
+// The bootstrap of a source: roles its manifest lists, which local-env runs
+// before the logins (services/dashboard/bootstrap.ts BootstrapStatus)
+export type Bootstrap = {
+  source: string
+  // The ids of the roles the manifest lists, and of every role they include
+  roles: string[]
+  run: string[]
+  // done: ran as it is now; never: never ran; changed: its roles or the
+  // values of their inputs changed since it ran; blocked: can't run
+  state: 'done' | 'never' | 'changed' | 'blocked'
+  problems: string[]
+}
+
 export type Tools = {
   roles: Role[]
   // Ids of the roles picked in the catalog
@@ -101,6 +114,8 @@ export type Tools = {
   // The roles of the installed Galaxy collections: their inputs count once
   // a wanted role includes them
   galaxyRoles: GalaxyRole[]
+  // The sources' bootstraps: not in the Tools catalog, shown on the Overview
+  bootstraps: Bootstrap[]
 }
 
 export type LiveData = {

@@ -85,12 +85,17 @@ export const getSourceUrl = async (name: string) => {
 // the one of the source's manifest (local-env.yml), else the repo's. Returns
 // it, or null when a source of that name is already added: the repo is
 // skipped, whatever it is. `checkManifest` throws when the manifest has
-// something the caller refuses (its logins).
+// something the caller refuses (its logins); `checkSource` when the added
+// source has (a bootstrap that needs a login), which removes it.
 export const addSource = async (
   location: string,
   {
     checkManifest,
-  }: { checkManifest?: (manifest: SourceManifest) => void } = {},
+    checkSource,
+  }: {
+    checkManifest?: (manifest: SourceManifest) => void
+    checkSource?: (name: string) => void
+  } = {},
 ) => {
   let origin = location
   if (isLocalPath(location)) {
@@ -145,6 +150,15 @@ export const addSource = async (
       return null
     }
     renameSync(cloned, dir)
+    // Its roles are read from the sources folder, with the other sources'
+    try {
+      checkSource?.(name)
+    } catch (error) {
+      rmSync(dir, { recursive: true, force: true })
+      throw new Error(
+        `${location}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     if (name !== repoName) logger.info(`Added as ${name}`)
     await syncBuildContext(name)
     return name

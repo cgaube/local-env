@@ -107,6 +107,7 @@ describe('the overview', () => {
         stacks: {},
         variables: {},
         galaxyRoles: [],
+        bootstraps: [],
       })
     })
 

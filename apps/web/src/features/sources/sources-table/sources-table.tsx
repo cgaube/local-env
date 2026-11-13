@@ -1,6 +1,8 @@
 import type { LoginRow } from '#services/dashboard/agent-protocol.ts'
 import type { Source } from '#ui/features/live-data/live-data.ts'
 import { LoginState } from '#ui/features/logins/login-state'
+import { BootstrapState } from '#ui/features/bootstrap/bootstrap-state'
+import type { BootstrapRow } from '#ui/features/bootstrap/bootstrap.ts'
 import { plural } from '#ui/lib/plural.ts'
 
 // "8 templates · 16 roles", what a source offers
@@ -16,15 +18,18 @@ const contentOf = ({ docker, ansible }: Source) =>
 const originOf = (origin: string | null) =>
   origin?.replace(/^https?:\/\//, '').replace(/\.git$/, '') ?? null
 
-// The sources, a panel each: what it is and offers, then the accounts it
-// needs, as the dashboard agent checked them (logins: null when it could
-// not, not running or still checking)
+// The sources, a panel each: what it is and offers, then its bootstrap and
+// the accounts it needs, as the dashboard agent checked them (logins: null
+// when it could not, not running or still checking)
 export function SourcesTable({
   sources,
   logins,
+  bootstraps,
 }: {
   sources: Source[]
   logins: LoginRow[] | null
+  // By source
+  bootstraps: Map<string, BootstrapRow>
 }) {
   return (
     <ul className="flex flex-col gap-3">
@@ -32,6 +37,7 @@ export function SourcesTable({
         const own = logins?.filter(({ sources: of }) =>
           of.includes(source.name),
         )
+        const bootstrap = bootstraps.get(source.name)
         return (
           <li
             key={source.name}
@@ -53,9 +59,10 @@ export function SourcesTable({
                 {contentOf(source)}
               </span>
             </div>
-            {own?.length ? (
+            {bootstrap || own?.length ? (
               <div className="border-border flex flex-col gap-2 border-t pt-3">
-                {own.map((login) => (
+                {bootstrap ? <BootstrapState bootstrap={bootstrap} /> : null}
+                {own?.map((login) => (
                   <LoginState
                     key={`${login.type}:${login.title}:${login.name}`}
                     login={login}

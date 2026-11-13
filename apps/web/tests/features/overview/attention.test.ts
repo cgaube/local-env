@@ -131,4 +131,67 @@ describe('attentionItems', () => {
       ],
     ])
   })
+
+  test('gives the command for a bootstrap that never ran or changed, nothing for one that is done', () => {
+    const bootstrap = {
+      source: 'acme',
+      roles: ['acme/granted'],
+      run: ['acme/granted'],
+      problems: [],
+      labels: ['Granted'],
+    }
+    const items = attentionItems({
+      services: [buildService()],
+      agent: AGENT,
+      logins: undefined,
+      tools: NO_TOOLS,
+      bootstraps: [
+        { ...bootstrap, state: 'never' },
+        { ...bootstrap, source: 'beta', state: 'changed' },
+        { ...bootstrap, source: 'done', state: 'done' },
+      ],
+    })
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        title: 'The bootstrap of acme never ran',
+        action: {
+          kind: 'command',
+          command: 'local-env sources bootstrap acme',
+        },
+      }),
+      expect.objectContaining({
+        title: 'The bootstrap of beta changed',
+        action: {
+          kind: 'command',
+          command: 'local-env sources bootstrap beta',
+        },
+      }),
+    ])
+  })
+
+  test("says why a bootstrap can't run, without a command", () => {
+    const [item] = attentionItems({
+      services: [buildService()],
+      agent: AGENT,
+      logins: undefined,
+      tools: NO_TOOLS,
+      bootstraps: [
+        {
+          source: 'acme',
+          roles: ['acme/granted'],
+          run: ['acme/granted'],
+          state: 'blocked',
+          problems: ['Granted names logins (acme-dev)'],
+          labels: ['Granted'],
+        },
+      ],
+    })
+
+    expect(item).toMatchObject({
+      title: "The bootstrap of acme can't run",
+      detail: 'Granted names logins (acme-dev)',
+      action: null,
+    })
+  })
 })

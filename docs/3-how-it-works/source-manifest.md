@@ -1,7 +1,7 @@
 # Source manifest
 
 Status: done for `name` and `label`. [Logins](logins.md) reads `logins` and
-`secrets`.
+`secrets`. [Source bootstrap](source-bootstrap.md) reads `bootstrap`.
 
 ## What it does
 
@@ -18,6 +18,8 @@ logins: # see Logins
     # …
 secrets: # see Logins: the variable each secret fills, and where it is
   github_token: { login: acme-dev, ref: platform/dev/github, field: token }
+bootstrap: # see Source bootstrap: roles run before the logins
+  - acme.platform.aws_access
 ```
 
 - `name` is required in a manifest. It is lowercase letters, digits and `-`,
@@ -25,6 +27,10 @@ secrets: # see Logins: the variable each secret fills, and where it is
 - `label` is optional, free text. Without it, local-env shows the `name`.
 - `logins` and `secrets` are optional. [Logins](logins.md) explains them.
   `sources add` refuses a manifest whose logins or secrets are not valid.
+- `bootstrap` is optional: the roles that make the Mac ready for the logins.
+  [Source bootstrap](source-bootstrap.md) explains it. `sources add` refuses a
+  bootstrap role that no source has, or that gets a secret, names a login or
+  needs a stack.
 - `local-env sources add <repo>` reads the manifest of the repo before it clones
   it into `volumes/sources/<name>`. With a manifest, the folder is the `name` of
   the manifest.
@@ -68,8 +74,8 @@ flowchart TD
 ```
 
 - `services/dashboard/source-manifest.ts` reads and checks the manifest:
-  `readSourceManifest(dir)` gives `{ name, label, logins }`, `null` without a
-  file, or throws a `SourceManifestError` that names the field.
+  `readSourceManifest(dir)` gives `{ name, label, logins, secrets, bootstrap }`,
+  `null` without a file, or throws a `SourceManifestError` that names the field.
   `tryReadSourceManifest` gives `null` for a manifest that is not valid: for
   what only shows it. It imports nothing of the CLI, so the dashboard
   (`server.ts`, the `label` of each source) and the CLI share it.

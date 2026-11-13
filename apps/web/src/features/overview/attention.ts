@@ -7,6 +7,10 @@ import type { WantedInput } from '#services/dashboard/role-graph.ts'
 import { accountLabel, stateLabel } from '#ui/features/logins/logins.ts'
 import { tone } from '#ui/features/status/tone.ts'
 import { plural } from '#ui/lib/plural.ts'
+import {
+  bootstrapCommand,
+  type BootstrapRow,
+} from '#ui/features/bootstrap/bootstrap.ts'
 
 // What needs you, at the top of the overview: each problem the dashboard
 // can see, with what to do about it. A command to run in your terminal (the
@@ -42,11 +46,34 @@ const loginItem = (login: LoginRow): AttentionItem => ({
   action: login.command ? { kind: 'command', command: login.command } : null,
 })
 
+// A bootstrap that never ran, changed since it ran, or can't run
+const bootstrapItem = (bootstrap: BootstrapRow): AttentionItem => {
+  const roles = bootstrap.labels.join(', ')
+  if (bootstrap.state === 'blocked') {
+    return {
+      id: `bootstrap:${bootstrap.source}`,
+      title: `The bootstrap of ${bootstrap.source} can't run`,
+      detail: bootstrap.problems.join(' '),
+      action: null,
+    }
+  }
+  return {
+    id: `bootstrap:${bootstrap.source}`,
+    title:
+      bootstrap.state === 'changed'
+        ? `The bootstrap of ${bootstrap.source} changed`
+        : `The bootstrap of ${bootstrap.source} never ran`,
+    detail: `${roles}: it makes your Mac ready for the logins of ${bootstrap.source}. Install runs it first.`,
+    action: { kind: 'command', command: bootstrapCommand(bootstrap.source) },
+  }
+}
+
 export const attentionItems = ({
   services,
   agent,
   logins,
   tools,
+  bootstraps = [],
 }: {
   // null until the server sent them
   services: Service[] | null
@@ -59,6 +86,8 @@ export const attentionItems = ({
     missing: WantedInput[]
     secrets: WantedInput[]
   }
+  // The sources' bootstraps (bootstrapRows)
+  bootstraps?: BootstrapRow[]
 }): AttentionItem[] => {
   const items: AttentionItem[] = []
 
@@ -95,6 +124,10 @@ export const attentionItems = ({
 
   if (logins?.available) {
     items.push(...logins.logins.filter(needsYou).map(loginItem))
+  }
+
+  for (const bootstrap of bootstraps.filter(({ state }) => state !== 'done')) {
+    items.push(bootstrapItem(bootstrap))
   }
 
   if (tools.secrets.length > 0) {

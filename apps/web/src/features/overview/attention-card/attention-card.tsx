@@ -1,3 +1,4 @@
+import { bootstrapRows } from '#ui/features/bootstrap/bootstrap.ts'
 import type { LucideIcon } from 'lucide-react'
 import {
   CircleCheckIcon,
@@ -79,10 +80,16 @@ const countTitle = (count: number) =>
 // page knows: the core services, the agent, the logins it checked and the
 // tools of the next install.
 export function AttentionCard() {
-  const { services, agent } = useLiveData()
+  const { services, agent, tools: live } = useLiveData()
   const logins = useLogins()
   const tools = useToolChanges()
-  const items = attentionItems({ services, agent, logins: logins.data, tools })
+  const items = attentionItems({
+    services,
+    agent,
+    logins: logins.data,
+    tools,
+    bootstraps: [...bootstrapRows(live).values()],
+  })
   const checking = !services || !agent
 
   return (

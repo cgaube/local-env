@@ -84,6 +84,7 @@ export const buildTools = (overrides: Partial<Tools> = {}): Tools => ({
   stacks: {},
   variables: {},
   galaxyRoles: [],
+  bootstraps: [],
   ...overrides,
 })
 
