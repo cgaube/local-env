@@ -91,9 +91,15 @@
     },
     "registry": {
       "type": "object",
-      "description": "A registry of private images. local-env asks the user for a username and a token, which Dockhand keeps.",
+      "description": "A registry of private images. local-env asks the user for a username and a token, which Dockhand keeps. For a registry whose tokens expire (AWS ECR), login names a login that gets them: local-env saves a new token in Dockhand with its session.",
       "required": ["type", "host"],
       "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          { "required": ["login", "usernameHelp"] },
+          { "required": ["login", "tokenHelp"] }
+        ]
+      },
       "properties": {
         "type": {
           "const": "registry"
@@ -110,6 +116,11 @@
         "tokenHelp": {
           "type": "string",
           "description": "Shown when local-env asks for the token: what to give, and where to get it."
+        },
+        "login": {
+          "type": "string",
+          "pattern": "^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$",
+          "description": "The login whose session gets the tokens, by name, or <source>/<name> for a login of another source. Today an aws login, for an ECR host (<account>.dkr.ecr.<region>.amazonaws.com). local-env asks for nothing and saves a new token in Dockhand on start, sources sync, deploy, install, update and local-env login."
         }
       }
     },

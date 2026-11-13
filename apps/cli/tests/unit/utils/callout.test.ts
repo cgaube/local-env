@@ -56,6 +56,14 @@ describe('formatCallout', () => {
     )
   })
 
+  test('closes the frame right under a title alone, with a thin corner', () => {
+    expect(
+      plain(
+        formatCallout('success', 'All set', { columns: 80, closing: true }),
+      ),
+    ).toEqual(['│', '◆  All set', '└'])
+  })
+
   test("has each level's own symbol", () => {
     const symbol = (level: Parameters<typeof formatCallout>[0]) =>
       plain(formatCallout(level, 'Title', { columns: 80 }))[1]?.[0]

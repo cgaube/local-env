@@ -105,6 +105,38 @@ describe.concurrent('local-env doctor', () => {
     )
   })
 
+  test('checks the default of a variable in a mounted Mac path, and skips a variable without one', async () => {
+    await using cli = await createCli({ dockhand: provisionedDockhand() })
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    dnsWorking(cli)
+    const acme = cli.createSource('acme', {
+      templates: [
+        buildTemplate({
+          folder: 'tester',
+          compose: [
+            'name: tester',
+            'services:',
+            '  tester:',
+            '    image: tester:1',
+            '    volumes:',
+            '      - ${HOST_HOME}/${CONFIG_DIR:-.config/tester}:/config',
+            '      - ${HOST_HOME}/${DATA_DIR}/data:/data',
+            '',
+          ].join('\n'),
+        }),
+      ],
+    })
+    await cli.run(['sources', 'add', acme.dir])
+
+    const result = await cli.run(['doctor'])
+
+    expect(result.output).toContain(
+      "▲ acme/tester mounts ~/.config/tester, which doesn't exist",
+    )
+    expect(result.output).not.toContain('mounts ~/${')
+  })
+
   test('rejects an invalid --domain', async () => {
     await using cli = await createCli()
 

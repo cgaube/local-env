@@ -1,4 +1,11 @@
-import { S_BAR, S_ERROR, S_INFO, S_SUCCESS, S_WARN } from '@clack/prompts'
+import {
+  S_BAR,
+  S_BAR_END,
+  S_ERROR,
+  S_INFO,
+  S_SUCCESS,
+  S_WARN,
+} from '@clack/prompts'
 import { stripVTControlCharacters, styleText } from 'node:util'
 
 // A callout on clack's guide line: the level's symbol and a bold title, then
@@ -9,6 +16,9 @@ import { stripVTControlCharacters, styleText } from 'node:util'
 //   ┃  They run an older version of local-env: dashboard.
 //   ┃  Run `local-env start` to update them.
 //   ┃
+//
+// A title alone that closes the frame is two lines: `◆  All logins work`,
+// then clack's thin corner, └.
 
 export type CalloutLevel = 'info' | 'success' | 'warn' | 'error'
 
@@ -89,8 +99,15 @@ export const formatCallout = (
             ),
         ]
       : []),
-    ...(padded ? [styleText(color, BAR)] : []),
-    // After the padding: the corner closes the frame
-    ...(closing ? [styleText(color, CORNER)] : []),
+    // A bar line after the text, but not between a title alone and the
+    // corner: an empty line there
+    ...(padded && (lines.length > 0 || !closing)
+      ? [styleText(color, BAR)]
+      : []),
+    // After the padding: the corner closes the frame. Thin under a title
+    // alone, as clack's: there is no thick bar to end
+    ...(closing
+      ? [styleText(color, lines.length > 0 ? CORNER : S_BAR_END)]
+      : []),
   ]
 }

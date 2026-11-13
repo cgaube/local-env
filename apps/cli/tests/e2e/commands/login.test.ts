@@ -4,7 +4,10 @@ import {
   provisionedDockhand,
 } from '#cli-tests/support/factories/dockhand.js'
 import { dockerRunning, machineReady } from '#cli-tests/support/machine.js'
-import { manifestFiles } from '#cli-tests/support/factories/manifest.js'
+import {
+  loginNameFor,
+  manifestFiles,
+} from '#cli-tests/support/factories/manifest.js'
 import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 const TOKEN = 'ghp_secret_token_1234'
@@ -89,7 +92,7 @@ describe.concurrent('local-env sources add, registry logins', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(
-      'ghcr.io: acme needs a login to pull private images. Run `local-env sources login acme` to log in.',
+      'ghcr.io: acme needs a login to pull private images. Run `local-env login` to log in.',
     )
     expect(cli.dockhand.state.registries).toEqual([])
   })
@@ -125,10 +128,9 @@ describe.concurrent('local-env start, registry logins', () => {
         ignored: ['registry:ghcr.io'],
       })
 
-      await cli.run(
-        ['sources', 'login', 'acme', '-u', 'octocat', '--password-stdin'],
-        { stdin: TOKEN },
-      )
+      await cli.run(['login', 'ghcr-io', '-u', 'octocat', '--password-stdin'], {
+        stdin: TOKEN,
+      })
       expect(cli.home.readJson('volumes/logins.json')).toMatchObject({
         ignored: [],
       })
@@ -160,7 +162,7 @@ describe.concurrent('local-env start, registry logins', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(
-      'ghcr.io rejected the login: Authentication failed — check username and password. Run `local-env sources login acme` to log in.',
+      'ghcr.io rejected the login: Authentication failed — check username and password. Run `local-env login` to log in.',
     )
     expect(result.output).not.toContain(TOKEN)
     expect(cli.dockhand.state.registries).toEqual([])
@@ -168,6 +170,7 @@ describe.concurrent('local-env start, registry logins', () => {
 })
 
 const QUAY = { host: 'quay.io' }
+const ECR_HOST = '123456789012.dkr.ecr.us-east-1.amazonaws.com'
 
 // Adds one more source that needs these registries
 const addSource = async (
@@ -182,7 +185,6 @@ const addSource = async (
 }
 
 const stdinLogin = (...args: string[]) => [
-  'sources',
   'login',
   ...args,
   '-u',
@@ -190,18 +192,18 @@ const stdinLogin = (...args: string[]) => [
   '--password-stdin',
 ]
 
-describe.concurrent('local-env sources login', () => {
+describe.concurrent('local-env login', () => {
   test.skipIf(COMPILED)(
-    'asks for the username and the token, then saves them',
+    'asks for the registry logins Dockhand lacks, then saves them',
     async () => {
       await using cli = await createCliWithSource()
 
-      const result = await cli.run(['sources', 'login', 'acme'], {
-        answers: logIn.slice(1),
-      })
+      const result = await cli.run(['login'], { answers: logIn.slice(1) })
 
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('Logged in to ghcr.io as octocat')
+      expect(result.output).toContain(
+        '✔ acme/ghcr-io  ghcr.io  logged in as octocat',
+      )
       expect(result.output).not.toContain(TOKEN)
       expect(cli.dockhand.requests).toContainEqual(
         expect.objectContaining({
@@ -217,14 +219,15 @@ describe.concurrent('local-env sources login', () => {
   )
 
   test.skipIf(COMPILED)(
-    'lists the sources that need a login, then logs in to the one picked',
+    'asks only for the logins that do not work, in every source',
     async () => {
-      await using cli = await createCliWithSource()
+      await using cli = await createCliWithSource([GHCR], {
+        registries: [buildDockhandRegistry()],
+      })
       await addSource(cli, 'beta', [QUAY])
 
-      const result = await cli.run(['sources', 'login'], {
+      const result = await cli.run(['login'], {
         answers: [
-          { ask: 'Which source do you want to log in to?', answer: 'beta' },
           { ask: 'Username for quay.io', answer: 'robot' },
           { ask: 'Token for quay.io', answer: TOKEN },
         ],
@@ -232,55 +235,87 @@ describe.concurrent('local-env sources login', () => {
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain(
-        'ghcr-io  ghcr.io  no login: local-env sources login acme --login ghcr-io',
-      )
-      expect(result.output).toContain(
-        'quay-io  quay.io  no login: local-env sources login beta --login quay-io',
+        '✔ acme/ghcr-io  ghcr.io  logged in as octocat',
       )
       // No hint when the source gives none
       expect(result.questions).toEqual([
-        'Which source do you want to log in to?',
         'Username for quay.io',
         'Token for quay.io',
       ])
-      expect(cli.dockhand.state.registries).toEqual([
-        expect.objectContaining({ url: 'quay.io', username: 'robot' }),
-      ])
-    },
-  )
-
-  test.skipIf(COMPILED)(
-    'asks before logging in again to a registry with a login',
-    async () => {
-      await using cli = await createCliWithSource([GHCR, QUAY], {
-        registries: [buildDockhandRegistry()],
-      })
-
-      const result = await cli.run(['sources', 'login', 'acme'], {
-        answers: [
-          {
-            ask: 'ghcr.io: logged in as octocat. Log in again?',
-            answer: false,
-          },
-          { ask: 'Username for quay.io', answer: 'robot' },
-          { ask: 'Token for quay.io', answer: TOKEN },
-        ],
-      })
-
-      expect(result.exitCode).toBe(0)
       expect(registryWrites(cli)).toEqual([
         expect.objectContaining({ method: 'POST', path: '/registries' }),
       ])
     },
   )
 
+  test.skipIf(COMPILED)(
+    'logs in again to a named login that works',
+    async () => {
+      await using cli = await createCliWithSource([GHCR, QUAY], {
+        registries: [buildDockhandRegistry()],
+      })
+
+      const result = await cli.run(['login', 'acme/ghcr-io'], {
+        answers: [
+          {
+            ask: 'Username for ghcr.io (your GitHub username)',
+            answer: 'hubot',
+          },
+          {
+            ask: 'Token for ghcr.io (a classic token with read:packages)',
+            answer: TOKEN,
+          },
+        ],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(registryWrites(cli)).toEqual([
+        expect.objectContaining({ method: 'PUT', path: '/registries/1' }),
+      ])
+    },
+  )
+
+  test.skipIf(COMPILED)(
+    'asks only for the token of an ECR host: its username is AWS',
+    async () => {
+      await using cli = await createCliWithSource([{ host: ECR_HOST }])
+
+      const result = await cli.run(['login'], {
+        answers: [{ ask: `Token for ${ECR_HOST}`, answer: TOKEN }],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(cli.dockhand.state.registries).toEqual([
+        expect.objectContaining({ url: ECR_HOST, username: 'AWS' }),
+      ])
+    },
+  )
+
+  test('needs no --username for an ECR host, with the token from stdin', async () => {
+    await using cli = await createCliWithSource([{ host: ECR_HOST }])
+    const name = `acme/${loginNameFor(ECR_HOST)}`
+
+    const result = await cli.run(['login', name, '--password-stdin'], {
+      stdin: TOKEN,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.dockhand.state.registries).toEqual([
+      expect.objectContaining({ url: ECR_HOST, username: 'AWS' }),
+    ])
+  })
+
   test('reads the token from stdin', async () => {
     await using cli = await createCliWithSource()
 
-    const result = await cli.run(stdinLogin('acme'), { stdin: `${TOKEN}\n` })
+    const result = await cli.run(stdinLogin('ghcr-io'), {
+      stdin: `${TOKEN}\n`,
+    })
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Logged in to ghcr.io as octocat')
+    expect(result.output).toContain(
+      '✔ acme/ghcr-io  ghcr.io  logged in as octocat',
+    )
     expect(cli.dockhand.state.registries).toEqual([
       expect.objectContaining({
         url: 'ghcr.io',
@@ -290,17 +325,15 @@ describe.concurrent('local-env sources login', () => {
     ])
   })
 
-  test('needs --login with the token from stdin, for several registries', async () => {
+  test('needs one named registry login with the token from stdin', async () => {
     await using cli = await createCliWithSource([GHCR, QUAY])
 
-    const missing = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
-    const given = await cli.run(stdinLogin('acme', '--login', 'quay-io'), {
-      stdin: TOKEN,
-    })
+    const missing = await cli.run(stdinLogin(), { stdin: TOKEN })
+    const given = await cli.run(stdinLogin('acme/quay-io'), { stdin: TOKEN })
 
     expect(missing.exitCode).toBe(1)
     expect(missing.output).toContain(
-      'acme needs several registries (ghcr.io, quay.io): give --login.',
+      '--username and --password-stdin are for one registry login that you type',
     )
     expect(given.exitCode).toBe(0)
     expect(cli.dockhand.state.registries).toEqual([
@@ -314,35 +347,42 @@ describe.concurrent('local-env sources login', () => {
       { ...GHCR, host: 'https://GHCR.io/team-b' },
     ])
 
-    const result = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
+    const result = await cli.run(stdinLogin('ghcr-io-team-a'), {
+      stdin: TOKEN,
+    })
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain('Logged in to ghcr.io as octocat')
     expect(registryWrites(cli)).toEqual([
       expect.objectContaining({ method: 'POST', path: '/registries' }),
     ])
   })
 
-  test('refuses a login the source does not declare', async () => {
+  test('asks for <source>/<name> when sources share a login name', async () => {
+    await using cli = await createCliWithSource()
+    await addSource(cli, 'beta', [GHCR])
+
+    const shared = await cli.run(stdinLogin('ghcr-io'), { stdin: TOKEN })
+    const named = await cli.run(stdinLogin('beta/ghcr-io'), { stdin: TOKEN })
+
+    expect(shared.exitCode).toBe(1)
+    expect(shared.output).toContain(
+      'Several sources have a login named "ghcr-io": acme/ghcr-io, beta/ghcr-io.',
+    )
+    expect(named.exitCode).toBe(0)
+  })
+
+  test('refuses a login no source declares', async () => {
     await using cli = await createCliWithSource()
 
-    const result = await cli.run(stdinLogin('acme', '--login', 'quay'), {
+    const unknown = await cli.run(stdinLogin('quay'), { stdin: TOKEN })
+    const otherSource = await cli.run(stdinLogin('nope/ghcr-io'), {
       stdin: TOKEN,
     })
 
-    expect(result.exitCode).toBe(1)
-    expect(result.output).toContain(
-      'acme has no login named "quay", only ghcr-io.',
-    )
-  })
-
-  test('refuses an unknown source', async () => {
-    await using cli = await createCliWithSource()
-
-    const result = await cli.run(stdinLogin('nope'), { stdin: TOKEN })
-
-    expect(result.exitCode).toBe(1)
-    expect(result.output).toContain('No source named "nope"')
+    for (const result of [unknown, otherSource]) {
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain('No source has a login named')
+    }
   })
 
   test('updates the login of the host and leaves the others alone', async () => {
@@ -362,7 +402,7 @@ describe.concurrent('local-env sources login', () => {
       ],
     })
 
-    const result = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
+    const result = await cli.run(stdinLogin('ghcr-io'), { stdin: TOKEN })
 
     expect(result.exitCode).toBe(0)
     expect(registryWrites(cli)).toEqual([
@@ -387,7 +427,7 @@ describe.concurrent('local-env sources login', () => {
       message: 'Authentication token rejected (HTTP 401)',
     }))
 
-    const result = await cli.run(stdinLogin('acme'), { stdin: TOKEN })
+    const result = await cli.run(stdinLogin('ghcr-io'), { stdin: TOKEN })
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
@@ -397,35 +437,28 @@ describe.concurrent('local-env sources login', () => {
     expect(cli.dockhand.state.registries).toEqual([])
   })
 
-  test('needs --username and --password-stdin without a terminal', async () => {
+  test('only says what to run without a terminal', async () => {
     await using cli = await createCliWithSource()
 
-    const result = await cli.run(['sources', 'login', 'acme'], { env: NO_TTY })
+    const result = await cli.run(['login'], { env: NO_TTY })
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'Give --username and --password-stdin to log in without a terminal.',
+      'acme/ghcr-io (ghcr.io): no login. Run `local-env login acme/ghcr-io` in a terminal, or give --username and --password-stdin.',
     )
   })
-})
 
-// Snapshots can't run concurrently
-describe('local-env sources login, without a name', () => {
-  test('lists the sources that need a login, and their login', async () => {
-    await using cli = await createCliWithSource([GHCR, QUAY], {
-      registries: [buildDockhandRegistry()],
-    })
-    await addSource(cli, 'beta', [QUAY])
-    await addSource(cli, 'plain', [])
+  test('says so when no source needs a login', async () => {
+    await using cli = await createCliWithSource([])
 
-    const result = await cli.run(['sources', 'login'], { env: NO_TTY })
+    const result = await cli.run(['login'], { env: NO_TTY })
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toMatchSnapshot()
+    expect(result.output).toContain('No source needs a login')
   })
 })
 
-describe.concurrent('local-env sources logout', () => {
+describe.concurrent('local-env logout', () => {
   test('removes the login of the host only, and names the sources that share it', async () => {
     const team = buildDockhandRegistry({ id: 2, url: 'ghcr.io/team' })
     await using cli = await createCliWithSource([GHCR], {
@@ -433,7 +466,7 @@ describe.concurrent('local-env sources logout', () => {
     })
     await addSource(cli, 'beta', [GHCR])
 
-    const result = await cli.run(['sources', 'logout', 'acme'])
+    const result = await cli.run(['logout', 'acme/ghcr-io'])
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('Logged out of ghcr.io, also used by beta')
@@ -441,16 +474,19 @@ describe.concurrent('local-env sources logout', () => {
   })
 
   test.skipIf(COMPILED)(
-    'lists the sources with a login, then logs out of the one picked',
+    'lists the logins, then logs out of the one picked',
     async () => {
       await using cli = await createCliWithSource([GHCR], {
         registries: [buildDockhandRegistry()],
       })
       await addSource(cli, 'beta', [QUAY])
 
-      const result = await cli.run(['sources', 'logout'], {
+      const result = await cli.run(['logout'], {
         answers: [
-          { ask: 'Which source do you want to log out of?', answer: 'acme' },
+          {
+            ask: 'Which login do you want to log out of?',
+            answer: 'acme/ghcr-io',
+          },
         ],
       })
 
@@ -460,31 +496,16 @@ describe.concurrent('local-env sources logout', () => {
     },
   )
 
-  test('logs out of a host the source lists twice once', async () => {
-    await using cli = await createCliWithSource(
-      [{ host: 'ghcr.io/team-a' }, { host: 'ghcr.io/team-b' }],
-      { registries: [buildDockhandRegistry()] },
-    )
-
-    const result = await cli.run(['sources', 'logout', 'acme'])
-
-    expect(result.exitCode).toBe(0)
-    expect(registryWrites(cli)).toEqual([
-      expect.objectContaining({ method: 'DELETE' }),
-    ])
-    expect(cli.dockhand.state.registries).toEqual([])
-  })
-
   test('needs a name without a terminal', async () => {
     await using cli = await createCliWithSource([GHCR], {
       registries: [buildDockhandRegistry()],
     })
 
-    const result = await cli.run(['sources', 'logout'], { env: NO_TTY })
+    const result = await cli.run(['logout'], { env: NO_TTY })
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'Name the source to log out of: `local-env sources logout <name>`',
+      'Name the login to log out of: `local-env logout <source>/<name>`',
     )
     expect(cli.dockhand.state.registries).toHaveLength(1)
   })
@@ -506,10 +527,10 @@ describe.concurrent('local-env doctor, registry logins', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      '✗ ghcr.io: the registry rejects the login of octocat: Authentication token rejected (HTTP 401). Run `local-env sources login acme`.',
+      '✗ ghcr.io: the registry rejects the login of octocat: Authentication token rejected (HTTP 401). Run `local-env login acme/ghcr-io`.',
     )
     expect(result.output).toContain(
-      '▲ quay.io: no login, needed by acme. Run `local-env sources login acme`.',
+      '▲ quay.io: no login, needed by acme. Run `local-env login acme/quay-io`.',
     )
     expect(cli.dockhand.requests).toContainEqual(
       expect.objectContaining({

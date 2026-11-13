@@ -154,16 +154,15 @@ it, and logs in to the registry before each deploy. To log in, change the token
 or remove it:
 
 ```sh
-local-env sources login       # the sources that need a login, and their login
-local-env sources login acme-platform  # asks for each login of the source
-echo "$TOKEN" | local-env sources login acme-platform --login ghcr -u octocat --password-stdin
-local-env sources logout acme-platform
+local-env login                       # every login that does not work, in every source
+local-env login acme-platform/ghcr    # this one, again
+echo "$TOKEN" | local-env login acme-platform/ghcr -u octocat --password-stdin
+local-env logout acme-platform/ghcr
 ```
 
-`sources login` asks for each login of the source that is missing. For a login
-that exists, it asks first if the user wants to log in again. `--login` selects
-one login of the source. A registry login is for a host, not for a source:
-sources that use the same host use the same login.
+`local-env login` asks for each login that is missing, and leaves the others. A
+named login (`<source>/<login>`) is asked again. A registry login is for a host,
+not for a source: sources that use the same host use the same login.
 
 `local-env sources list` shows whether each source that needs a login has one.
 `local-env doctor` tests each login against its registry.
@@ -175,6 +174,49 @@ access to the packages of all the organizations of the user.
 
 Docker keeps one login for each host. Thus, sources that need two different
 accounts on the same host cannot both work.
+
+#### AWS ECR
+
+AWS ECR takes no fixed login: the username is `AWS` and the password is a token
+of `aws ecr get-login-password`, which expires after 12 hours. For an ECR host,
+add `login` to the registry login. It names an
+[aws login](../3-how-it-works/logins.md) of the manifest, and local-env gets the
+tokens with its session:
+
+```yaml
+# local-env.yml
+logins:
+  acme-dev:
+    type: aws
+    profile: acme-dev # or sso: { startUrl, region, accountId, roleName }
+  ecr:
+    type: registry
+    host: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+    login: acme-dev
+```
+
+local-env asks for no username or token. On `start`, `update`, `sources sync`,
+`deploy` and `install`, it gets a new token when the one in Dockhand has lived
+half of its 12 hours, and saves it in Dockhand as the user `AWS`. The token is
+for the region of the host. When the aws login is logged out, local-env offers
+to log in; without a terminal, it only shows the command to run.
+`local-env login` does the same, and `local-env login <source>/ecr` gets a new
+token at once, even when the one in Dockhand is fresh.
+
+Without `login`, an ECR registry is a login the user types: local-env asks only
+for the token, as the username is always `AWS`. Say how to get one in
+`tokenHelp` (`run: aws ecr get-login-password --region us-east-1`). The user
+types a new token every 12 hours.
+
+`login` takes the name of a login of the same source, or `<source>/<name>` for a
+login of another source, without `usernameHelp` or `tokenHelp`. Today only an
+`aws` login gets registry tokens, for ECR hosts. Registries of other clouds
+whose tokens expire (Azure ACR, Google Artifact Registry) would each need a
+login type of their own.
+
+Dockhand checks for new images in the background, between commands. 12 hours
+after the last token, it skips the ECR images, until the next local-env command
+gets a new token: running apps are not affected.
 
 ### Secrets
 

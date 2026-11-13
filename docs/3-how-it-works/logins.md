@@ -11,11 +11,11 @@ missing, and shows their state.
 
 There are three types of login:
 
-| Type       | For                                      | The credential                                  |
-| ---------- | ---------------------------------------- | ----------------------------------------------- |
-| `registry` | Private images of the source's templates | A token that the user types. Dockhand keeps it. |
-| `aws`      | AWS Secrets Manager, read by roles       | The AWS CLI's SSO session (`~/.aws/sso/cache`)  |
-| `vault`    | HashiCorp Vault, read by roles           | The Vault CLI's token (`~/.vault-token`)        |
+| Type       | For                                      | The credential                                                                              |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `registry` | Private images of the source's templates | A token that the user types, or for AWS ECR a token from an `aws` login. Dockhand keeps it. |
+| `aws`      | AWS Secrets Manager, read by roles       | The AWS CLI's SSO session (`~/.aws/sso/cache`)                                              |
+| `vault`    | HashiCorp Vault, read by roles           | The Vault CLI's token (`~/.vault-token`)                                                    |
 
 local-env never keeps an AWS or a Vault secret. Roles read their secrets with
 the vendor's CLI, which uses the session. local-env makes sure that the CLI is
@@ -81,27 +81,36 @@ logins:
   `environment: "{{ local_env.logins['acme-dev'].env }}"`.
 
 - A registry login is not named by anything. The images of the templates need
-  it.
+  it. An ECR registry names an `aws` login (`login: acme-dev`), whose session
+  gets its tokens: see [Registry tokens](#registry-tokens).
 - `local-env install` handles the logins of the wanted roles before the
   playbook: it installs the CLI, configures it, checks the session, and logs in.
-- `local-env sources login [source] [--login <name>]` logs in to the logins of a
-  source. `local-env sources logout [source] [--login <name>]` logs out. Without
-  a source, both list the sources and the state of their logins. They show the
-  AWS profile of each `aws` login, for the user's own `aws` commands.
+- `local-env login` makes every login of every source work: it logs in to the
+  `aws` and `vault` sessions that are logged out (after "Log in now?"), asks for
+  the registry logins Dockhand lacks, then gets a new token for each token
+  registry whose token is missing or has lived half of its life. A login that
+  works stays. It is what every message about a login tells the user to run.
+  `local-env login <source>/<name>…` logs in to those logins again, even when
+  they work (`<name>` alone when one source has it); `-u` and `--password-stdin`
+  give a registry login without prompts. `local-env logout <source>/<name>…`
+  logs out (a list to pick from in a terminal). A login is always printed as
+  `<source>/<name>`: the name stays the same when another source adds a login of
+  that name.
 - `local-env sources list` shows if each source with logins is logged in.
   `local-env doctor` checks every login.
 - `start` and `sources sync` ask for the missing registry logins, as before.
-  They do not ask for AWS or Vault logins: they read no secret.
+  They do not ask for AWS or Vault logins: they read no secret. The one
+  exception is the `aws` login of an ECR registry, which they need for its
+  token.
 - `local-env sources remove` removes the AWS profiles that only this source
   used.
 - The Overview of the dashboard shows the logins of each source in its row of
   the **Sources** card (`features/logins/login-state/`): each account, its type
   and its state (logged in as …, logged out, CLI not installed, not asked). A
   login that waits for you is also in **Needs attention**, at the top of the
-  page, with the command to copy
-  (`local-env sources login acme --login acme-dev`) and the `help` of the source
-  (`features/overview/attention.ts`). It checks them when the page opens, and
-  again with **Check logins**.
+  page, with the command to copy (`local-env login acme/acme-dev`) and the
+  `help` of the source (`features/overview/attention.ts`). It checks them when
+  the page opens, and again with **Check logins**.
 - The dashboard never logs in and never takes a credential.
 
 ## How it works
@@ -146,7 +155,10 @@ flowchart LR
   of the dashboard agent, which sets `LOCAL_ENV_FROM_DASHBOARD=1`.
 - `declared.ts` reads the logins of the manifests: by type (`readSourceLogins`,
   `listAccounts`, one entry for each account), or by name (`findSourceLogin`).
-  `listing.ts` gives the lines of `sources list`, `sources login` and `logout`.
+  `findLoginsByRef` finds the login of a `<source>/<name>` or a `<name>`, and
+  `loginCommandFor` gives the command of every message. `listing.ts` gives the
+  lines of `sources list`. `apps/cli/src/commands/login.ts` is `login` and
+  `logout`.
 - `prepare.ts` serves whatever needs a login or a secret (a role, later a stack:
   a `Consumer`, its label and its source): `resolveSecret` finds a secret of the
   consumer's source with its login and command, `ensureSessions` installs the
@@ -159,8 +171,9 @@ flowchart LR
 - `registry.ts`, `aws.ts` and `vault.ts` implement the types. `ini.ts` edits the
   sections of `~/.aws/config`.
 - `volumes/logins.json` in the home folder keeps the logins that the user does
-  not want to be asked about again (by identity), and the AWS profiles and
-  sso-sessions that local-env wrote.
+  not want to be asked about again (by identity), the AWS profiles and
+  sso-sessions that local-env wrote, and the registry tokens it saved
+  (`registryTokens`, by host: when, and when they expire).
 
 The identity of each type:
 
@@ -352,14 +365,20 @@ sequenceDiagram
   each install, and removes the ones that no login uses any more. It never
   changes a section that it did not write.
 
-- Without `sso`, the login names the user's own profile (`profile: acme`):
-  `credential_process`, aws-vault or keys. local-env writes nothing.
+- Without `sso`, the login names the user's own profile (`profile: acme`): AWS
+  SSO, `credential_process` (Granted), aws-vault or keys. local-env writes
+  nothing.
 - `env`: `AWS_PROFILE` and `AWS_REGION`.
 - `status`: `aws sts get-caller-identity --profile <profile>`. Exit 0 is logged
   in.
-- `logIn`: `aws sso login --profile <profile>`. Without `sso`, local-env shows
-  the `help` and the command that failed.
-- `logOut`: `aws sso logout --profile <profile>`.
+- `logIn`: `aws sso login --profile <profile>`, with `sso`, or when the user's
+  own profile is an AWS SSO profile (`sso_session` or `sso_start_url` in its
+  section of `~/.aws/config`: `isSsoProfile`). Other profiles log in through
+  their own program (Granted, aws-vault): local-env shows the `help` and the
+  command that failed.
+- `logOut`: `aws sso logout --profile <profile>`, with `sso` only. The user's
+  own profile can share its SSO session with their other tools: local-env does
+  not end it.
 
 ### The `vault` type
 
@@ -383,12 +402,60 @@ saves them there. `registryLoginsStep` is the provisioning step of `start` and
 
 - The identity is the full host: `ghcr.io/team-a` and `ghcr.io/team-b` are one
   login, as Docker keeps one login for each host.
-- `sources login acme --login ghcr` (the name in the manifest) logs in to one
-  login of the source. It replaced `--registry <host>`.
+- `local-env login acme/ghcr` (the name in the manifest) logs in to one login
+  again. It replaced `sources login acme --login ghcr`.
 - "Don't ask again" is `registry:<host>` in `volumes/logins.json`.
 - `sources add` refuses a manifest whose logins are not valid
   (`checkManifestLogins`): an unknown `type`, a missing `host`. A login that is
   not valid in a source pulled later is left out.
+
+### Registry tokens
+
+Some registries take no fixed login. AWS ECR's username is `AWS` and its
+password a token of `aws ecr get-login-password`, good for 12 hours. A registry
+login with `login` names a session login, and
+`apps/cli/src/logins/registry-tokens.ts` gets the tokens with its session. The
+type says how, as data (`registryToken` in `types.ts`): the command, the
+username and how long a token lasts. Only `aws` has one today, for ECR hosts.
+`registryTokensStep` runs after `registryLoginsStep` (which leaves these
+registries out) on `start`, `sources sync`, `deploy` and `install`
+(`prepareStacks`), and at the start of `update` (not with `--dry-run`).
+
+```mermaid
+flowchart TD
+  step[registryTokensStep] --> fresh{"Dockhand has a token of the host<br/>with more than half its life left?"}
+  fresh -->|yes| done[nothing to do]
+  fresh -->|no| session{"its login<br/>logged in?"}
+  session -->|no, with a terminal| login[offer to log in] --> token
+  session -->|no, without a terminal<br/>or from the dashboard| warn[warning: run<br/>local-env login]
+  session -->|yes| token["the type's command<br/>aws ecr get-login-password --region …"]
+  token --> save["PUT /registries/:id<br/>the type's username, the token"]
+  save --> date[registryTokens in logins.json<br/>saved and expiry dates]
+```
+
+- The region comes from the host (`<account>.dkr.ecr.<region>.amazonaws.com`): a
+  token is good for one region only, and the `aws` login may have no region or
+  another one.
+- `login` finds its login as a secret does: in the registry's source first, then
+  in any source; `<source>/<name>` names the source. `sources add` refuses
+  `login` with `usernameHelp` or `tokenHelp`, naming a login of the manifest
+  whose type gets no tokens (`vault`), or with a host the type does not serve
+  (an `aws` login and a host that is not ECR). A login of another source is
+  checked when a token is needed: a warning.
+- A registry that gets no token is a warning, never an error: `start` and
+  `sources sync` go on, and only its private images do not pull.
+- `local-env login` uses the same rule, after it has logged in to the sessions,
+  and says when a fresh token expires. A named login
+  (`local-env login acme/ecr`) gets a new token even when the one in Dockhand is
+  fresh. `sources list`, `doctor` and the dashboard show when the token expires
+  (`token from acme-dev, expires in 9 h`).
+- Azure ACR (about 3 hours, `az acr login --expose-token`) and Google Artifact
+  Registry (about 1 hour, `gcloud auth print-access-token`) work the same way
+  with Dockhand. Each would be a session login type with a `registryToken`.
+  Their tokens are too short for a refresh on each command: they wait for a
+  login at pull time in Dockhand.
+- The token goes from the CLI's stdout to Dockhand's API. It is never on a
+  command line, in a file or in the output.
 
 ### Tests
 
@@ -398,7 +465,8 @@ saves them there. `registryLoginsStep` is the provisioning step of `start` and
 that no file of the run folder holds a value. A login that opens a session is a
 rule with `touch: <file>`, and the status after it is a rule with
 `ifFile: <file>`. `tests/e2e/commands/logins.test.ts` covers the install,
-`sources login`, `logout`, `list`, `remove` and `doctor`. The `aws` type was
+`login`, `logout`, `list`, `remove` and `doctor`. `login.test.ts` covers the
+registry logins and `ecr-tokens.test.ts` the registry tokens. The `aws` type was
 also checked by hand against MiniStack, with the real AWS CLI and Ansible: a
 role read a secret with only
 `environment: "{{ local_env.logins['acme-dev'].env }}"`, and the real Ansible
@@ -499,12 +567,31 @@ filled.
 - **On open and on Check logins, no polling.** A login changes when the user
   logs in in a terminal: they come back and refresh. A timer would call AWS and
   Vault every minute for nothing.
+- **ECR tokens from an `aws` login.** The ECR credential helper
+  (`docker-credential-ecr-login`) serves only the docker CLI: Dockhand calls the
+  Docker Engine API and sends the login itself. Dockhand has no ECR support
+  ([Finsys/dockhand#1583](https://github.com/Finsys/dockhand/issues/1583)), and
+  the one proposed there uses fixed IAM keys or an instance role, which Macs
+  with SSO do not have. The `aws` login already holds the SSO session, so
+  local-env gets the token with it and saves it like any registry login. 6 hours
+  is half the life of a token: a deploy always gets one with 6 hours left or
+  more.
 
 ## Limits
 
 - Only `registry`, `aws` and `vault`. A new type is a new file in
   `apps/cli/src/logins/` and a line in its list.
-- A registry token cannot come from a vault yet.
+- A registry token cannot come from a vault yet. An ECR token comes from an
+  `aws` login; no other registry gets its token from a CLI.
+- local-env gets a new ECR token only when a command runs. Dockhand has no hook
+  before a pull, and its registry login is a fixed username and password: it
+  cannot ask for a login at pull time, as the docker CLI asks its credential
+  helpers (`docker-credential-ecr-login`). 12 hours after the last token,
+  Dockhand's auto-update finds its registry check fails, skips the update and
+  sends no notification: running apps keep running, and the update waits for the
+  next command that gets a token. A pull from Dockhand's own page fails until
+  then: `local-env login`. A timer was left out on purpose. A login at pull time
+  would need a change to Dockhand.
 - A secret rotated in the vault reaches a stack when local-env redeploys it (a
   template change), not before: the stack keeps the value Dockhand saved. A
   stack deployed from Dockhand, not with local-env, has no secrets: Dockhand's

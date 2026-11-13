@@ -4,6 +4,7 @@ import { styleText } from 'node:util'
 import { hasCommand } from '#cli/utils/brew.js'
 import { canAsk } from '#cli/utils/prompt.js'
 import { logger } from '#cli/utils/logger.js'
+import { loginCommandFor } from '#cli/logins/declared.js'
 import type {
   DeclaredLogin,
   LoginStatus,
@@ -125,7 +126,7 @@ export const logInToSession = async <Config>(
   if (!command) {
     const help = type.help(login.config)
     throw new Error(
-      `local-env cannot log in to ${type.title(login.config)} for you: it is your own profile.${help ? ` ${help}` : ''}`,
+      `local-env cannot log in to ${type.title(login.config)} for you: your own profile logs in its own way.${help ? ` ${help}` : ''}`,
     )
   }
   logger.handOver(`${login.name}: ${type.loginHint(login)}`, command.join(' '))
@@ -151,9 +152,6 @@ export const logOutOfSession = async <Config>(
   })
   return exitCode === 0
 }
-
-export const loginCommandFor = (source: string, name: string) =>
-  `local-env sources login ${source} --login ${name}`
 
 // One line for a session login of a source, as for a registry login: its
 // name, the account, the state and what to do

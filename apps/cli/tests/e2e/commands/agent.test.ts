@@ -129,7 +129,7 @@ describe.concurrent('local-env agent', () => {
           state: 'logged-out',
           detail:
             'aws: [ERROR]: Error loading SSO Token: Token for acme does not exist',
-          command: 'local-env sources login acme --login acme-dev',
+          command: 'local-env login acme/acme-dev',
           help: 'Ask #platform',
         },
       ],

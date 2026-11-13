@@ -2,6 +2,7 @@ import { log } from '@clack/prompts'
 import { Command } from 'commander'
 import { styleText } from 'node:util'
 import { galaxyLine } from '#cli/core/galaxy-collections.js'
+import { loginLineText } from '#cli/logins/listing.js'
 import { renderPlaybook } from '#cli/core/playbook-output.js'
 import { closeFrameWithCallout, logger } from '#cli/utils/logger.js'
 import {
@@ -95,6 +96,27 @@ export const uiCommand = new Command('ui')
     logger.takeBack()
     logger.success(
       'logger.takeBack, then: acme-dev (AWS 123456789012 (Dev)): logged in as …',
+    )
+
+    logger.group('Accounts (login.ts: loginLineText)')
+    logger.success(
+      loginLineText(
+        'acme/acme-dev',
+        'AWS 123456789012 (Dev)',
+        'logged in as arn:aws:sts::123456789012:assumed-role/Dev/octocat',
+      ),
+    )
+    logger.warn('acme/data (Vault vault.acme.io (dev)): logged out')
+    logger.group('Registries')
+    logger.success(
+      loginLineText('acme/ghcr', 'ghcr.io', 'logged in as octocat', true),
+    )
+    logger.success(
+      loginLineText(
+        'acme/ecr',
+        '123456789012.dkr.ecr.us-east-1.amazonaws.com',
+        'token from acme/acme-dev, expires in 9 h',
+      ),
     )
 
     logger.group('Task lines (playbook-output.ts, galaxy-collections.ts)')

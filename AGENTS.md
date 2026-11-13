@@ -25,7 +25,7 @@ holds what we build:
 
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
-  `update`, `sources` (add, list, remove, sync, links, login, logout),
+  `update`, `sources` (add, list, remove, sync, links), `login`, `logout`,
   `install`, `deploy`, `vars` (list, set, unset), `proxy routes`, `doctor`, and
   `onboard` (hidden): a company's onboarding script runs it once Homebrew and
   local-env are installed. It chains `setup --yes` (its `--domain` on the first
@@ -288,9 +288,17 @@ holds what we build:
   The `registryLoginsStep` (`src/logins/registry.ts`) asks for a login for each
   host that Dockhand has no login for, on every provisioning and `sources sync`
   (only a hint without a terminal), and saves it in Dockhand with its registry
-  API. `local-env sources login [name] [--login <login>]` and `logout`
-  (`src/commands/sources/login.ts`) manage the logins of a source's registries;
-  without a name, they list the sources and the state of their logins. A login
+  API. `local-env login [<source>/<name>…]` and `logout`
+  (`src/commands/login.ts`) manage every login: without a name, `login` fixes
+  what does not work in every source (sessions logged out, registry logins
+  missing, a new token for each ECR registry past half of its life); a named
+  login is logged in to again (a new token, even a fresh one). A registry login
+  with `login: <login>` gets its tokens from that session login, whose type says
+  how (`registryToken`: the `aws` type runs `aws ecr get-login-password` for an
+  ECR host, username `AWS`, 12 hours). `registryTokensStep`
+  (`src/logins/registry-tokens.ts`) saves a new token in Dockhand when the one
+  there has lived half of its life, on start, sync, deploy, install and update;
+  `volumes/logins.json` keeps when it was saved and when it expires. A login
   stays per host in Dockhand, shared by the sources that use that host. The CLI
   only changes the Dockhand registry of a full host (`ghcr.io`, not
   `ghcr.io/team`), and never shows, stores or passes the token on a command

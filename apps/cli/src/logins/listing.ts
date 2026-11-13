@@ -1,3 +1,4 @@
+import { styleText } from 'node:util'
 import { listSources } from '#cli/sources/sources.js'
 import { readSourceLogins } from '#cli/logins/declared.js'
 import { SESSION_TYPES } from '#cli/logins/index.js'
@@ -61,3 +62,13 @@ export const sourceLoginLines = async (
     ),
   )),
 ]
+
+// A login that works, in `local-env login`: its name, what it is (dim: the
+// account or the host), its state. What the run changed is in cyan.
+export const loginLineText = (
+  ref: string,
+  detail: string,
+  state: string,
+  changed = false,
+) =>
+  `${styleText('green', '✔')} ${ref}  ${styleText('dim', detail)}  ${changed ? styleText('cyan', state) : state}`

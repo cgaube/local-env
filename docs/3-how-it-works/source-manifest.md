@@ -32,7 +32,8 @@ secrets: # see Logins: the variable each secret fills, and where it is
   with a warning and exits 0: the same repo again, or another one with the same
   name.
 - The dashboard's Sources card, `sources list` and the prompts show the `label`.
-  Commands take the `name`: `local-env sources login acme-platform`.
+  Commands take the `name`: `local-env sources sync acme-platform`, and a login
+  is `<name>/<login>`: `local-env login acme-platform/ghcr`.
 - A repo without a manifest still works. Its name is the repo's basename. It has
   no label and no logins. If that name is not valid, the author adds a manifest.
 - References to another source use its name: a role's
