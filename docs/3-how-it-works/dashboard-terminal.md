@@ -15,6 +15,13 @@ dashboard and shown in a terminal in the page.
   **Update** badge, and the menu's **Update to v…** opens a dialog: the new
   version, the command, and an **Update** button. Otherwise, **Update** runs at
   once: it also pulls the sources and refreshes the stacks.
+- The command menu runs both from any page: `⌘K` (or `Ctrl+K`), or the terminal
+  button with `⌘K` on it, beside the theme switcher in the header
+  (`features/command-menu/command-menu/`). It has **Install tools** and **Update
+  local-env**, and the pages. It runs the install at once, without the install
+  dialog: the user picked the command. It disables a command the agent can't
+  run, or an install with a missing variable, and gives the reason. In the
+  terminal, `Ctrl+K` stays the shell's.
 - The Docker page's **Deploy** button, on each template, runs
   `local-env deploy <template>` ([Docker catalog](docker-catalog.md)).
 - Each of these opens a terminal in a side sheet and runs the command on the
