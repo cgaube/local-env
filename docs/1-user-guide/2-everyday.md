@@ -39,6 +39,9 @@ local-env tells you when a new version is out, at most once a day.
   [Deploy apps](3-apps.md)), and every route of the proxy, with a link to each
   app.
 
+Press `⌘K` (or click the terminal button beside the theme switcher) to run
+`local-env install` or `local-env update` from any page, or to go to a page.
+
 Dockhand, at `https://docker.dev.test`, manages your containers and stacks.
 
 ## Sources

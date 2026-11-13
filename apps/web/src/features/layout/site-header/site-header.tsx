@@ -1,5 +1,6 @@
 import { Separator } from '#ui/components/ui/separator'
 import { SidebarTrigger } from '#ui/components/ui/sidebar'
+import { CommandMenu } from '#ui/features/command-menu/command-menu'
 import { ThemeSwitcher } from '#ui/features/theme/theme-switcher'
 import { PageBreadcrumb } from '#ui/features/layout/page-breadcrumb'
 
@@ -16,7 +17,8 @@ export function SiteHeader() {
           className="mr-2 data-vertical:h-4 data-vertical:self-auto"
         />
         <PageBreadcrumb />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1">
+          <CommandMenu />
           <ThemeSwitcher />
         </div>
       </div>
