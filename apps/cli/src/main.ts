@@ -16,7 +16,9 @@ import { CANCELLED_EXIT_CODE } from '#cli/utils/prompt.js'
 
 const program = new Command()
   .name('local-env')
-  .description('Local dev environment: HTTPS proxy and a Dockhand app catalog')
+  .description(
+    'Local dev environment for macOS: HTTPS for your containers, and the Docker templates, tools and logins of your git sources',
+  )
   // Bumped by `bun run version-packages` (changesets)
   .version(packageJson.version)
 

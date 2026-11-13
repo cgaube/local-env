@@ -39,6 +39,44 @@ describe('Catalog page', () => {
     ).not.toBeChecked()
   })
 
+  test("leaves out the roles of the sources' bootstraps, and doesn't count those they installed as unpicked", async () => {
+    const granted = buildRole({ name: 'granted', dependencies: ['aws_cli'] })
+    const awsCli = buildRole({ name: 'aws_cli' })
+    const { events } = await renderApp('/tools')
+
+    act(() =>
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [git, granted, { ...awsCli }],
+          installed: {
+            'acme/granted': { revision: 'abc', installedAt: '2026-11-13' },
+            'acme/aws_cli': {
+              revision: awsCli.revision,
+              installedAt: '2026-11-13',
+            },
+          },
+          bootstraps: [
+            {
+              source: 'acme',
+              roles: ['acme/granted'],
+              run: ['acme/granted', 'acme/aws_cli'],
+              state: 'done',
+              problems: [],
+            },
+          ],
+        }),
+      ),
+    )
+
+    expect(screen.getByRole('row', { name: /git/ })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('row', { name: /granted/ }),
+    ).not.toBeInTheDocument()
+    const included = screen.getByRole('row', { name: /aws_cli/ })
+    expect(within(included).queryByText('Unpicked, still installed')).toBeNull()
+  })
+
   test('saves a pick and tells how to install it', async () => {
     const user = userEvent.setup()
     const fetch = stubFetch()

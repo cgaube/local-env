@@ -23,6 +23,15 @@ import {
 import { logger } from '#cli/utils/index.js'
 import { askSelect } from '#cli/utils/prompt.js'
 import { checkManifest } from '#cli/logins/index.js'
+import { checkBootstrap, sourceBootstrap } from '#cli/core/bootstrap-plan.js'
+import { offerBootstraps, runBootstraps } from '#cli/core/bootstrap.js'
+import { listCatalog } from '#cli/core/tools.js'
+
+// For `sources add` and `onboard`: refuses a source whose bootstrap can't
+// run (a role missing, one that gets a secret, names a login or needs a
+// stack)
+export const checkAddedSource = (name: string) =>
+  checkBootstrap(listCatalog(), name)
 
 const withErrors =
   <A extends unknown[]>(action: (...args: A) => Promise<void>) =>
@@ -43,8 +52,12 @@ const addCommand = new Command('add')
       logger.group('Sources')
       const added = await addSource(repo, {
         checkManifest,
+        checkSource: checkAddedSource,
       })
-      if (added) await provisionProviders()
+      if (!added) return
+      // Before the provisioning: it may set up what the registry logins use
+      await offerBootstraps({ sources: [added] })
+      await provisionProviders()
     }),
   )
 
@@ -134,6 +147,15 @@ const syncCommand = new Command('sync')
           // it may start Dockhand
           if (!options.dryRun) await refreshDockhand()
         }
+        // A bootstrap that changed: asked first, as the stacks' secrets may
+        // need what it sets up
+        if (options.pull && !options.dryRun) {
+          await offerBootstraps({
+            yes: options.yes,
+            sources: source ? [source] : undefined,
+            changedOnly: true,
+          })
+        }
         logger.group('Stacks')
         const { applied, rebuilt } = await syncStacks({ ...options, source })
         if (applied.length > 0) {
@@ -168,6 +190,37 @@ const linksCommand = new Command('links')
     }),
   )
 
+const bootstrapCommand = new Command('bootstrap')
+  .description(
+    'Run the bootstrap of the sources: the roles of their manifest that make this Mac ready for their logins',
+  )
+  .argument('[source]', 'Only this source (default: all)')
+  .option('-v, --verbose', "Show Ansible's own output", false)
+  .action(
+    withErrors(
+      async (source: string | undefined, options: { verbose: boolean }) => {
+        const sources = source ? [source] : listSources()
+        if (source && !listSources().includes(source)) {
+          throw new Error(
+            `No source named "${source}". See \`local-env sources list\`.`,
+          )
+        }
+        const catalog = listCatalog()
+        // Run again even when done: the command is asked for
+        const plans = sources.flatMap(
+          (name) => sourceBootstrap(catalog, name) ?? [],
+        )
+        if (plans.length === 0) {
+          logger.info(
+            source ? `${source} has no bootstrap` : 'No source has a bootstrap',
+          )
+          return
+        }
+        await runBootstraps(catalog, plans, options)
+      },
+    ),
+  )
+
 export const sourcesCommand = new Command('sources')
   .description('Manage the repos of docker templates and ansible roles')
   .addCommand(addCommand)
@@ -175,3 +228,4 @@ export const sourcesCommand = new Command('sources')
   .addCommand(removeCommand)
   .addCommand(syncCommand)
   .addCommand(linksCommand)
+  .addCommand(bootstrapCommand)

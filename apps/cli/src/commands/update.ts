@@ -7,6 +7,7 @@ import { updateSelf } from '#cli/core/self-update.js'
 import { pullSources } from '#cli/sources/sources.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { upgradeGalaxyCollections } from '#cli/core/tools.js'
+import { offerBootstraps } from '#cli/core/bootstrap.js'
 import { runStep } from '#cli/utils/task.js'
 import {
   runCompose,
@@ -37,7 +38,11 @@ export const updateCommand = new Command('update')
   .description(
     'Update everything: local-env, core services, sources and what was installed from them',
   )
-  .option('-y, --yes', 'Sync stacks with their templates without asking', false)
+  .option(
+    '-y, --yes',
+    'Sync stacks with their templates and run changed bootstraps without asking',
+    false,
+  )
   .option(
     '--dry-run',
     'Pull sources and show what would change, without touching containers',
@@ -68,6 +73,10 @@ export const updateCommand = new Command('update')
       }
 
       await pullSources()
+      // A bootstrap that changed, asked before the provisioning: it may set
+      // up what the registry logins use
+      if (!options.dryRun)
+        await offerBootstraps({ yes: options.yes, changedOnly: true })
       // Provisioning starts the providers' apps, so a dry run skips it
       if (!options.dryRun) await provisionProviders()
 

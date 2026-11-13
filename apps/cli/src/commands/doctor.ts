@@ -1,3 +1,6 @@
+import { describeRoles, listBootstraps } from '#cli/core/bootstrap-plan.js'
+import { BOOTSTRAP_COMMAND, pendingBootstraps } from '#cli/core/bootstrap.js'
+import { listCatalog } from '#cli/core/tools.js'
 import { describeAgent } from '#cli/core/agent.js'
 import { Command } from 'commander'
 import { execa } from 'execa'
@@ -229,7 +232,36 @@ const checkSources = async (): Promise<CheckResult[]> => {
           },
     )
   }
+  results.push(...checkBootstraps())
   return results
+}
+
+// Each bootstrap can run (a source pulled since `sources add` checked it),
+// and ran with its roles as they are now
+const checkBootstraps = (): CheckResult[] => {
+  const catalog = listCatalog()
+  const pending = new Map(
+    pendingBootstraps(catalog).map((plan) => [plan.source, plan]),
+  )
+  return listBootstraps(catalog).map((plan): CheckResult => {
+    if (plan.problems.length > 0) {
+      return {
+        level: 'fail',
+        message: `${plan.source}: its bootstrap can't run. ${plan.problems.join(' ')}`,
+      }
+    }
+    const waiting = pending.get(plan.source)
+    if (waiting) {
+      return {
+        level: 'warn',
+        message: `${plan.source}: its bootstrap ${waiting.changed ? 'changed since it ran' : 'never ran'} (${describeRoles(plan)}). Run \`${BOOTSTRAP_COMMAND} ${plan.source}\`.`,
+      }
+    }
+    return {
+      level: 'pass',
+      message: `${plan.source}: bootstrap done (${describeRoles(plan)})`,
+    }
+  })
 }
 
 const checkDockerProxy = async (): Promise<CheckResult> => {

@@ -21,6 +21,11 @@
 //                   Mac that runs `local-env install` and `update` in a pty
 //                   (apps/cli/src/agent/server.ts). Only this server has its
 //                   token, and only the dashboard's own pages can connect.
+import {
+  bootstrapStatuses,
+  listBootstrapPlans,
+  readBootstrapState,
+} from './bootstrap.js'
 import { existsSync, readdirSync, readFileSync, statSync, watch } from 'node:fs'
 import { join, normalize } from 'node:path'
 import {
@@ -218,6 +223,7 @@ const readers = {
   templates: async () => JSON.stringify(listTemplates(SOURCES_DIR)),
   tools: async () => {
     const roles = listRoles(SOURCES_DIR)
+    const variables = readVariables(TOOLS_DIR)
     return JSON.stringify({
       roles,
       picked: readSelection(TOOLS_DIR),
@@ -227,8 +233,14 @@ const readers = {
       stacks: readDeployedStacks(TOOLS_DIR),
       // The values of the inputs, and the installed Galaxy roles, for the
       // inputs of the roles they include
-      variables: readVariables(TOOLS_DIR),
+      variables,
       galaxyRoles: listGalaxyRoles(GALAXY_DIR),
+      // The sources' bootstraps: the Overview shows them, the Tools page
+      // hides their roles (bootstrap.ts)
+      bootstraps: bootstrapStatuses(
+        listBootstrapPlans(SOURCES_DIR, roles, variables),
+        readBootstrapState(TOOLS_DIR),
+      ),
     })
   },
   agent: readAgent,

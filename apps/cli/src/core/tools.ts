@@ -32,6 +32,7 @@ import {
   wantedRoles,
 } from '#services/dashboard/role-graph.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
+import { bootstrapRoots } from '#cli/core/bootstrap-plan.js'
 import { logger } from '#cli/utils/logger.js'
 import {
   askConfirm,
@@ -159,9 +160,10 @@ export const findProfile = (catalog: Role[], name: string): Role => {
 // on the Mac: local-env doesn't uninstall. Forgets them, so the dashboard no
 // longer lists them as installed. Their ids.
 export const forgetUnwanted = (catalog: Role[], roots: Role[]) => {
+  // The bootstraps of the sources are wanted too: they ran on this Mac
   const wanted = wantedRoles(
     catalog,
-    roots.map(({ id }) => id),
+    [...roots, ...bootstrapRoots(catalog)].map(({ id }) => id),
   )
   const installed = readInstalled(TOOLS_DIR)
   const forgotten = Object.keys(installed).filter((id) => !wanted.has(id))
@@ -181,14 +183,19 @@ const withDependencies = (catalog: Role[], roots: Role[]) => {
   return catalog.filter(({ id }) => wanted.has(id))
 }
 
-// The roots of the next install: the saved profile and the picks still in
-// the sources. Read only: install says when the profile or a pick left them.
+// The roots of what you want on this Mac: the saved profile, the picks still
+// in the sources and the bootstraps. Read only: install says when the
+// profile or a pick left them.
 export const currentRoots = (catalog: Role[]) => {
   const profileId = readProfile(TOOLS_DIR)
   const picked = readSelection(TOOLS_DIR)
+  // And the roles of the sources' bootstraps, which run before the logins
+  const bootstrap = new Set(bootstrapRoots(catalog).map(({ id }) => id))
   return catalog.filter(
     ({ id, isProfile }) =>
-      (id === profileId && isProfile) || picked.includes(id),
+      (id === profileId && isProfile) ||
+      picked.includes(id) ||
+      bootstrap.has(id),
   )
 }
 

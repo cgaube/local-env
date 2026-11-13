@@ -1,5 +1,9 @@
 import { act, screen, within } from '@testing-library/react'
-import { buildSource } from '#ui-tests/support/factories.ts'
+import {
+  buildRole,
+  buildSource,
+  buildTools,
+} from '#ui-tests/support/factories.ts'
 import { renderApp } from '#ui-tests/support/render-app.tsx'
 
 describe('Sources on the overview', () => {
@@ -32,6 +36,34 @@ describe('Sources on the overview', () => {
         'acme-platform · github.com/acme/local-env-templates',
       ),
     ).toBeInTheDocument()
+  })
+
+  test('shows the bootstrap of a source, with its roles and its state', async () => {
+    const { events } = await renderApp('/')
+
+    act(() => {
+      events.emit('sources', [buildSource()])
+      events.emit(
+        'tools',
+        buildTools({
+          roles: [buildRole({ name: 'granted', label: 'Granted' })],
+          bootstraps: [
+            {
+              source: 'acme',
+              roles: ['acme/granted'],
+              run: ['acme/granted'],
+              state: 'changed',
+              problems: [],
+            },
+          ],
+        }),
+      )
+    })
+
+    const source = screen.getByRole('listitem', { name: 'acme' })
+    expect(within(source).getByText('Bootstrap')).toBeInTheDocument()
+    expect(within(source).getByText('Granted')).toBeInTheDocument()
+    expect(within(source).getByText('Changed')).toBeInTheDocument()
   })
 
   test('says how to add one', async () => {

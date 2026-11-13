@@ -34,6 +34,7 @@ import {
   sessionStatus,
 } from '#cli/logins/session.js'
 import type { DeclaredLogin, SessionLoginType } from '#cli/logins/types.js'
+import { ensureBootstraps } from '#cli/core/bootstrap.js'
 import { logger } from '#cli/utils/index.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import {
@@ -217,7 +218,13 @@ const logInSession = async (entry: SessionEntry, run: Run) => {
     }
     loginLine(entry, loggedInAs(after.detail), true)
   } catch (error) {
-    fail(messageOf(error))
+    // What the CLI said when it checked the session: the real cause, when it
+    // is not a session that ended (a config file it can't read)
+    const said =
+      status.state === 'logged-out' && status.detail
+        ? ` ${type.cli.binary} says: ${status.detail}`
+        : ''
+    fail(`${messageOf(error)}${said}`)
   }
 }
 
@@ -300,6 +307,58 @@ const refreshToken = async (entry: RegistryEntry, run: Run) => {
   }
 }
 
+// Logs in to these logins: the accounts first, then the registries. Returns
+// what it did, and the refs that it could not log in to.
+const logIn = async (
+  entries: Entry[],
+  { force, options }: { force: boolean; options: LoginOptions },
+): Promise<Run> => {
+  const sessions = entries.filter(
+    (entry): entry is SessionEntry => entry.kind === 'session',
+  )
+  const registryEntries = entries.filter(
+    (entry): entry is RegistryEntry => entry.kind === 'registry',
+  )
+  const run: Run = {
+    force,
+    options,
+    registries: registryEntries.length > 0 ? await getRegistries() : [],
+    loggedOut: new Set(),
+    failed: [],
+    newTokens: 0,
+  }
+
+  // The accounts first: the registry tokens come from them
+  if (sessions.length > 0) {
+    logger.group('Accounts')
+    await installClis(sessions.map(({ type }) => type))
+    for (const entry of sessions) await logInSession(entry, run)
+  }
+  if (registryEntries.length > 0) logger.group('Registries')
+  // Typed logins first, then the tokens
+  for (const entry of registryEntries) {
+    if (!entry.login.config.login) await logInRegistry(entry, run)
+  }
+  for (const entry of registryEntries) {
+    if (entry.login.config.login) await refreshToken(entry, run)
+  }
+  return run
+}
+
+// For `local-env onboard`: makes every login of the sources work, as
+// `local-env login` without a name, after the bootstraps. The refs it could
+// not log in to: onboard says them and goes on, the install says what needs
+// them.
+export const logInToEveryLogin = async (): Promise<string[]> => {
+  const entries = allEntries()
+  if (entries.length === 0) return []
+  const run = await logIn(entries, {
+    force: false,
+    options: { passwordStdin: false },
+  })
+  return run.failed
+}
+
 export const loginCommand = new Command('login')
   .description(
     'Make the logins of the sources work: AWS and Vault sessions, registry logins and tokens in Dockhand. Named logins are logged in to again.',
@@ -319,6 +378,9 @@ export const loginCommand = new Command('login')
   )
   .action(
     withErrors(async (refs: string[], options: LoginOptions) => {
+      // A bootstrap that never ran or changed first: it may set up what a
+      // login uses (a CLI, an AWS profile)
+      await ensureBootstraps()
       const named = refs.length > 0
       const entries = named ? resolveRefs(refs) : allEntries()
       if (entries.length === 0) {
@@ -339,35 +401,7 @@ export const loginCommand = new Command('login')
         }
       }
 
-      const sessions = entries.filter(
-        (entry): entry is SessionEntry => entry.kind === 'session',
-      )
-      const registryEntries = entries.filter(
-        (entry): entry is RegistryEntry => entry.kind === 'registry',
-      )
-      const run: Run = {
-        force: named,
-        options,
-        registries: registryEntries.length > 0 ? await getRegistries() : [],
-        loggedOut: new Set(),
-        failed: [],
-        newTokens: 0,
-      }
-
-      // The accounts first: the registry tokens come from them
-      if (sessions.length > 0) {
-        logger.group('Accounts')
-        await installClis(sessions.map(({ type }) => type))
-        for (const entry of sessions) await logInSession(entry, run)
-      }
-      if (registryEntries.length > 0) logger.group('Registries')
-      // Typed logins first, then the tokens
-      for (const entry of registryEntries) {
-        if (!entry.login.config.login) await logInRegistry(entry, run)
-      }
-      for (const entry of registryEntries) {
-        if (entry.login.config.login) await refreshToken(entry, run)
-      }
+      const run = await logIn(entries, { force: named, options })
 
       if (run.failed.length > 0) {
         throw new Error(`Not logged in: ${run.failed.join(', ')}.`)

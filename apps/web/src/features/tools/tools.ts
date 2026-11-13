@@ -67,11 +67,19 @@ export const stackName = (stack: string, source: string) =>
 export const currentProfile = ({ roles, profile }: Tools) =>
   roles.find((role) => role.id === profile && role.isProfile) ?? null
 
+// The roles the sources' bootstraps list: run before the logins, not picked,
+// so not in the catalog
+const bootstrapRoots = (tools: Tools) =>
+  tools.bootstraps.flatMap(({ roles }) => roles)
+
 // Every role, profiles included, and the picks whose role left the sources:
-// listed so they can be unpicked (`local-env install` unpicks them too)
+// listed so they can be unpicked (`local-env install` unpicks them too).
+// Not the roles the bootstraps list; the roles they include count as wanted,
+// so one installed by a bootstrap is not unpicked.
 export const catalogRows = (tools: Tools): CatalogRow[] => {
   const profile = currentProfile(tools)
-  const roots = [...tools.picked, ...(profile ? [profile.id] : [])]
+  const hidden = new Set(bootstrapRoots(tools))
+  const roots = [...tools.picked, ...(profile ? [profile.id] : []), ...hidden]
   const included = includedRoles(tools.roles, tools.picked)
   const inProfile = profile
     ? new Set([profile.id, ...includedRoles(tools.roles, [profile.id]).keys()])
@@ -85,13 +93,15 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
   )
   const known = new Set(tools.roles.map((role) => role.id))
   return [
-    ...tools.roles.map((role) => ({
-      ...role,
-      picked: tools.picked.includes(role.id),
-      includedBy: included.get(role.id) ?? [],
-      inProfile: inProfile.has(role.id) ? (profile?.label ?? null) : null,
-      status: statusOf(tools, wanted, passed, role),
-    })),
+    ...tools.roles
+      .filter((role) => !hidden.has(role.id))
+      .map((role) => ({
+        ...role,
+        picked: tools.picked.includes(role.id),
+        includedBy: included.get(role.id) ?? [],
+        inProfile: inProfile.has(role.id) ? (profile?.label ?? null) : null,
+        status: statusOf(tools, wanted, passed, role),
+      })),
     ...tools.picked
       .filter((id) => !known.has(id))
       .map((id) => {
@@ -123,10 +133,15 @@ export const catalogRows = (tools: Tools): CatalogRow[] => {
   ]
 }
 
-// The roots `local-env install` runs: the profile and the picks
+// The roots `local-env install` runs: the profile and the picks, and the
+// bootstraps it runs first
 const rootsOf = (tools: Tools) => {
   const profile = currentProfile(tools)
-  return [...tools.picked, ...(profile ? [profile.id] : [])]
+  return [
+    ...tools.picked,
+    ...(profile ? [profile.id] : []),
+    ...bootstrapRoots(tools),
+  ]
 }
 
 // The inputs of what the next install runs (the profile, the picks, what

@@ -61,6 +61,44 @@ describe.concurrent('local-env onboard', () => {
     expect(result.output).not.toContain('local-env is running')
   })
 
+  test('runs the bootstrap after the start, before the logins and the install', async () => {
+    await using cli = await createOnboardCli()
+    const acme = teamSource(cli)
+    acme.commit({
+      'local-env.yml': 'name: acme\nbootstrap: [granted]\n',
+      'ansible/granted/tasks/main.yml': '- debug: msg=granted\n',
+    })
+
+    const result = await cli.run([
+      'onboard',
+      acme.dir,
+      '--domain',
+      TEST_DOMAIN,
+      '--profile',
+      'backend',
+    ])
+
+    expect(result.exitCode).toBe(0)
+    // Two playbooks: the bootstrap, then the profile
+    const playbooks = cli.bin
+      .calls('ansible-playbook')
+      .map((call) => call.inputs[call.args.at(-1) ?? ''] ?? '')
+    expect(playbooks).toHaveLength(2)
+    expect(playbooks[0]).toContain('/ansible/granted')
+    expect(playbooks[0]).not.toContain('/ansible/backend')
+    expect(playbooks[1]).toContain('/ansible/backend')
+    // Asked nothing: the install runs it anyway
+    const output = result.output
+    expect(output).toContain('Services started')
+    expect(output).toContain('Bootstrapped acme')
+    expect(output.indexOf('Services started')).toBeLessThan(
+      output.indexOf('Bootstrapped acme'),
+    )
+    expect(output.indexOf('Bootstrapped acme')).toBeLessThan(
+      output.indexOf('Installed the Backend profile'),
+    )
+  })
+
   test.skipIf(COMPILED)('asks for the profile when none is given', async () => {
     await using cli = await createOnboardCli()
     const acme = teamSource(cli)

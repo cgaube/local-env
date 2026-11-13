@@ -17,6 +17,10 @@ export const isValidSourceName = (name: string) =>
 export const isLoginRef = (ref: string) =>
   /^(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9-]*$/.test(ref)
 
+// A role as `bootstrap` names it: <namespace>.<collection>.<role>, or a plain
+// role's name
+export const isRoleName = (name: string) => /^[A-Za-z0-9_][\w.-]*$/.test(name)
+
 export type SourceManifest = {
   name: string
   label: string | null
@@ -25,6 +29,10 @@ export type SourceManifest = {
   // By variable name, as written: where its value is, in a vault the logins
   // reach. The CLI checks each entry (apps/cli/src/logins/secrets.ts).
   secrets: Record<string, unknown>
+  // The roles that make this Mac ready for the logins, run before them
+  // (docs/3-how-it-works/source-bootstrap.md): by name, as dependencies
+  // name roles
+  bootstrap: string[]
 }
 
 // A manifest that is there but wrong. The message names the field.
@@ -53,7 +61,7 @@ export const readSourceManifest = (dir: string): SourceManifest | null => {
     )
   }
 
-  const { name, label, logins, secrets } = content
+  const { name, label, logins, secrets, bootstrap } = content
   if (typeof name !== 'string' || !isValidSourceName(name)) {
     throw new SourceManifestError(
       `${SOURCE_MANIFEST_FILE}: name must be lowercase letters, digits and dashes (${name === undefined ? 'missing' : JSON.stringify(name)})`,
@@ -74,11 +82,23 @@ export const readSourceManifest = (dir: string): SourceManifest | null => {
     )
   }
 
+  if (
+    bootstrap !== undefined &&
+    bootstrap !== null &&
+    (!Array.isArray(bootstrap) ||
+      !bootstrap.every((role) => typeof role === 'string' && isRoleName(role)))
+  ) {
+    throw new SourceManifestError(
+      `${SOURCE_MANIFEST_FILE}: bootstrap must be a list of role names`,
+    )
+  }
+
   return {
     name,
     label: label?.trim() || null,
     logins: logins ?? {},
     secrets: secrets ?? {},
+    bootstrap: [...new Set((bootstrap as string[] | null) ?? [])],
   }
 }
 

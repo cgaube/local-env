@@ -3,7 +3,10 @@ import { join } from 'path'
 import { LOGIN_TYPES } from '#cli/logins/index.js'
 import { isValidLoginName } from '#cli/logins/declared.js'
 import { isValidSecretName } from '#cli/logins/secrets.js'
-import { isValidSourceName } from '#services/dashboard/source-manifest.js'
+import {
+  isRoleName,
+  isValidSourceName,
+} from '#services/dashboard/source-manifest.js'
 
 // schemas/source-manifest.json helps authors write local-env.yml in their
 // editor. It must follow what the CLI accepts. Tests run from the root.
@@ -35,6 +38,21 @@ describe('schemas/source-manifest.json', () => {
       'ansible',
     ]) {
       expect(secrets.test(name)).toBe(isValidSecretName(name))
+    }
+  })
+
+  test('has the same rule as the CLI for the roles of the bootstrap', () => {
+    const roles = new RegExp(schema.properties.bootstrap.items.pattern)
+    for (const name of [
+      'acme.platform.aws_access',
+      'vpn',
+      'my-role',
+      '../vpn',
+      'a/b',
+      '',
+      '.hidden',
+    ]) {
+      expect(roles.test(name)).toBe(isRoleName(name))
     }
   })
 

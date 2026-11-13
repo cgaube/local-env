@@ -12,6 +12,7 @@ of this site.
 | [Dashboard terminal](dashboard-terminal.md) | Runs `local-env install`, `update` and `deploy` from the dashboard |
 | [Source manifest](source-manifest.md)       | `local-env.yml` at a source's root: its name, label and logins     |
 | [Logins](logins.md)                         | Registries and secret managers that the sources need               |
+| [Source bootstrap](source-bootstrap.md)     | Runs a source's setup roles before its logins                      |
 | [Wildcard DNS](wildcard-dns.md)             | Points every name of the domain to the Mac, with dnsmasq           |
 
 ## Write a feature page

@@ -49,6 +49,33 @@ their state, and **Needs attention**, at the top, gives the command to copy for
 one that waits for you. It checks them when the page opens: after you log in,
 click **Check logins**.
 
+## Before the logins: the bootstrap
+
+Some logins need something on your Mac first: a CLI, an AWS profile, a VPN
+client. A source sets it up with its **bootstrap**, a few roles that local-env
+runs before the logins. When you add the source, local-env asks:
+
+```
+acme has a bootstrap (AWS access). Run it now?
+```
+
+If you say no, `local-env install` and `local-env login` run it first. When its
+roles change, `local-env update` and `local-env sources sync` ask again. To run
+it yourself, even when it is done:
+
+```sh
+local-env sources bootstrap        # every source, or name one: acme
+```
+
+It can ask for your password, for the roles that need sudo, and for the values
+the roles need (your AWS role, for example), which it saves. Change a value (in
+the Variables sheet of the Tools page, or with `local-env vars set`) and the
+next install runs the bootstrap again.
+
+The Overview of the dashboard shows the bootstrap in the panel of its source,
+and **Needs attention** says when it never ran or changed, with the command to
+copy. `local-env doctor` says it too.
+
 ## Registries
 
 When you add a source with private images, local-env asks for a username and a

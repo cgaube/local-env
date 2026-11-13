@@ -1,4 +1,6 @@
+import { join } from 'path'
 import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
+import { buildTemplate } from '#cli-tests/support/factories/template.js'
 import { buildManifest } from '#cli-tests/support/factories/manifest.js'
 import { machineReady } from '#cli-tests/support/machine.js'
 import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
@@ -303,5 +305,63 @@ describe.concurrent('local-env sources add, ECR registries', () => {
 
     expect(added.exitCode).toBe(1)
     expect(added.output).toContain(message)
+  })
+})
+
+describe.concurrent('local-env install, ECR tokens', () => {
+  test('gets a token after the playbook, which set up the aws login, before the stacks deploy', async () => {
+    await using cli = await createCli({ dockhand: provisionedDockhand() })
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    machineReady(cli)
+    // The profile acme-dev exists once a role of the install wrote it
+    const profile = join(cli.root, 'aws-profile')
+    cli.bin.on('which', ['aws'])
+    cli.bin.on('which', ['ansible-playbook'])
+    cli.bin.on('ansible-playbook', [], { touch: profile })
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_OUT)
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+      stdout: JSON.stringify({ Arn: ARN }),
+      ifFile: profile,
+    })
+    cli.bin.on('aws', GET_TOKEN, {
+      env: { AWS_PROFILE: 'acme-dev' },
+      stdout: `${TOKEN}\n`,
+    })
+    const repo = cli.createSource('acme', {
+      roles: ['aws_access', 'backend'],
+      templates: [
+        buildTemplate({
+          folder: 'api',
+          compose: `name: api\nservices:\n  api:\n    image: ${HOST}/api:latest\n`,
+        }),
+      ],
+    })
+    repo.commit({
+      'local-env.yml': buildManifest({ name: 'acme', logins: LOGINS }),
+      'ansible/backend/meta/main.yml':
+        'galaxy_info:\n  galaxy_tags: [profile]\ndependencies: [aws_access]\n',
+      'ansible/backend/local-env.yml': 'stacks: [api]\n',
+    })
+    await cli.run(['sources', 'add', repo.dir], { env: NO_TTY })
+
+    const result = await cli.run(['install', 'backend', '--yes'], {
+      env: NO_TTY,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(ecrRegistry(cli)).toMatchObject({ username: 'AWS', password: TOKEN })
+    expect(result.output).toContain('api deployed')
+    // The token is saved before the stack is created
+    const paths = cli.dockhand.requests
+      .filter(({ method }) => method === 'POST')
+      .map(({ path }) => path)
+    expect(
+      paths.findIndex((path) => path.startsWith('/registries')),
+    ).toBeLessThan(paths.indexOf('/stacks'))
+    expect(
+      paths.findIndex((path) => path.startsWith('/registries')),
+    ).toBeGreaterThan(-1)
+    expect(tokenCalls(cli)).toHaveLength(1)
   })
 })

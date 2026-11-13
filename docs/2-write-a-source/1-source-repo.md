@@ -50,7 +50,7 @@ What it holds:
 
 ```
 <repo>/
-├── local-env.yml             # optional: the manifest (name, label, logins)
+├── local-env.yml             # optional: the manifest (name, label, logins, bootstrap)
 ├── docker/
 │   ├── templates.json        # the list of templates (Portainer format)
 │   ├── mailpit/
@@ -108,6 +108,8 @@ $schema: https://raw.githubusercontent.com/cgaube/local-env/main/schemas/source-
   and secret managers (see [Secrets](5-secrets.md)).
 - `secrets` says where the secrets of your tools are, in those secret managers,
   by the name of the variable each one fills (see [Secrets](5-secrets.md)).
+- `bootstrap` lists the roles that make the Mac ready for your logins: local-env
+  runs them before the logins (see [Bootstrap the logins](7-bootstrap.md)).
 - Without a manifest, the source is named after the repo, and has no label, no
   logins and no secrets.
 - Other sources name yours by its `name`: `acme-platform/postgres` in `stacks:`.

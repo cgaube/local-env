@@ -14,6 +14,7 @@ import { useLiveData } from '#ui/features/live-data/live-data-provider'
 import { loginsSummary, useLogins } from '#ui/features/logins/logins.ts'
 import { plural } from '#ui/lib/plural.ts'
 import { SourcesTable } from '#ui/features/sources/sources-table'
+import { bootstrapRows } from '#ui/features/bootstrap/bootstrap.ts'
 
 // What the card says about the logins of the sources, which the dashboard
 // agent checks on the Mac (the dashboard logs in to nothing)
@@ -30,7 +31,7 @@ const loginsLine = (logins: ReturnType<typeof useLogins>) => {
 // each one needs. The logins are checked when the page opens and on Refresh,
 // never on a timer: each check is a call to AWS, Vault or Dockhand.
 export function SourcesCard() {
-  const { sources } = useLiveData()
+  const { sources, tools } = useLiveData()
   const logins = useLogins()
   const rows = logins.data?.available ? logins.data.logins : null
   const line = sources?.length ? loginsLine(logins) : null
@@ -69,7 +70,11 @@ export function SourcesCard() {
         {!sources ? (
           <Skeleton className="h-6" />
         ) : sources.length ? (
-          <SourcesTable sources={sources} logins={rows} />
+          <SourcesTable
+            sources={sources}
+            logins={rows}
+            bootstraps={bootstrapRows(tools)}
+          />
         ) : (
           <CodeSnippet code="local-env sources add <repo>" />
         )}

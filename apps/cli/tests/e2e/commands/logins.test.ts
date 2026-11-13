@@ -769,6 +769,29 @@ describe.concurrent('local-env login, aws and vault', () => {
     },
   )
 
+  test.skipIf(COMPILED)(
+    "says what the AWS CLI said when it can't read the profile",
+    async () => {
+      await using cli = await createLoginsCli()
+      ownProfile(cli, [
+        'credential_process = granted credential-process --profile acme',
+      ])
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+        exitCode: 255,
+        stderr:
+          '\naws: [ERROR]: Unable to parse config file: /Users/me/.aws/config',
+      })
+      await addSource(cli, 'acme', { own: OWN }, {})
+
+      const result = await cli.run(['login', 'acme/own'])
+
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain(
+        'aws says: aws: [ERROR]: Unable to parse config file: /Users/me/.aws/config',
+      )
+    },
+  )
+
   test('needs your own terminal', async () => {
     await using cli = await createLoginsCli()
     cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)

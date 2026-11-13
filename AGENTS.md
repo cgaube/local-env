@@ -25,12 +25,13 @@ holds what we build:
 
 - `src/main.ts` is the CLI entrypoint (commander).
 - `src/commands/*.ts` implements commands: `setup`, `start`, `stop`, `status`,
-  `update`, `sources` (add, list, remove, sync, links), `login`, `logout`,
-  `install`, `deploy`, `vars` (list, set, unset), `proxy routes`, `doctor`, and
-  `onboard` (hidden): a company's onboarding script runs it once Homebrew and
-  local-env are installed. It chains `setup --yes` (its `--domain` on the first
-  setup only), `sources add`, `start` and `install` (`--profile`, else the
-  profile select), with one summary at the end
+  `update`, `sources` (add, list, remove, sync, links, bootstrap), `login`,
+  `logout`, `install`, `deploy`, `vars` (list, set, unset), `proxy routes`,
+  `doctor`, and `onboard` (hidden): a company's onboarding script runs it once
+  Homebrew and local-env are installed. It chains `setup --yes` (its `--domain`
+  on the first setup only), `sources add`, `start`, the sources' bootstraps,
+  `login` (every login; one that fails only warns) and `install` (`--profile`,
+  else the profile select), with one summary at the end
   (`docs/2-write-a-source/6-onboard-your-team.md`; the script is `onboarding.sh`
   in the template source). `update` first upgrades local-env with Homebrew when
   a newer version is out, then hands over to the new version
@@ -133,7 +134,22 @@ holds what we build:
   manifest, `local-env.yml` at its root, gives its `name` (unique: the folder,
   the same on every Mac; else the repo's name), its `label` and its `logins`
   (`services/dashboard/source-manifest.ts`, shared with the dashboard;
-  `docs/3-how-it-works/source-manifest.md`).
+  `docs/3-how-it-works/source-manifest.md`). Its `bootstrap` lists roles that
+  make the Mac ready for its logins (a CLI, an AWS profile): they run before the
+  logins, so they and their dependencies get no secret, name no login and need
+  no stack (`services/dashboard/bootstrap.ts`, shared with the dashboard,
+  resolves and checks them and hashes their folders, their dependencies' and the
+  values of their inputs; `src/core/bootstrap-plan.ts` gives it the CLI's
+  sources; `sources add` refuses a source that breaks it, `doctor` reports it).
+  `src/core/bootstrap.ts` runs them through `runPlaybook`, one playbook for all,
+  and records the hash by source in `volumes/tools/bootstrap.json` once it
+  succeeds: `install` and `login` run the ones that never ran or changed first,
+  `sources add` asks, `sources sync` and `update` ask for a changed one,
+  `sources bootstrap` runs them anyway, `start` never
+  (`docs/3-how-it-works/source-bootstrap.md`). Their roles count as wanted, like
+  the profile and the picks. The dashboard's Tools page leaves out the roles
+  they list; the Overview shows each bootstrap in its source's panel and in
+  Needs attention (`features/bootstrap/`).
 - `src/providers/<name>/` installs one kind of source content through its app:
   `docker` (Dockhand, reads `docker/`; `steps/` are idempotent provisioning
   steps run on every `start`). Each provider implements `Provider` from
@@ -187,10 +203,11 @@ holds what we build:
   Tests fake them with `tests/support/factories/ansible.ts`. The stacks the
   wanted roles need are planned before the playbook (one confirmation, `--yes`
   to skip it, then registry logins and required variables) and deployed after it
-  with Dockhand's `POST /stacks`, linked to their template, once: `stacks.json`
-  keeps them from coming back (`src/providers/docker/required-stacks.ts`, on top
-  of `stack-deploy.ts`). The dashboard runs nothing on the Mac itself: it asks
-  the dashboard agent. `docs/3-how-it-works/tools-and-profiles.md` explains why.
+  with Dockhand's `POST /stacks` (a new ECR token first: a role may have set up
+  its login), linked to their template, once: `stacks.json` keeps them from
+  coming back (`src/providers/docker/required-stacks.ts`, on top of
+  `stack-deploy.ts`). The dashboard runs nothing on the Mac itself: it asks the
+  dashboard agent. `docs/3-how-it-works/tools-and-profiles.md` explains why.
 - `volumes/` in the home folder holds runtime data: the Dockhand database, the
   sources, the tools (`volumes/tools/`) and the dashboard agent's files
   (`volumes/agent/`).

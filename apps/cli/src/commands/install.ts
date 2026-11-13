@@ -17,6 +17,9 @@ import {
   unpickTools,
 } from '#cli/core/tools.js'
 import { planRequiredStacks } from '#cli/providers/docker/required-stacks.js'
+import { registryTokensStep } from '#cli/logins/registry-tokens.js'
+import { ensureBootstraps, pendingBootstraps } from '#cli/core/bootstrap.js'
+import { describeRoles } from '#cli/core/bootstrap-plan.js'
 import { deployStacks } from '#cli/providers/docker/stack-deploy.js'
 import type { PlaybookSummary } from '#cli/core/playbook-output.js'
 import { hasCommand, logger } from '#cli/utils/index.js'
@@ -172,10 +175,20 @@ const showNothingPicked = (catalog: Role[]) => {
   )
 }
 
+// --dry-run: the bootstraps the install would run first
+const showPendingBootstraps = (catalog: Role[]) => {
+  for (const plan of pendingBootstraps(catalog)) {
+    logger.info(
+      `Would run the bootstrap of ${plan.source} first (${describeRoles(plan)})`,
+    )
+  }
+}
+
 // --dry-run: what an install would run and the values it would pass,
 // without running, saving or asking anything
 const showDryRun = (catalog: Role[], roots: Role[], ran: string) => {
   logger.group('Dry run')
+  showPendingBootstraps(catalog)
   logger.info(`Would install ${ran}`)
   const inputs = readWantedInputs(catalog, roots)
   if (inputs.length === 0) return
@@ -275,7 +288,13 @@ export const runInstall = async (
     if (write) {
       forgotten = forgetUnwanted(catalog, [...roots, ...(kept ? [kept] : [])])
     }
+    // The bootstraps of the sources first, even with nothing picked: they
+    // make the Mac ready for the logins the roles and stacks use
+    if (!options.dryRun) {
+      await ensureBootstraps({ verbose: options.verbose, catalog })
+    }
     if (roots.length === 0) {
+      if (options.dryRun) showPendingBootstraps(catalog)
       showNothingPicked(catalog)
       showForgotten(forgotten, catalog, left)
       return null
@@ -295,6 +314,9 @@ export const runInstall = async (
     const summary = await runPlaybook(catalog, roots, options)
     const ran = describeRun(catalog, profile, picked)
     if (stacks) {
+      // A role may have just set up the login that gets the registry's
+      // tokens (an AWS profile): a new token, before the images pull
+      await registryTokensStep.run()
       // Each stack says how it went, in its own group
       await deployStacks(stacks, 'local-env install')
     }

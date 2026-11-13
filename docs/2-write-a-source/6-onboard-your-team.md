@@ -56,7 +56,11 @@ To try it with the template source:
    - `local-env setup --yes`: the DNS and the certificate. The domain applies on
      the first run only: a Mac set up before keeps its own.
    - `local-env sources add`: your source. Skipped when it is already added.
-   - `local-env start`: the core services, then the logins of your source.
+   - `local-env start`: the core services.
+   - The bootstrap of your source, when it has one: the roles that make the Mac
+     ready for its logins (see [Bootstrap the logins](7-bootstrap.md)).
+   - The logins of your source, as `local-env login`: a login that fails is
+     said, and the install goes on.
    - `local-env install`: the profile you set, or the one the employee picks. On
      the next runs, it installs the saved profile again.
 

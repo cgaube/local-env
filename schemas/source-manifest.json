@@ -38,6 +38,15 @@
       "additionalProperties": {
         "$ref": "#/definitions/secret"
       }
+    },
+    "bootstrap": {
+      "type": "array",
+      "description": "The roles that make the Mac ready for the logins of the source (a CLI, an AWS profile, a VPN client), by name: <namespace>.<collection>.<role>, or a plain role's name. local-env runs them before the logins, so they and their dependencies get no secret, name no login and need no stack (https://cgaube.github.io/local-env/write-a-source/bootstrap).",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_][\\w.-]*$"
+      },
+      "uniqueItems": true
     }
   },
   "definitions": {
@@ -96,8 +105,12 @@
       "additionalProperties": false,
       "not": {
         "anyOf": [
-          { "required": ["login", "usernameHelp"] },
-          { "required": ["login", "tokenHelp"] }
+          {
+            "required": ["login", "usernameHelp"]
+          },
+          {
+            "required": ["login", "tokenHelp"]
+          }
         ]
       },
       "properties": {

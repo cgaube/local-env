@@ -49,6 +49,7 @@ describe('readSourceManifest', () => {
       label: 'Acme Platform',
       logins: { ghcr: { type: 'registry', host: 'ghcr.io' } },
       secrets: {},
+      bootstrap: [],
     })
   })
 
@@ -58,7 +59,19 @@ describe('readSourceManifest', () => {
       label: null,
       logins: {},
       secrets: {},
+      bootstrap: [],
     })
+  })
+
+  test('reads the bootstrap roles, each once', () => {
+    const dir = sourceWith(
+      'name: acme\nbootstrap: [acme.platform.aws_access, vpn, vpn]',
+    )
+
+    expect(readSourceManifest(dir)?.bootstrap).toEqual([
+      'acme.platform.aws_access',
+      'vpn',
+    ])
   })
 
   test.each([
@@ -72,6 +85,11 @@ describe('readSourceManifest', () => {
     ],
     ['name: acme\nlabel: [a]', 'label must be text'],
     ['name: acme\nlogins: [ghcr]', 'logins must be a mapping of login names'],
+    ['name: acme\nbootstrap: vpn', 'bootstrap must be a list of role names'],
+    [
+      'name: acme\nbootstrap: ["../vpn"]',
+      'bootstrap must be a list of role names',
+    ],
     ['- acme', 'must be a mapping with a name'],
     ['name: [', 'is not valid YAML'],
   ])('rejects %p', (manifest, message) => {
