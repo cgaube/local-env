@@ -65,6 +65,22 @@ export type SessionLoginType<Config> = LoginType<Config> & {
     login: DeclaredLogin<Config>,
     secret: SecretRef,
   ) => SecretCommand
+  // For a registry login that names this login (`login:`): the command that
+  // gets a token of the host. Data, run by registry-tokens.ts. Throws an
+  // Error that says which hosts the type serves. Missing: the type gets no
+  // registry tokens.
+  registryToken?: (
+    login: DeclaredLogin<Config>,
+    host: string,
+  ) => RegistryTokenCommand
+}
+
+// The command that prints a registry token, run with the login's `env`: the
+// password of `username` on the registry, good for `hours`
+export type RegistryTokenCommand = {
+  argv: string[]
+  username: string
+  hours: number
 }
 
 export type SecretCommand = {

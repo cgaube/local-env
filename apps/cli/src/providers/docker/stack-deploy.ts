@@ -12,6 +12,7 @@ import { logger } from '#cli/utils/logger.js'
 import { runStep } from '#cli/utils/task.js'
 import { askPassword, askText, canAsk } from '#cli/utils/prompt.js'
 import { dockhandApi, dockhandPost } from '#cli/providers/docker/api.js'
+import { registryTokensStep } from '#cli/logins/registry-tokens.js'
 import { registryLoginsStep } from '#cli/logins/registry.js'
 import { readBuildTree } from '#cli/providers/docker/stack-builds.js'
 import {
@@ -127,8 +128,10 @@ export const prepareStacks = async (
   candidates: StackCandidate[],
   retry: string,
 ): Promise<StackPlan | null> => {
-  // Their private images pull with the logins of their source's registries
+  // Their private images pull with the logins of their source's registries,
+  // and a new token of each ECR registry
   await registryLoginsStep.run()
+  await registryTokensStep.run()
 
   const fromVault = new Map(
     candidates.map(({ name, template, compose }) => [

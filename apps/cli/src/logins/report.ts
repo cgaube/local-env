@@ -2,15 +2,17 @@ import type {
   LoginRow,
   LoginsReport,
 } from '#services/dashboard/agent-protocol.js'
-import { listAccounts } from '#cli/logins/declared.js'
+import { listAccounts, loginCommandFor } from '#cli/logins/declared.js'
 import { SESSION_TYPES } from '#cli/logins/index.js'
 import {
   findLogin,
   getRegistries,
   isIgnored,
+  isTokenExpired,
   registryLogin,
+  tokenState,
 } from '#cli/logins/registry.js'
-import { loginCommandFor, sessionStatus } from '#cli/logins/session.js'
+import { sessionStatus } from '#cli/logins/session.js'
 
 // Every login of the sources and its state, for the dashboard (the agent's
 // GET /logins). Each account once; the sessions are checked in parallel.
@@ -39,6 +41,17 @@ const registryRows = async (): Promise<LoginRow[]> => {
       }
     }
     const saved = findLogin(registries, login.config.host)
+    const { host, login: from } = login.config
+    if (from) {
+      // local-env gets a new token on start: an expired one waits for you
+      const ok = saved !== undefined && !isTokenExpired(host)
+      return {
+        ...base,
+        state: ok ? ('logged-in' as const) : ('logged-out' as const),
+        detail: saved ? tokenState(host, from) : 'no token',
+        command: ok ? null : command,
+      }
+    }
     if (saved) {
       return {
         ...base,

@@ -8,13 +8,12 @@ import {
   hasCommand,
   installBrewPackages,
 } from '#cli/utils/brew.js'
-import { findSourceLogin } from '#cli/logins/declared.js'
+import { findSourceLogin, loginCommandFor } from '#cli/logins/declared.js'
 import { SESSION_TYPES } from '#cli/logins/index.js'
 import { registryLogin } from '#cli/logins/registry.js'
 import {
   canLogIn,
   logInToSession,
-  loginCommandFor,
   readSecret,
   sessionStatus,
 } from '#cli/logins/session.js'
@@ -152,7 +151,9 @@ const sessionKey = ({ type, login }: SessionEntry) =>
   `${type.type}:${login.identity}`
 
 // The CLIs of these types, installed with Homebrew when missing
-export const installClis = async (types: SessionLoginType<unknown>[]) => {
+export const installClis = async (
+  types: Pick<SessionLoginType<unknown>, 'cli'>[],
+) => {
   const clis = [...new Map(types.map(({ cli }) => [cli.binary, cli])).values()]
   for (const { binary, formula } of clis) {
     if (await hasCommand(binary)) continue

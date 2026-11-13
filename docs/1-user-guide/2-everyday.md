@@ -55,22 +55,22 @@ it too, with everything else.
 
 ## Every command
 
-| Command                             | What it does                                           |
-| ----------------------------------- | ------------------------------------------------------ |
-| `setup`                             | Set up the domain, the certificate and the DNS         |
-| `start` / `stop` / `status`         | Start, stop or show the services of local-env          |
-| `update`                            | Update local-env, its services, the sources and stacks |
-| `sources add <repo>`                | Add a source: a git URL or a git repo on your Mac      |
-| `sources list` / `remove`           | Show or remove your sources                            |
-| `sources sync [source]`             | Pull the sources and apply the changes of templates    |
-| `sources links`                     | Show the deployed stacks and their templates           |
-| `sources login` / `logout [source]` | Log in to the accounts that a source needs, or log out |
-| `deploy [template]`                 | Deploy a template of your sources in Docker            |
-| `install [profile]`                 | Install your profile and the tools you picked          |
-| `vars` (`list`, `set`, `unset`)     | Show or set the variables of your tools                |
-| `proxy routes`                      | Show the hosts that the proxy serves                   |
-| `config get` / `set <key> <value>`  | Read or change a setting, and apply it                 |
-| `doctor`                            | Check everything, and tell what to do                  |
-| `reset`                             | Remove everything that local-env created               |
+| Command                            | What it does                                           |
+| ---------------------------------- | ------------------------------------------------------ |
+| `setup`                            | Set up the domain, the certificate and the DNS         |
+| `start` / `stop` / `status`        | Start, stop or show the services of local-env          |
+| `update`                           | Update local-env, its services, the sources and stacks |
+| `sources add <repo>`               | Add a source: a git URL or a git repo on your Mac      |
+| `sources list` / `remove`          | Show or remove your sources                            |
+| `sources sync [source]`            | Pull the sources and apply the changes of templates    |
+| `sources links`                    | Show the deployed stacks and their templates           |
+| `login` / `logout [login]`         | Fix the logins that do not work, or log out of one     |
+| `deploy [template]`                | Deploy a template of your sources in Docker            |
+| `install [profile]`                | Install your profile and the tools you picked          |
+| `vars` (`list`, `set`, `unset`)    | Show or set the variables of your tools                |
+| `proxy routes`                     | Show the hosts that the proxy serves                   |
+| `config get` / `set <key> <value>` | Read or change a setting, and apply it                 |
+| `doctor`                           | Check everything, and tell what to do                  |
+| `reset`                            | Remove everything that local-env created               |
 
 `local-env <command> --help` gives the options of each command.

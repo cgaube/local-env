@@ -9,6 +9,7 @@ import {
   removeIniSections,
   writeIniSections,
 } from '#cli/logins/ini.js'
+import { ecrRegion } from '#cli/logins/registry.js'
 import { readAwsSections, writeAwsSections } from '#cli/logins/state.js'
 import {
   type DeclaredLogin,
@@ -149,6 +150,15 @@ export const configureAws = (login: DeclaredLogin<AwsConfig>) => {
   writeAwsSections([...ours, ...writable.map(({ header }) => header)])
 }
 
+// The user's own profile is an AWS SSO profile: `aws sso login` logs in to
+// it. Not a profile that runs a program (Granted's credential_process,
+// aws-vault): only the program knows how to log in.
+export const isSsoProfile = (profile: string) => {
+  const header = profile === 'default' ? 'default' : `profile ${profile}`
+  const values = readIniSection(readConfigFile(), header)
+  return Boolean(values && (values.sso_session || values.sso_start_url))
+}
+
 // Removes the sections local-env wrote that none of these logins needs
 // (the logins of every source)
 export const pruneAwsConfig = (logins: DeclaredLogin<AwsConfig>[]) => {
@@ -213,8 +223,11 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
     }
   },
   loginHint: () => 'the AWS CLI opens your browser to log in',
+  // With sso, or the user's own AWS SSO profile. Logging out stays for sso
+  // only: the user's profile can share its session with their other tools.
   loginCommand: (login) =>
-    login.config.sso
+    login.config.sso ||
+    (login.config.profile && isSsoProfile(login.config.profile))
       ? ['aws', 'sso', 'login', '--profile', awsProfile(login)]
       : null,
   logoutCommand: (login) =>
@@ -239,6 +252,21 @@ export const awsLogin: SessionLoginType<AwsConfig> = {
     output: 'json',
     keys: field ? [field] : [],
   }),
+  // ECR takes no fixed login: the username is AWS, the password a token of
+  // the host's region (good for that region only), for 12 hours
+  registryToken: (_login, host) => {
+    const region = ecrRegion(host)
+    if (!region) {
+      throw new Error(
+        'an aws login gets tokens for ECR registries only: the host must be <account>.dkr.ecr.<region>.amazonaws.com',
+      )
+    }
+    return {
+      argv: ['aws', 'ecr', 'get-login-password', '--region', region],
+      username: 'AWS',
+      hours: 12,
+    }
+  },
   facts: (login) => ({
     profile: awsProfile(login),
     ...(login.config.region || login.config.sso

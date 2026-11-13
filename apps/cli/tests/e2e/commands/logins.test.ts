@@ -429,7 +429,7 @@ describe.concurrent('local-env install, logins', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      `${TITLE}: not logged in, needed by Github. Nothing ran. In a terminal: local-env sources login acme --login acme-dev`,
+      `${TITLE}: not logged in, needed by Github. Nothing ran. In a terminal: local-env login acme/acme-dev`,
     )
     expect(result.output).toContain('Ask #platform for the dev account')
     expect(cli.bin.calls('ansible-playbook')).toEqual([])
@@ -453,7 +453,7 @@ describe.concurrent('local-env install, logins', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.output).toContain(
-      'In a terminal: local-env sources login acme',
+      'In a terminal: local-env login acme/acme-dev',
     )
     expect(cli.bin.calls('aws').map(({ args }) => args[0])).not.toContain('sso')
   })
@@ -635,7 +635,7 @@ describe.concurrent('local-env sources remove, logins', () => {
   })
 })
 
-describe.concurrent('local-env sources login, aws and vault', () => {
+describe.concurrent('local-env login, aws and vault', () => {
   // A terminal: the fake prompts give one, not the compiled binary
   test.skipIf(COMPILED)(
     'logs in to the login it names, with its CLI',
@@ -650,50 +650,155 @@ describe.concurrent('local-env sources login, aws and vault', () => {
       cli.bin.on('aws', ['sso', 'login'], { touch: session })
       await addSource(cli, 'acme', { 'acme-dev': AWS_DEV }, {})
 
-      const result = await cli.run([
-        'sources',
-        'login',
-        'acme',
-        '--login',
-        'acme-dev',
-      ])
+      const result = await cli.run(['login', 'acme/acme-dev'])
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain(
         'acme-dev: the AWS CLI opens your browser to log in',
       )
-      expect(result.output).toContain(`${TITLE}: logged in as ${ARN}`)
+      expect(result.output).toContain(
+        `✔ acme/acme-dev  AWS 123456789012 (Dev)  logged in as ${ARN}`,
+      )
       // Configured first: the profile must exist for `aws sso login`
       expect(awsConfig(cli)).toContain(`[profile ${PROFILE}]`)
     },
   )
 
+  test.skipIf(COMPILED)(
+    'offers to log in to the sessions that are logged out',
+    async () => {
+      await using cli = await createLoginsCli()
+      const session = join(cli.root, 'session')
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+        ...LOGGED_IN,
+        ifFile: session,
+      })
+      cli.bin.on('aws', ['sso', 'login'], { touch: session })
+      cli.bin.on('vault', ['token', 'lookup'], {
+        stdout: JSON.stringify({ data: { display_name: 'oidc-octocat' } }),
+      })
+      await addSource(
+        cli,
+        'acme',
+        { 'acme-dev': AWS_DEV, data: VAULT_DATA },
+        {},
+      )
+
+      const result = await cli.run(['login'], {
+        answers: [
+          {
+            ask: 'acme/acme-dev (AWS 123456789012 (Dev)): logged out. Log in now?',
+            answer: true,
+          },
+        ],
+      })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain(
+        '✔ acme/data  Vault vault.acme.test (dev)  logged in as oidc-octocat',
+      )
+      expect(
+        cli.bin.calls('aws').filter(({ args }) => args[0] === 'sso'),
+      ).toHaveLength(1)
+    },
+  )
+
+  // The user's own profile, in ~/.aws/config
+  const ownProfile = (cli: Cli, lines: string[]) => {
+    mkdirSync(join(cli.root, 'user/.aws'), { recursive: true })
+    writeFileSync(
+      join(cli.root, 'user/.aws/config'),
+      ['[profile acme]', ...lines, ''].join('\n'),
+    )
+  }
+  const OWN = {
+    type: 'aws',
+    profile: 'acme',
+    help: 'Run the onboarding script',
+  }
+
+  test.skipIf(COMPILED)(
+    'logs in to your own AWS SSO profile with aws sso login',
+    async () => {
+      await using cli = await createLoginsCli()
+      ownProfile(cli, ['sso_session = acme', 'sso_account_id = 123456789012'])
+      const session = join(cli.root, 'session')
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], {
+        ...LOGGED_IN,
+        ifFile: session,
+      })
+      cli.bin.on('aws', ['sso', 'login', '--profile', 'acme'], {
+        touch: session,
+      })
+      await addSource(cli, 'acme', { own: OWN }, {})
+
+      const result = await cli.run(['login', 'acme/own'])
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain(
+        `✔ acme/own  AWS profile acme  logged in as ${ARN}`,
+      )
+      // Your own profile: local-env writes nothing in it
+      expect(awsConfig(cli)).toBe(
+        '[profile acme]\nsso_session = acme\nsso_account_id = 123456789012\n',
+      )
+    },
+  )
+
+  test.skipIf(COMPILED)(
+    'leaves a profile that runs a program to its program',
+    async () => {
+      await using cli = await createLoginsCli()
+      ownProfile(cli, [
+        'credential_process = granted credential-process --profile acme',
+      ])
+      cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
+      await addSource(cli, 'acme', { own: OWN }, {})
+
+      const result = await cli.run(['login', 'acme/own'])
+
+      expect(result.exitCode).toBe(1)
+      expect(result.output).toContain(
+        'local-env cannot log in to AWS profile acme for you: your own profile logs in its own way. Run the onboarding script',
+      )
+      expect(
+        cli.bin.calls('aws').filter(({ args }) => args[0] === 'sso'),
+      ).toEqual([])
+    },
+  )
+
   test('needs your own terminal', async () => {
     await using cli = await createLoginsCli()
+    cli.bin.on('aws', ['sts', 'get-caller-identity'], NO_TOKEN)
     await addSource(cli, 'acme', { 'acme-dev': AWS_DEV }, {})
 
-    const result = await cli.run(
-      ['sources', 'login', 'acme', '--login', 'acme-dev'],
-      { env: NO_TTY },
-    )
+    const result = await cli.run(['login', 'acme-dev'], { env: NO_TTY })
 
     expect(result.exitCode).toBe(1)
-    expect(result.output).toContain(`Log in to ${TITLE} in your own terminal`)
-    expect(cli.bin.calls('aws')).toEqual([])
+    expect(result.output).toContain(
+      'acme/acme-dev (AWS 123456789012 (Dev)): logged out. Run `local-env login acme/acme-dev` in your own terminal',
+    )
+    expect(
+      cli.bin.calls('aws').filter(({ args }) => args[0] === 'sso'),
+    ).toEqual([])
   })
 })
 
-describe.concurrent('local-env sources logout, aws and vault', () => {
+describe.concurrent('local-env logout, aws and vault', () => {
   test('logs out of a session', async () => {
     await using cli = await createLoginsCli()
     cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
     cli.bin.on('aws', ['sso', 'logout'])
     await addSource(cli, 'acme', { 'acme-dev': AWS_DEV }, {})
 
-    const result = await cli.run(['sources', 'logout', 'acme'])
+    const result = await cli.run(['logout', 'acme/acme-dev'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.output).toContain(`Logged out of ${TITLE}`)
+    expect(result.output).toContain(
+      'Logged out of acme/acme-dev (AWS 123456789012 (Dev))',
+    )
     expect(cli.bin.calls('aws')).toContainEqual(
       expect.objectContaining({
         args: ['sso', 'logout', '--profile', PROFILE],
@@ -716,7 +821,7 @@ describe('local-env sources list, aws and vault', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain(
-      'acme-dev  AWS 123456789012 (Dev)  logged out: local-env sources login acme --login acme-dev',
+      'acme-dev  AWS 123456789012 (Dev)  logged out: local-env login acme/acme-dev',
     )
     expect(result.output).toContain(
       'data  Vault vault.acme.test (dev)  logged in as oidc-octocat',
@@ -734,7 +839,7 @@ describe.concurrent('local-env doctor, aws and vault', () => {
     const result = await cli.run(['doctor'])
 
     expect(result.output).toContain(
-      `${TITLE}: not logged in, needed by acme. Run \`local-env sources login acme --login acme-dev\`.`,
+      `${TITLE}: not logged in, needed by acme. Run \`local-env login acme/acme-dev\`.`,
     )
   })
 })

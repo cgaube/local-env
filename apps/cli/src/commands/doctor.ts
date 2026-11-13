@@ -13,16 +13,12 @@ import {
   getRegistries,
   isIgnored,
   listDeclaredRegistries,
-  loginCommandFor,
   testRegistryLogin,
 } from '#cli/logins/registry.js'
 import { resolveTemplateCompose } from '#cli/providers/docker/template-sync.js'
 import { checkManifest, SESSION_TYPES } from '#cli/logins/index.js'
-import { listAccounts } from '#cli/logins/declared.js'
-import {
-  loginCommandFor as sessionLoginCommand,
-  sessionStatus,
-} from '#cli/logins/session.js'
+import { listAccounts, loginCommandFor } from '#cli/logins/declared.js'
+import { sessionStatus } from '#cli/logins/session.js'
 import { tryReadSourceManifest } from '#services/dashboard/source-manifest.js'
 import {
   BUILD_CONTEXTS_DIR,
@@ -90,12 +86,19 @@ const checkRegistries = async (): Promise<CheckResult[]> => {
     ]
   }
   const results: CheckResult[] = []
-  for (const { host, sources } of declared) {
+  for (const { host, sources, login: from, name, source } of declared) {
     const login = findLogin(registries, host)
+    if (from && !login) {
+      results.push({
+        level: 'warn',
+        message: `${host}: no token, needed by ${sources.join(', ')}. Run \`${loginCommandFor(source, name)}\`: it gets one from ${from}.`,
+      })
+      continue
+    }
     if (!login) {
       results.push({
         level: 'warn',
-        message: `${host}: no login, needed by ${sources.join(', ')}${isIgnored(host) ? ' (not asked, as you chose)' : ''}. Run \`${loginCommandFor(sources[0]!)}\`.`,
+        message: `${host}: no login, needed by ${sources.join(', ')}${isIgnored(host) ? ' (not asked, as you chose)' : ''}. Run \`${loginCommandFor(source, name)}\`.`,
       })
       continue
     }
@@ -119,7 +122,9 @@ const checkRegistries = async (): Promise<CheckResult[]> => {
     } else {
       results.push({
         level: 'fail',
-        message: `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(sources[0]!)}\`.`,
+        message: from
+          ? `${host}: the registry rejects the token from ${from}, which has expired. Run \`${loginCommandFor(source, name)}\` for a new one.`
+          : `${host}: the registry rejects the login of ${login.username}: ${test.message}. Run \`${loginCommandFor(source, name)}\`.`,
       })
     }
   }
@@ -162,7 +167,7 @@ const checkLogins = async (): Promise<CheckResult[]> => {
     } else {
       results.push({
         level: 'warn',
-        message: `${title}: not logged in, needed by ${account.sources.join(', ')}. Run \`${sessionLoginCommand(login.source, login.name)}\`.`,
+        message: `${title}: not logged in, needed by ${account.sources.join(', ')}. Run \`${loginCommandFor(login.source, login.name)}\`.`,
       })
     }
   }

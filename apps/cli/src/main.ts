@@ -38,6 +38,8 @@ const TITLES: Record<string, string> = {
   'sources list': 'Sources',
   'sources remove': 'Remove a source',
   'sources sync': 'Sync stacks with their templates',
+  login: 'Log in',
+  logout: 'Log out',
   install: 'Install tools',
   deploy: 'Deploy a template',
   'proxy routes': 'Proxy routes',

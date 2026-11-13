@@ -2,11 +2,16 @@
 // slowest tests. bun test has no such report: its JUnit file has the times.
 // Bun keeps one --reporter, so pass `--dots` for dots, not `--reporter dot`.
 import { mkdtempSync, readFileSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
+import { availableParallelism, tmpdir } from 'os'
 import { join } from 'path'
 import { styleText } from 'node:util'
 
 const SLOWEST = 5
+
+// Half the cores: each e2e file runs its tests concurrently, and each test
+// starts the CLI and its fake binaries as processes. A worker per core
+// starves them, and the slowest tests near their timeout.
+const WORKERS = Math.max(1, Math.floor(availableParallelism() / 2))
 
 const dir = mkdtempSync(join(tmpdir(), 'local-env-junit-'))
 const report = join(dir, 'junit.xml')
@@ -16,7 +21,7 @@ const child = Bun.spawn(
     process.execPath,
     'test',
     // One process per file: e2e tests wait on child processes
-    '--parallel',
+    `--parallel=${WORKERS}`,
     '--reporter=junit',
     `--reporter-outfile=${report}`,
     ...process.argv.slice(2),

@@ -15,7 +15,7 @@ const VAULT = buildLogin({
   title: 'Vault vault.dev.test',
   state: 'logged-out',
   detail: null,
-  command: 'local-env sources login acme --login example-vault',
+  command: 'local-env login acme/example-vault',
 })
 
 // A card of the page, by its title: CardTitle is not a heading
@@ -70,9 +70,7 @@ describe('the overview', () => {
       within(card('Health')).getByText('exited').closest('[data-slot="badge"]'),
     ).not.toBeNull()
     expect(
-      within(needs).getByText(
-        'local-env sources login acme --login example-vault',
-      ),
+      within(needs).getByText('local-env login acme/example-vault'),
     ).toBeInTheDocument()
   })
 

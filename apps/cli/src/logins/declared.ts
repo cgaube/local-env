@@ -103,3 +103,33 @@ export const findSourceLogin = (
     return null
   }
 }
+
+// The logins a ref names, in every source when it gives no source:
+// `ghcr`, or `acme/ghcr`. Several when sources share the name.
+export const findLoginsByRef = (
+  ref: string,
+  types: LoginType<any>[],
+): { type: LoginType<any>; login: DeclaredLogin<unknown> }[] => {
+  const [source, name] = ref.includes('/')
+    ? (ref.split('/', 2) as [string, string])
+    : [null, ref]
+  const sources = source
+    ? listSources().filter((candidate) => candidate === source)
+    : listSources()
+  return sources.flatMap((candidate) => {
+    const found = findSourceLogin(candidate, name, types)
+    return found ? [found] : []
+  })
+}
+
+// How the commands name a login: <source>/<name>, which never changes when
+// another source adds a login of that name
+export const loginRef = (source: string, name: string) => `${source}/${name}`
+
+// Fixes every login that does not work: what to run when a pull or a secret
+// fails
+export const LOGIN_COMMAND = 'local-env login'
+
+// Logs in to one login again, even when it works
+export const loginCommandFor = (source: string, name: string) =>
+  `${LOGIN_COMMAND} ${loginRef(source, name)}`

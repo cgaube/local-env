@@ -8,6 +8,7 @@ import {
   updateContainers,
 } from '#cli/providers/docker/container-updates.js'
 import { getLocalEnvironment } from '#cli/providers/docker/environments.js'
+import { registryTokensStep } from '#cli/logins/registry-tokens.js'
 import { registryLoginsStep } from '#cli/logins/registry.js'
 import { offerStackSync } from '#cli/providers/docker/stack-sync.js'
 import { autoUpdateStep } from '#cli/providers/docker/steps/auto-update.js'
@@ -28,8 +29,9 @@ const steps: DockhandStep[] = [
   sidebarStep,
   removeBuiltinTemplatesStep,
   ownTemplateSourcesStep,
-  // Last: it may ask questions, after the steps that need none
+  // Last: they may ask questions, after the steps that need none
   registryLoginsStep,
+  registryTokensStep,
 ]
 
 // The services provisioning starts: Dockhand and the server of its templates
@@ -70,10 +72,12 @@ export const refreshDockhand = async () => {
       { done: 'Dockhand running' },
     )
   }
-  // A pulled source can need a new registry login
+  // A pulled source can need a new registry login. The ECR tokens say
+  // themselves when they change.
   if ((await registryLoginsStep.run()) !== 'unchanged') {
     logger.success('Registry logins saved in Dockhand')
   }
+  await registryTokensStep.run()
 }
 
 // Deployed stacks only: `update` refreshes the core stack through compose
@@ -112,6 +116,9 @@ const updateStackImages = async (dryRun: boolean) => {
 }
 
 const update = async (options: UpdateOptions) => {
+  // The images of ECR registries pull with a token less than 12 hours old
+  if (!options.dryRun) await registryTokensStep.run()
+
   logger.group('Stacks')
   // Lists the template changes and syncs only on approval
   const { applied: synced, rebuilt } = await offerStackSync(options)

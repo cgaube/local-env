@@ -77,7 +77,7 @@ describe('attentionItems', () => {
             title: 'Vault vault.acme.test',
             state: 'logged-out',
             detail: null,
-            command: 'local-env sources login acme --login data',
+            command: 'local-env login acme/data',
             help: 'Ask #data for the developer role',
           }),
           // Chosen not to be asked about again: not a problem
@@ -95,7 +95,7 @@ describe('attentionItems', () => {
           'Vault vault.acme.test, for acme. Ask #data for the developer role',
         action: {
           kind: 'command',
-          command: 'local-env sources login acme --login data',
+          command: 'local-env login acme/data',
         },
       },
     ])

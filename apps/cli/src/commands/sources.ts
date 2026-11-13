@@ -22,7 +22,6 @@ import {
 } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/index.js'
 import { askSelect } from '#cli/utils/prompt.js'
-import { loginCommand, logoutCommand } from '#cli/commands/sources/login.js'
 import { checkManifest } from '#cli/logins/index.js'
 
 const withErrors =
@@ -176,5 +175,3 @@ export const sourcesCommand = new Command('sources')
   .addCommand(removeCommand)
   .addCommand(syncCommand)
   .addCommand(linksCommand)
-  .addCommand(loginCommand)
-  .addCommand(logoutCommand)

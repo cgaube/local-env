@@ -46,6 +46,40 @@ export const checkManifestLogins = (logins: Record<string, unknown>) => {
       )
     }
   }
+  checkRegistryTokens(logins)
+}
+
+// The `login` of a registry names a login that gets tokens for its host. One
+// of this manifest is checked here; one of another source, when a token is
+// needed (registry-tokens.ts).
+const checkRegistryTokens = (logins: Record<string, unknown>) => {
+  for (const [name, entry] of Object.entries(logins)) {
+    if ((entry as Record<string, unknown>).type !== registryLogin.type) continue
+    const { host, login } = registryLogin.parse(
+      entry as Record<string, unknown>,
+    )
+    if (!login || login.includes('/')) continue
+    const named = logins[login] as Record<string, unknown> | undefined
+    if (!named) continue
+    const type = SESSION_TYPES.find(
+      (candidate) => candidate.type === named.type,
+    )
+    if (!type?.registryToken) {
+      throw new Error(
+        `logins.${name}.login names ${login}, a ${String(named.type)} login, which gets no registry tokens`,
+      )
+    }
+    try {
+      type.registryToken(
+        { source: '', name: login, identity: '', config: type.parse(named) },
+        host,
+      )
+    } catch (error) {
+      throw new Error(
+        `logins.${name}.login: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 }
 
 // Checks the `logins` and the `secrets` of a manifest, for `sources add` and

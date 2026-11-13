@@ -12,12 +12,16 @@ import type {
   DockhandStepResult,
 } from '#cli/providers/docker/types.js'
 import {
+  isValidLoginName,
+  LOGIN_COMMAND,
   listAccounts,
+  loginCommandFor,
   readSourceLogins,
   sourcesWithLogins,
 } from '#cli/logins/declared.js'
 import {
   isIgnored as isIgnoredLogin,
+  readRegistryToken,
   setIgnored as setIgnoredLogin,
 } from '#cli/logins/state.js'
 import {
@@ -35,6 +39,14 @@ import {
 //     tokenHelp: a classic token with read:packages
 // The user types a username and a token; Dockhand keeps them and logs in to
 // the registry before each deploy.
+//
+// A registry whose tokens expire (AWS ECR) names a session login instead:
+// local-env gets a token with its CLI and saves it in Dockhand
+// (registry-tokens.ts; the type's `registryToken` says how)
+//   ecr:
+//     type: registry
+//     host: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+//     login: acme-dev
 
 // Dockhand counts all these names as Docker Hub
 const DOCKER_HUB_HOSTS = new Set([
@@ -62,6 +74,21 @@ export type RegistryConfig = {
   host: string
   usernameHelp?: string
   tokenHelp?: string
+  // The session login that gets the tokens (an aws login for ECR): `name`,
+  // or `source/name` for a login of another source
+  login?: string
+}
+
+// The region of an ECR host: an ECR token is good for that region only
+// "123456789012.dkr.ecr.us-east-1.amazonaws.com" -> "us-east-1"
+export const ecrRegion = (host: string) =>
+  /^\d{12}\.dkr\.ecr(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/.exec(
+    host,
+  )?.[1]
+
+const isLoginRef = (ref: string) => {
+  const parts = ref.split('/')
+  return parts.length <= 2 && parts.every(isValidLoginName)
 }
 
 export const registryLogin: LoginType<RegistryConfig> = {
@@ -69,11 +96,20 @@ export const registryLogin: LoginType<RegistryConfig> = {
   parse: (entry) => {
     const host = registryHost(requiredText(entry, 'host'))
     if (!host) throw new Error('host is required')
-    return {
-      host,
-      usernameHelp: optionalText(entry, 'usernameHelp'),
-      tokenHelp: optionalText(entry, 'tokenHelp'),
+    const usernameHelp = optionalText(entry, 'usernameHelp')
+    const tokenHelp = optionalText(entry, 'tokenHelp')
+    const login = optionalText(entry, 'login')
+    if (login !== undefined) {
+      if (!isLoginRef(login)) {
+        throw new Error('login must name a login: its name, or <source>/<name>')
+      }
+      if (usernameHelp || tokenHelp) {
+        throw new Error(
+          'login gets the token: usernameHelp and tokenHelp are for a login the user types',
+        )
+      }
     }
+    return { host, usernameHelp, tokenHelp, login }
   },
   identity: ({ host }) => host,
   title: ({ host }) => host,
@@ -90,6 +126,19 @@ export const usernameQuestion = (host: string, help?: string) =>
 export const tokenQuestion = (host: string, help?: string) =>
   question('Token', host, help)
 
+// The username of a host that has only one: AWS for an ECR host. Not asked.
+export const fixedUsername = (host: string) =>
+  ecrRegion(host) ? 'AWS' : undefined
+
+// The username: AWS for an ECR host, else asked, starting with the saved one
+export const askUsername = async (
+  host: string,
+  help?: string,
+  saved?: string | null,
+) =>
+  fixedUsername(host) ??
+  (await askText(usernameQuestion(host, help), saved ?? '')).trim()
+
 // A registry as Dockhand returns it. It never returns the password.
 export type DockhandRegistry = {
   id: number
@@ -100,8 +149,13 @@ export type DockhandRegistry = {
   hasCredentials: boolean
 }
 
-// A registry that one or more sources need
-export type DeclaredRegistry = RegistryConfig & { sources: string[] }
+// A registry that one or more sources need, with the login that declares it
+// first
+export type DeclaredRegistry = RegistryConfig & {
+  name: string
+  source: string
+  sources: string[]
+}
 
 type RegistryTest = {
   success: boolean
@@ -131,8 +185,10 @@ export const sourcesNeedingLogin = () => sourcesWithLogins(registryLogin)
 
 // The registries all sources need, by host, in the order of the sources
 export const listDeclaredRegistries = (): DeclaredRegistry[] =>
-  listAccounts(registryLogin).map(({ config, sources }) => ({
+  listAccounts(registryLogin).map(({ config, login, sources }) => ({
     ...config,
+    name: login.name,
+    source: login.source,
     sources,
   }))
 
@@ -222,7 +278,7 @@ export const logInToRegistry = async (
 // when Dockhand can't be reached.
 export const registryLoginLine = (
   source: string,
-  { name, host }: { name: string; host: string },
+  { name, host, login: from }: { name: string; host: string; login?: string },
   registries: DockhandRegistry[] | undefined,
 ) => {
   const what = `${name}  ${styleText('dim', host)}`
@@ -230,19 +286,40 @@ export const registryLoginLine = (
     return `${styleText('dim', '?')} ${what}  ${styleText('dim', "can't reach Dockhand")}`
   }
   const login = findLogin(registries, host)
+  if (from) {
+    const fix = styleText('dim', loginCommandFor(source, name))
+    if (!login) {
+      return `${styleText('yellow', S_WARN)} ${what}  no token: ${fix}`
+    }
+    return isTokenExpired(host)
+      ? `${styleText('yellow', S_WARN)} ${what}  ${tokenState(host, from)}: ${fix}`
+      : `${styleText('green', '✔')} ${what}  ${tokenState(host, from)}`
+  }
   if (login) {
     return `${styleText('green', '✔')} ${what}  logged in as ${login.username}`
   }
   const state = isIgnored(host) ? 'no login, not asked' : 'no login'
-  return `${styleText('yellow', S_WARN)} ${what}  ${state}: ${styleText('dim', `${loginCommandFor(source)} --login ${name}`)}`
+  return `${styleText('yellow', S_WARN)} ${what}  ${state}: ${styleText('dim', loginCommandFor(source, name))}`
 }
 
-// The command that logs in to the registries of a source
-export const loginCommandFor = (source: string) =>
-  `local-env sources login ${source}`
+// The token local-env saved for this host has expired
+export const isTokenExpired = (host: string, now = new Date()) => {
+  const token = readRegistryToken(host)
+  return token !== undefined && token.expiresAt <= now
+}
 
-const loginHint = (source: string) =>
-  `Run \`${loginCommandFor(source)}\` to log in.`
+// "token from acme-dev, expires in 9 h"
+export const tokenState = (host: string, from: string, now = new Date()) => {
+  const token = readRegistryToken(host)
+  if (!token) return `token from ${from}`
+  const hours = Math.floor(
+    (token.expiresAt.getTime() - now.getTime()) / 3_600_000,
+  )
+  if (token.expiresAt <= now) return `token from ${from} expired`
+  return `token from ${from}, expires in ${hours < 1 ? 'less than 1 h' : `${hours} h`}`
+}
+
+const loginHint = () => `Run \`${LOGIN_COMMAND}\` to log in.`
 
 // Asks for the login of one registry. False when the user does not log in.
 const offerLogin = async (declared: DeclaredRegistry) => {
@@ -255,7 +332,7 @@ const offerLogin = async (declared: DeclaredRegistry) => {
       {
         value: 'never',
         label: "Don't ask again",
-        hint: `${loginCommandFor(sources[0]!)} still works`,
+        hint: `${LOGIN_COMMAND} still works`,
       },
     ],
   )
@@ -265,9 +342,7 @@ const offerLogin = async (declared: DeclaredRegistry) => {
   }
   if (choice === 'later') return false
 
-  const username = (
-    await askText(usernameQuestion(host, usernameHelp), '')
-  ).trim()
+  const username = await askUsername(host, usernameHelp)
   const password = (await askPassword(tokenQuestion(host, tokenHelp))).trim()
   try {
     await logInToRegistry(host, username, password)
@@ -275,7 +350,7 @@ const offerLogin = async (declared: DeclaredRegistry) => {
     return true
   } catch (error) {
     logger.warn(
-      `${error instanceof Error ? error.message : String(error)}. ${loginHint(sources[0]!)}`,
+      `${error instanceof Error ? error.message : String(error)}. ${loginHint()}`,
     )
     return false
   }
@@ -286,7 +361,8 @@ const offerLogin = async (declared: DeclaredRegistry) => {
 export const registryLoginsStep: DockhandStep = {
   name: 'Registry logins',
   run: async (): Promise<DockhandStepResult> => {
-    const declared = listDeclaredRegistries()
+    // A login gets the tokens of these (registryTokensStep)
+    const declared = listDeclaredRegistries().filter(({ login }) => !login)
     if (declared.length === 0) return 'unchanged'
 
     const registries = await getRegistries()
@@ -298,7 +374,7 @@ export const registryLoginsStep: DockhandStep = {
     if (!canAsk()) {
       for (const { host, sources } of missing) {
         logger.warn(
-          `${host}: ${sources.join(', ')} needs a login to pull private images. ${loginHint(sources[0]!)}`,
+          `${host}: ${sources.join(', ')} needs a login to pull private images. ${loginHint()}`,
         )
       }
       return 'unchanged'
