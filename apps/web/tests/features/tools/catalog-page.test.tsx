@@ -541,11 +541,12 @@ describe('Catalog page', () => {
       screen.queryByRole('switch', { name: 'Install git' }),
     ).not.toBeInTheDocument()
 
-    await user.click(
-      screen.getByRole('switch', {
-        name: "Show the backend profile's 2 tools",
-      }),
-    )
+    const toggle = screen.getByRole('switch', {
+      name: "Show the backend profile's tools",
+    })
+    expect(toggle).not.toBeChecked()
+    await user.click(toggle)
+    expect(toggle).toBeChecked()
     for (const name of ['git', 'node']) {
       const toolSwitch = screen.getByRole('switch', { name: `Install ${name}` })
       expect(toolSwitch).toBeChecked()

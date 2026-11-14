@@ -7,14 +7,15 @@ import {
 } from '@tanstack/react-table'
 import { SearchIcon } from 'lucide-react'
 import { useState } from 'react'
+import { cn } from 'cn'
+import { Badge } from '#ui/components/ui/badge'
+import { buttonVariants } from '#ui/components/ui/button'
 import { Card, CardContent } from '#ui/components/ui/card'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from '#ui/components/ui/input-group'
-import { Label } from '#ui/components/ui/label'
-import { Switch } from '#ui/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -23,6 +24,12 @@ import {
   TableHeader,
   TableRow,
 } from '#ui/components/ui/table'
+import { Switch } from '#ui/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '#ui/components/ui/tooltip'
 import { plural } from '#ui/lib/plural.ts'
 import { ColumnsMenu } from '#ui/features/tools/columns-menu'
 import { FacetedFilter } from '#ui/features/tools/faceted-filter'
@@ -184,14 +191,37 @@ export function CatalogTable({
               onChange={statuses.setPicked}
             />
             {profile && profileTools > 0 ? (
-              <Label className="text-muted-foreground font-normal">
-                <Switch
-                  size="sm"
-                  checked={showProfile}
-                  onCheckedChange={(on) => profileColumn?.setFilterValue(!on)}
-                />
-                Show the {profile} profile's {plural(profileTools, 'tool')}
-              </Label>
+              <Tooltip>
+                {/* A switch in a label drawn like the filters' buttons */}
+                <TooltipTrigger
+                  render={
+                    <label
+                      // Merged like Button merges them: the outline's
+                      // border wins over the base's transparent one
+                      className={cn(
+                        buttonVariants({
+                          variant: 'outline',
+                          className: 'cursor-pointer pl-2',
+                        }),
+                      )}
+                    />
+                  }
+                >
+                  <Switch
+                    size="sm"
+                    aria-label={`Show the ${profile} profile's tools`}
+                    checked={showProfile}
+                    onCheckedChange={(on) => profileColumn?.setFilterValue(!on)}
+                  />
+                  Profile tools
+                  <Badge variant="secondary">{profileTools}</Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {showProfile
+                    ? `Hide the ${plural(profileTools, 'tool')} of the ${profile} profile: it installs them`
+                    : `Show the ${plural(profileTools, 'tool')} of the ${profile} profile: it installs them`}
+                </TooltipContent>
+              </Tooltip>
             ) : null}
             <span className="text-muted-foreground ml-auto text-sm">
               {matching === rows.length
@@ -211,7 +241,7 @@ export function CatalogTable({
           </div>
           <FilterChips
             chips={chips}
-            // Not the profile filter: it has its own switch
+            // Not the profile filter: it has its own toggle
             onClear={() =>
               table.setColumnFilters((filters) =>
                 filters.filter(({ id }) => id === 'profile'),

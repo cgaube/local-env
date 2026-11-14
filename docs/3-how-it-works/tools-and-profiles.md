@@ -61,11 +61,12 @@ profiles on the Mac with `local-env install`.
   you are. It opens the Profiles page. If the sources have no profile, it is not
   there.
 - The Tools page hides the roles of the profile at first: the profile decides
-  them, and the user picks only the others. A switch in the filters shows them
-  ("Show the backend profile's 3 tools"), with a locked switch ("In the backend
-  profile"); **Clear all** leaves it. A role picked before it joined the profile
-  stays, so it can be unpicked. Their inputs stay in the Variables sheet, which
-  holds the whole next install. The profiles are not rows of the Tools page.
+  them, and the user picks only the others. The **Profile tools** switch beside
+  the filters, with their count, shows them, each with a locked switch ("In the
+  backend profile"); **Clear all** leaves it. A role picked before it joined the
+  profile stays, so it can be unpicked. Their inputs stay in the Variables
+  sheet, which holds the whole next install. The profiles are not rows of the
+  Tools page.
 - A role can need Docker stacks (`local-env.yml`). `local-env install` deploys
   the stacks that are missing, after one confirmation (`--yes` does not ask). It
   deploys each stack one time. If the user removes the stack, it stays removed.

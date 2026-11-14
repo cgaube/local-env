@@ -266,3 +266,12 @@
     @apply font-sans;
   }
 }
+
+/* No press nudge on buttons: shadcn's button classes move a pressed button
+   down 1px (active:translate-y-px, in components/ui/button.tsx). Here, not in
+   that file, so re-adding the component keeps it. Outside any layer, it wins
+   over Tailwind's utilities. group/button is on every element drawn with
+   buttonVariants, a Button or not (the Tools page's Profile tools switch). */
+.group\/button:active {
+  translate: none;
+}
