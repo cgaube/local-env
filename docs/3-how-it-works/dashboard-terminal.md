@@ -35,6 +35,8 @@ dashboard and shown in a terminal in the page.
   of the command: a select, a confirmation, the sudo password.
 - The sheet stays open when the user goes to another page. Closing the sheet
   does not stop the command. Opening it again shows the command from its start.
+- Escape closes the sheet once the command ended. While it runs, Escape goes to
+  the command, which can use it to cancel a question, and the sheet stays open.
 - During `update`, the dashboard restarts. The terminal shows **Reconnecting**,
   then shows the command again and goes on.
 - One command runs at a time. During its run, the Install button and the version

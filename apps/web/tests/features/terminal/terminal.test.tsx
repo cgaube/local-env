@@ -292,6 +292,43 @@ describe('Terminal', () => {
     ).not.toBeInTheDocument()
   })
 
+  test('closes on Escape once the command ended, not while it runs', async () => {
+    const user = userEvent.setup()
+    const { events } = await renderApp('/')
+    act(() => events.emit('agent', available))
+
+    await openUpdate(user)
+    const sheet = await screen.findByRole('dialog', { name: /Terminal/ })
+    const socket = FakeWebSocket.last()
+    act(() => {
+      socket.accept()
+      socket.receive({
+        type: 'state',
+        run: run({ command: 'update' }),
+        replay: true,
+      })
+    })
+
+    // A key of the run: it cancels a prompt
+    await user.click(within(sheet).getByLabelText('Terminal input'))
+    await user.keyboard('{Escape}')
+    expect(sheet).toBeInTheDocument()
+
+    act(() =>
+      socket.receive({
+        type: 'state',
+        run: run({ command: 'update', status: 'exited', exitCode: 0 }),
+        replay: false,
+      }),
+    )
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: /Terminal/ }),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
   test('cannot update while the agent is not running', async () => {
     const user = userEvent.setup()
     const { events } = await renderApp('/')

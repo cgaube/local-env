@@ -38,7 +38,9 @@ function RunBadge({ state }: { state: SessionState }) {
 }
 
 // The terminal of `local-env install`, `update` or `deploy`, run by the dashboard
-// agent on this Mac. Closing it doesn't stop the command.
+// agent on this Mac. Closing it doesn't stop the command. Escape closes it
+// only once the command ended: while it runs, Escape is a key of the run (it
+// cancels a prompt), wherever the focus is in the sheet.
 export function TerminalSheet({
   open,
   onOpenChange,
@@ -49,9 +51,19 @@ export function TerminalSheet({
   session: TerminalSession
 }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot)
+  const running = state.run?.status === 'running'
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(next, details) => {
+        if (!next && running && details.reason === 'escape-key') {
+          details.cancel()
+          return
+        }
+        onOpenChange(next)
+      }}
+    >
       <SheetContent className="w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader>
           <div className="flex items-center gap-2 pr-8">
