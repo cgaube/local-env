@@ -13,6 +13,8 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from '#ui/components/ui/input-group'
+import { Label } from '#ui/components/ui/label'
+import { Switch } from '#ui/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -45,9 +47,13 @@ export function CatalogTable({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'tool', desc: false },
   ])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  // The profile's tools hidden at first: the profile installs them, the
+  // user picks the others
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([
+    { id: 'profile', value: true },
+  ])
   const [columnVisibility, setColumnVisibility] =
-    useState<ColumnVisibilityState>({ tags: false })
+    useState<ColumnVisibilityState>({ tags: false, profile: false })
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -111,6 +117,12 @@ export function CatalogTable({
   const tags = facet('tags')
   const statuses = facet('status', STATUS_LABELS)
 
+  // The profile's tools that the profile filter can hide
+  const profileColumn = table.getColumn('profile')
+  const profile = rows.find((row) => row.inProfile)?.inProfile ?? null
+  const profileTools = rows.filter((row) => row.inProfile && !row.picked).length
+  const showProfile = !profileColumn?.getFilterValue()
+
   const chips: FilterChip[] = [
     ...(query
       ? [
@@ -171,6 +183,16 @@ export function CatalogTable({
               picked={statuses.picked}
               onChange={statuses.setPicked}
             />
+            {profile && profileTools > 0 ? (
+              <Label className="text-muted-foreground font-normal">
+                <Switch
+                  size="sm"
+                  checked={showProfile}
+                  onCheckedChange={(on) => profileColumn?.setFilterValue(!on)}
+                />
+                Show the {profile} profile's {plural(profileTools, 'tool')}
+              </Label>
+            ) : null}
             <span className="text-muted-foreground ml-auto text-sm">
               {matching === rows.length
                 ? plural(rows.length, 'tool')
@@ -189,7 +211,12 @@ export function CatalogTable({
           </div>
           <FilterChips
             chips={chips}
-            onClear={() => table.resetColumnFilters()}
+            // Not the profile filter: it has its own switch
+            onClear={() =>
+              table.setColumnFilters((filters) =>
+                filters.filter(({ id }) => id === 'profile'),
+              )
+            }
           />
         </CardContent>
       </Card>

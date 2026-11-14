@@ -127,6 +127,15 @@ export const catalogColumns = column.columns([
     // Each tag counts in the filter, not the list
     getUniqueValues: (tool) => tool.tags,
   }),
+  // Never shown: the profile filter. The profile decides these, so the
+  // catalog hides them at first. One picked here before stays, so it can be
+  // unpicked.
+  column.accessor((tool) => tool.inProfile !== null && !tool.picked, {
+    id: 'profile',
+    enableHiding: false,
+    enableSorting: false,
+    filterFn: 'hideTrue',
+  }),
   // A value for every row, so the status filter can pick the tools that are
   // neither picked nor installed
   column.accessor((tool) => tool.status ?? 'available', {

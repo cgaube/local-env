@@ -38,6 +38,11 @@ export const catalogFeatures = tableFeatures({
       filter: (value, picked: string[]) => picked.includes(value),
       autoRemove: (picked?: string[]) => !picked?.length,
     }),
+    // On: leaves out the rows whose value is true. The profile's tools
+    hideTrue: constructFilterFn({
+      filter: (value: boolean, hide: boolean) => !hide || !value,
+      autoRemove: (hide?: boolean) => !hide,
+    }),
   },
   sortFns: { text: sortFn_text },
 })

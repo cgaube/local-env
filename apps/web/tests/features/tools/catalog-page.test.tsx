@@ -501,13 +501,15 @@ describe('Catalog page', () => {
     expect(screen.getByText('No tools yet')).toBeInTheDocument()
   })
 
-  test('locks the roles of the profile, at every depth', async () => {
+  test('hides the roles of the profile at first, and locks them, at every depth', async () => {
+    const user = userEvent.setup()
     const { events } = await renderApp('/tools')
     const base = buildRole({
       name: 'base',
       isProfile: true,
       dependencies: ['git'],
     })
+    const docker = buildRole({ name: 'docker' })
     const backend = buildRole({
       name: 'backend',
       isProfile: true,
@@ -518,12 +520,32 @@ describe('Catalog page', () => {
       events.emit(
         'tools',
         buildTools({
-          roles: [git, node, base, backend],
+          roles: [git, node, base, backend, docker],
           profile: 'acme/backend',
         }),
       ),
     )
 
+    // The profile installs them: only the optional tools show
+    expect(
+      screen.queryByRole('switch', { name: 'Install git' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('switch', { name: 'Install docker' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('1 of 3 tools')).toBeInTheDocument()
+    // Not a filter Clear all removes
+    await user.type(screen.getByLabelText('Filter tools'), 'dock')
+    await user.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(
+      screen.queryByRole('switch', { name: 'Install git' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('switch', {
+        name: "Show the backend profile's 2 tools",
+      }),
+    )
     for (const name of ['git', 'node']) {
       const toolSwitch = screen.getByRole('switch', { name: `Install ${name}` })
       expect(toolSwitch).toBeChecked()
