@@ -72,6 +72,13 @@ export default function XtermView({ session }: { session: TerminalSession }) {
     }
     applyRunning()
     const stopState = session.subscribe(applyRunning)
+    // xterm stops every key it handles. Once the run ended, Escape goes on to
+    // the sheet, which closes.
+    terminal.attachCustomKeyEventHandler(
+      (event) =>
+        event.key !== 'Escape' ||
+        session.getSnapshot().run?.status === 'running',
+    )
     const input = terminal.onData((data) => session.input(data))
     const resize = terminal.onResize(({ cols, rows }) =>
       session.resize(cols, rows),
