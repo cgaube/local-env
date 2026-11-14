@@ -8,8 +8,9 @@ Docker: Git, Node.js, a database client, a CLI. Your sources hold the tools. A
 
 - On the **Profiles** page of the dashboard, pick the profile of your job. Its
   card shows its tools and the Docker stacks that it needs.
-- On the **Tools** page, pick other tools with their switch. The tools of your
-  profile are already on.
+- On the **Tools** page, pick other tools with their switch. The page hides the
+  tools of your profile, as the profile installs them. To see them, turn on the
+  **Profile tools** switch beside the filters: their switch is on and locked.
 
 Picking a tool does not install it. The **Install** button then stands out, with
 the count of what the next install does.

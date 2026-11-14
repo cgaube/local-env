@@ -102,6 +102,8 @@ export function CommandMenu() {
             <Button
               variant="outline"
               size="sm"
+              // The keys end it, like an icon: the same padding as the left
+              className="pr-1.5"
               aria-label="Commands"
               onClick={() => setOpen(true)}
             />

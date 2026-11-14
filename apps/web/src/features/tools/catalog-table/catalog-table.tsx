@@ -7,6 +7,9 @@ import {
 } from '@tanstack/react-table'
 import { SearchIcon } from 'lucide-react'
 import { useState } from 'react'
+import { cn } from 'cn'
+import { Badge } from '#ui/components/ui/badge'
+import { buttonVariants } from '#ui/components/ui/button'
 import { Card, CardContent } from '#ui/components/ui/card'
 import {
   InputGroup,
@@ -21,6 +24,12 @@ import {
   TableHeader,
   TableRow,
 } from '#ui/components/ui/table'
+import { Switch } from '#ui/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '#ui/components/ui/tooltip'
 import { plural } from '#ui/lib/plural.ts'
 import { ColumnsMenu } from '#ui/features/tools/columns-menu'
 import { FacetedFilter } from '#ui/features/tools/faceted-filter'
@@ -45,9 +54,13 @@ export function CatalogTable({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'tool', desc: false },
   ])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  // The profile's tools hidden at first: the profile installs them, the
+  // user picks the others
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([
+    { id: 'profile', value: true },
+  ])
   const [columnVisibility, setColumnVisibility] =
-    useState<ColumnVisibilityState>({ tags: false })
+    useState<ColumnVisibilityState>({ tags: false, profile: false })
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -111,6 +124,12 @@ export function CatalogTable({
   const tags = facet('tags')
   const statuses = facet('status', STATUS_LABELS)
 
+  // The profile's tools that the profile filter can hide
+  const profileColumn = table.getColumn('profile')
+  const profile = rows.find((row) => row.inProfile)?.inProfile ?? null
+  const profileTools = rows.filter((row) => row.inProfile && !row.picked).length
+  const showProfile = !profileColumn?.getFilterValue()
+
   const chips: FilterChip[] = [
     ...(query
       ? [
@@ -171,6 +190,39 @@ export function CatalogTable({
               picked={statuses.picked}
               onChange={statuses.setPicked}
             />
+            {profile && profileTools > 0 ? (
+              <Tooltip>
+                {/* A switch in a label drawn like the filters' buttons */}
+                <TooltipTrigger
+                  render={
+                    <label
+                      // Merged like Button merges them: the outline's
+                      // border wins over the base's transparent one
+                      className={cn(
+                        buttonVariants({
+                          variant: 'outline',
+                          className: 'cursor-pointer pl-2',
+                        }),
+                      )}
+                    />
+                  }
+                >
+                  <Switch
+                    size="sm"
+                    aria-label={`Show the ${profile} profile's tools`}
+                    checked={showProfile}
+                    onCheckedChange={(on) => profileColumn?.setFilterValue(!on)}
+                  />
+                  Profile tools
+                  <Badge variant="secondary">{profileTools}</Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {showProfile
+                    ? `Hide the ${plural(profileTools, 'tool')} of the ${profile} profile: it installs them`
+                    : `Show the ${plural(profileTools, 'tool')} of the ${profile} profile: it installs them`}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <span className="text-muted-foreground ml-auto text-sm">
               {matching === rows.length
                 ? plural(rows.length, 'tool')
@@ -189,7 +241,12 @@ export function CatalogTable({
           </div>
           <FilterChips
             chips={chips}
-            onClear={() => table.resetColumnFilters()}
+            // Not the profile filter: it has its own toggle
+            onClear={() =>
+              table.setColumnFilters((filters) =>
+                filters.filter(({ id }) => id === 'profile'),
+              )
+            }
           />
         </CardContent>
       </Card>
