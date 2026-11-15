@@ -30,6 +30,9 @@ local-env setup
 - It sets up a wildcard DNS for the domain (`dev.test` by default) with dnsmasq.
   Every name of the domain then points to your Mac.
 - It creates a certificate with mkcert, which your Mac trusts.
+- It installs Ansible for the tools of your sources: its own `ansible-core`,
+  with uv, in `~/.local-env`. It does not use or change an Ansible that you
+  installed yourself.
 - It offers to start local-env: the proxy, Dockhand, the dashboard and the
   server of the templates.
 

@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { existsSync } from 'fs'
+import { ANSIBLE_CORE_VERSION, ensureAnsible } from '#cli/core/ansible.js'
 import { installLocalCa } from '#cli/core/certificate.js'
 import {
   checkConfig,
@@ -23,7 +24,10 @@ const BREW_PACKAGES = [
   { name: 'mkcert', description: 'local certificate authority' },
   { name: 'nss', description: 'Firefox certificate trust support' },
   { name: 'dnsmasq', description: 'wildcard DNS resolver' },
-  { name: 'ansible', description: 'installs the tools of your sources' },
+  {
+    name: 'uv',
+    description: 'installs Ansible, for the tools of your sources',
+  },
 ]
 
 const ensureDependencies = async (yes: boolean) => {
@@ -45,19 +49,23 @@ const ensureDependencies = async (yes: boolean) => {
     logger.success(
       BREW_PACKAGES.map((pkg) => pkg.name).join(', ') + ' installed',
     )
-    return
+  } else {
+    for (const pkg of missing)
+      logger.info(`Missing ${pkg.name} (${pkg.description})`)
+    const install =
+      yes || (await askConfirm('Install them with Homebrew now?', true))
+    if (!install) {
+      throw new Error(
+        'Setup needs these packages. Install them and run it again.',
+      )
+    }
+    await installBrewPackages(missing.map((pkg) => pkg.name))
   }
 
-  for (const pkg of missing)
-    logger.info(`Missing ${pkg.name} (${pkg.description})`)
-  const install =
-    yes || (await askConfirm('Install them with Homebrew now?', true))
-  if (!install) {
-    throw new Error(
-      'Setup needs these packages. Install them and run it again.',
-    )
+  // local-env's own Ansible, with uv (core/ansible.ts)
+  if ((await ensureAnsible()) === 'ready') {
+    logger.success(`ansible-core ${ANSIBLE_CORE_VERSION} installed`)
   }
-  await installBrewPackages(missing.map((pkg) => pkg.name))
 }
 
 export type SetupOptions = {

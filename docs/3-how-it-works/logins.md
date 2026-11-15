@@ -506,10 +506,10 @@ filled.
   the manifest will serve the stacks, with one `secretCommand` per type.
 - **local-env reads the secrets, not Ansible.** Ansible's lookups
   (`amazon.aws.secretsmanager_secret`, `community.hashi_vault`) need `boto3` and
-  `hvac` in Ansible's Python. Homebrew's Ansible has neither, and a role cannot
-  install them for the run it is in. local-env runs the vendor's CLI, which it
-  installs, with the session it just checked. A lookup of our own would be
-  Python to ship and test, for the same commands.
+  `hvac` in Ansible's Python. local-env's `ansible-core` has neither, and a role
+  cannot install them for the run it is in. local-env runs the vendor's CLI,
+  which it installs, with the session it just checked. A lookup of our own would
+  be Python to ship and test, for the same commands.
 - **The same code for roles and stacks.** A Docker stack gets its secrets from
   local-env too, before the deploy: `readSecret` serves both, and a provider is
   written once, in TypeScript.

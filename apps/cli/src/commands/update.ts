@@ -7,6 +7,11 @@ import { updateSelf } from '#cli/core/self-update.js'
 import { pullSources } from '#cli/sources/sources.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { upgradeGalaxyCollections } from '#cli/core/tools.js'
+import {
+  ANSIBLE_CORE_VERSION,
+  ansibleState,
+  ensureAnsible,
+} from '#cli/core/ansible.js'
 import { offerBootstraps } from '#cli/core/bootstrap.js'
 import { runStep } from '#cli/utils/task.js'
 import {
@@ -32,6 +37,32 @@ const updateCoreStack = async () => {
     ['up', '-d', '--wait', '--remove-orphans'],
     { done: 'Core services running' },
   )
+}
+
+// local-env's Ansible, at the version this local-env pins (core/ansible.ts):
+// installed when missing (a Mac set up with Homebrew's ansible). A failure
+// only warns: the rest of the update goes on.
+const updateAnsible = async ({ dryRun }: { dryRun: boolean }) => {
+  logger.group('Ansible')
+  const state = ansibleState()
+  if (dryRun) {
+    logger.info(
+      state === 'ready'
+        ? `ansible-core ${ANSIBLE_CORE_VERSION} installed`
+        : `Would install ansible-core ${ANSIBLE_CORE_VERSION} (dry run)`,
+    )
+    return []
+  }
+  try {
+    if ((await ensureAnsible()) === 'ready') {
+      logger.success(`ansible-core ${ANSIBLE_CORE_VERSION} installed`)
+      return []
+    }
+    return [`ansible-core ${ANSIBLE_CORE_VERSION} installed`]
+  } catch (error) {
+    logger.warn(error instanceof Error ? error.message : String(error))
+    return []
+  }
 }
 
 export const updateCommand = new Command('update')
@@ -92,6 +123,7 @@ export const updateCommand = new Command('update')
         const reclaimed = /Total reclaimed space: (.+)/.exec(stdout ?? '')?.[1]
         logger.success(`Pruned old images (${reclaimed ?? '0B'} reclaimed)`)
       }
+      summary.push(...(await updateAnsible(options)))
       // After the pull: the ranges of galaxy.yml are the sources' latest
       summary.push(...(await upgradeGalaxyCollections(options)))
 

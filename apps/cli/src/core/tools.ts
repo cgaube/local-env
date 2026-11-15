@@ -41,9 +41,9 @@ import {
   askText,
   canAsk,
 } from '#cli/utils/prompt.js'
-import { hasCommand } from '#cli/utils/brew.js'
 import { HOME_DIR } from '#cli/core/paths.js'
 import { createRunFolder } from '#cli/core/run-folder.js'
+import { ANSIBLE_PYTHON, ansibleBin, ansibleState } from '#cli/core/ansible.js'
 import { prepareLogins } from '#cli/logins/wanted.js'
 import { pipeSecrets, secretsPath } from '#cli/core/secret-pipe.js'
 import { readConfig } from '#cli/core/config.js'
@@ -215,7 +215,7 @@ export const upgradeGalaxyCollections = async ({
   const requirements = galaxyRequirements(withDependencies(catalog, roots))
   if (requirements.length === 0) return []
   // The install opens this group itself
-  if (dryRun || !(await hasCommand('ansible-galaxy'))) {
+  if (dryRun || ansibleState() !== 'ready') {
     logger.group('Collections from Galaxy')
     logger.info(
       dryRun ? 'Skipped (dry run)' : 'Skipped: Ansible is not installed',
@@ -532,8 +532,9 @@ export const runPlaybook = async (
         catalog.map(({ source }) => join(SOURCES_DIR, source, 'ansible')),
       ),
     ].join(':'),
-    // The Python that runs Ansible, without the discovery warning
-    ANSIBLE_PYTHON_INTERPRETER: 'auto_silent',
+    // Ansible's own Python for the tasks too, not whatever python3 the Mac
+    // has (core/ansible.ts)
+    ANSIBLE_PYTHON_INTERPRETER: ANSIBLE_PYTHON,
     ANSIBLE_LOCALHOST_WARNING: 'false',
   }
   // The password, written then closed. Without one, nothing: a role never
@@ -552,7 +553,7 @@ export const runPlaybook = async (
       secretsPipe = await pipeSecrets(folder.path, secrets)
     }
     if (verbose) {
-      const child = execa('ansible-playbook', args, {
+      const child = execa(ansibleBin('ansible-playbook'), args, {
         ...stdin,
         stdout: 'inherit',
         stderr: 'inherit',
@@ -563,7 +564,7 @@ export const runPlaybook = async (
       folder.onSignal((signal) => child.kill(signal))
       await child
     } else {
-      const child = execa('ansible-playbook', args, {
+      const child = execa(ansibleBin('ansible-playbook'), args, {
         ...stdin,
         reject: false,
         // Its events, from local-env's own callback: ansible-core has no

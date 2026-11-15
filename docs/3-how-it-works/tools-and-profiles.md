@@ -217,6 +217,9 @@ sequenceDiagram
   cli->>files: read profile.json, picked.json
   cli->>files: write profile.json (not with --no-save)
   cli->>files: forget the tools no longer wanted (installed.json)
+  opt ansible-core is missing, or not the version this local-env pins
+    cli->>ansible: uv tool install ansible-core into volumes/ansible
+  end
   opt the collections of wanted tools need Galaxy collections
     cli->>tmp: write requirements.yml (every range, without the collections of the sources)
     cli->>ansible: ansible-galaxy collection install into volumes/tools/collections
@@ -248,12 +251,26 @@ sequenceDiagram
 
 - `apps/cli/src/core/tools.ts` finds the profile, forgets the tools and runs the
   playbook.
+- local-env runs its own Ansible: `ansible-core`, at the version that
+  `apps/cli/src/core/ansible.ts` pins (`ANSIBLE_CORE_VERSION`), with its own
+  Python (`ANSIBLE_PYTHON_VERSION`). `ensureAnsible` installs both with
+  `uv tool install` into `volumes/ansible/` in the home folder: `tools/` (the
+  virtual environment), `bin/` (`ansible-playbook`, `ansible-galaxy`) and
+  `python/`. `UV_PYTHON_PREFERENCE=only-managed` keeps the Mac's Pythons out.
+  `volumes/ansible/version` records the version that the last install installed.
+  When it is missing or not the pinned one, `setup`, `update`, `install` and the
+  bootstraps install the pinned one first; the same command with the same pin
+  does nothing. `doctor` only checks it. The CLI runs
+  `volumes/ansible/bin/ansible-playbook` and `ansible-galaxy` by their paths,
+  never the ones on the `PATH`.
+- The tasks on the Mac run with that Python too (`ANSIBLE_PYTHON_INTERPRETER`),
+  not the Python that Ansible would discover on the Mac.
 - Ansible finds a collection only in an `ansible_collections/<namespace>/<name>`
   folder. The CLI links each collection of the sources there, in the temporary
   folder. `ANSIBLE_COLLECTIONS_PATH` is this folder, then
   `volumes/tools/collections`, and nothing else: not `~/.ansible/collections`
-  and not the user's own `ANSIBLE_COLLECTIONS_PATH`. Ansible still adds the
-  collections of the `ansible` package.
+  and not the user's own `ANSIBLE_COLLECTIONS_PATH`. Ansible still adds
+  `ansible.builtin`, the only collection of `ansible-core`.
 - A collection lists the Galaxy collections that it needs in the `dependencies`
   of its `galaxy.yml`. Before the password and the playbook, the CLI installs
   those of the collections of the wanted tools, with
@@ -262,9 +279,8 @@ sequenceDiagram
   that the resolver finds a version that meets them all. The collections of the
   sources are left out. `ANSIBLE_COLLECTIONS_PATH` is only
   `volumes/tools/collections`, so `ansible-galaxy` installs there. It skips a
-  collection that is there already, or in the `ansible` package. If the install
-  fails, the CLI stops before the playbook and names each collection and the
-  `galaxy.yml` that asks for it.
+  collection that is there already. If the install fails, the CLI stops before
+  the playbook and names each collection and the `galaxy.yml` that asks for it.
 - The CLI then reads the installed Galaxy roles that the wanted tools include,
   and their dependencies, for `become`.
 - The playbook names a role of a collection by its full name, so that Ansible
@@ -444,10 +460,24 @@ sequenceDiagram
 - **local-env does not use the collections of the user.** A collection in
   `~/.ansible/collections` (installed by hand, for another project) would decide
   which version a profile runs with, so the same profile would run differently
-  on each Mac. local-env uses only its own folder and the collections of the
-  `ansible` package, which `local-env setup` installs with Homebrew. A role that
-  needs a collection lists it in its `galaxy.yml`. The user's own Ansible setup
-  does not change.
+  on each Mac. local-env uses only its own folder and `ansible.builtin`. A role
+  that needs a collection lists it in its `galaxy.yml`. The user's own Ansible
+  setup does not change.
+- **local-env installs its own `ansible-core`, with uv.** Homebrew has no
+  `ansible-core` formula, only `ansible` (about 600 MB, mostly collections
+  local-env does not use). uv installs a pinned `ansible-core` and its Python in
+  about 100 MB, and uv itself is about 30 MB. Every Mac then runs the same
+  version, the one that `bun run test:ansible` tests, whatever the user
+  installed. A user's own Ansible, for other work, never changes what local-env
+  runs, and local-env never changes it.
+- **Its own Python, for Ansible and for the tasks.** The Python of macOS can be
+  too old for `ansible-core`, or only a stub that asks to install the Command
+  Line Tools. The Python that Ansible discovers changes from Mac to Mac. uv
+  installs the same Python on every Mac.
+- **The commands install it when they need it.** A new local-env can pin another
+  version. `install` and the bootstraps then move to it before they run, and
+  `update` does too, also on a Mac that was set up with Homebrew's `ansible`.
+  The user runs nothing else.
 - **local-env ships its own output callback.** `ansible-core` has no callback
   that prints JSON lines. `ansible.posix.jsonl` is in the full `ansible` package
   (about 590 MB, mostly collections local-env does not use), not in
@@ -639,10 +669,14 @@ sequenceDiagram
   collection comes out. Only a change of the range in `galaxy.yml` does.
 - The dashboard shows a Galaxy role without its description and its tags: the
   collection is not in the sources.
-- The CLI does not read the roles of the collections of the `ansible` package
-  for `become`. A role of such a collection that uses sudo fails without the
-  password. The scan finds only `become: true` or `yes`: a templated value
-  (`become: "{{ … }}"`) fails the same way. The CLI then names the role.
+- The scan for `become` finds only `become: true` or `yes`. A role with a
+  templated value (`become: "{{ … }}"`) fails without the password. The CLI then
+  names the role.
+- local-env's Python has only what `ansible-core` needs. A module that needs
+  another Python library (`boto3`, `hvac`) fails.
+- The first install of `ansible-core` needs the network: uv downloads it from
+  PyPI and its Python from GitHub. A Python that an older pin used stays in
+  `volumes/ansible/python/`.
 - With `--verbose`, stdin is a pipe, not the terminal: a role that asks a
   question (`pause`, `vars_prompt`) gets no answer. The CLI cannot name a role
   that needs a password it did not ask for: Ansible's own output shows the

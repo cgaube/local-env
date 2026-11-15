@@ -1,7 +1,8 @@
 import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 import { provisionedDockhand } from '#cli-tests/support/factories/dockhand.js'
 import { buildTemplate } from '#cli-tests/support/factories/template.js'
-import { machineReady } from '#cli-tests/support/machine.js'
+import { ansibleInstalled, machineReady } from '#cli-tests/support/machine.js'
+import { ANSIBLE_CORE_VERSION } from '#cli/core/ansible.js'
 import { createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 // dnsmasq answers, the proxy runs and macOS resolves the probe host
@@ -28,7 +29,26 @@ describe.concurrent('local-env doctor', () => {
     expect(result.output).toContain('dnsmasq config is valid.')
     expect(result.output).toContain(`dnsmasq resolves doctor.${TEST_DOMAIN}`)
     expect(result.output).toContain('nginx-proxy container is running.')
+    expect(result.output).toContain(
+      `ansible-core ${ANSIBLE_CORE_VERSION} installed`,
+    )
     expect(result.output).toMatch(/\d+ passed, \d+ warning\(s\), \d+ failed/)
+  })
+
+  test('warns when its ansible-core is another version', async () => {
+    await using cli = await createCli()
+    cli.home.seedConfig()
+    cli.home.seedCertificate()
+    dnsWorking(cli)
+    ansibleInstalled(cli, { version: '2.17.0 python 3.12' })
+
+    const result = await cli.run(['doctor'])
+
+    expect(result.output).toContain(
+      `ansible-core is not ${ANSIBLE_CORE_VERSION}: \`local-env update\` updates it`,
+    )
+    // Doctor installs nothing
+    expect(cli.bin.calls('uv')).toEqual([])
   })
 
   test('fails on a missing certificate', async () => {

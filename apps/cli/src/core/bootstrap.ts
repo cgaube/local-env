@@ -12,7 +12,7 @@ import {
 } from '#cli/core/bootstrap-plan.js'
 import { listCatalog, runPlaybook, TOOLS_DIR } from '#cli/core/tools.js'
 import { sourceLabel } from '#cli/sources/sources.js'
-import { hasCommand } from '#cli/utils/brew.js'
+import { ensureAnsible } from '#cli/core/ansible.js'
 import { logger } from '#cli/utils/logger.js'
 import { askConfirm, canAsk } from '#cli/utils/prompt.js'
 
@@ -70,11 +70,7 @@ export const runBootstraps = async (
     problems.map((problem) => `${source}: ${problem}`),
   )
   if (problems.length > 0) throw new Error(problems.join('\n'))
-  if (!(await hasCommand('ansible-playbook'))) {
-    throw new Error(
-      'Ansible is not installed. Run `local-env setup`, or `brew install ansible`.',
-    )
-  }
+  await ensureAnsible()
   logger.info(`Runs ${plans.map(describe).join(', ')}`)
   const roots = [
     ...new Map(

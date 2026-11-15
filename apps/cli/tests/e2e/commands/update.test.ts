@@ -1,7 +1,8 @@
 import { buildContainerUpdate } from '#cli-tests/support/factories/dockhand.js'
 import packageJson from '#package.json' with { type: 'json' }
 import { fakeFormula } from '#cli-tests/support/fake-formula.js'
-import { dockerStopped } from '#cli-tests/support/machine.js'
+import { ansibleInstalled, dockerStopped } from '#cli-tests/support/machine.js'
+import { ANSIBLE_CORE_VERSION } from '#cli/core/ansible.js'
 import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
 import {
   createLinkedStack,
@@ -119,7 +120,6 @@ describe.concurrent('local-env update', () => {
     cli.home.writeJson('volumes/tools/profile.json', {
       profile: 'acme/acme.profiles.backend',
     })
-    cli.bin.on('which', ['ansible-galaxy'])
     cli.bin.on('ansible-galaxy', ['collection', 'install'], {
       stdout: 'geerlingguy.mac:5.1.0 was installed successfully\n',
     })
@@ -157,7 +157,6 @@ describe.concurrent('local-env update', () => {
     cli.home.writeJson('volumes/tools/profile.json', {
       profile: 'acme/acme.profiles.backend',
     })
-    cli.bin.on('which', ['ansible-galaxy'])
     cli.bin.on('ansible-galaxy', ['collection', 'install'], {
       stderr: 'ERROR! Unknown error when attempting to call Galaxy',
       exitCode: 1,
@@ -169,6 +168,41 @@ describe.concurrent('local-env update', () => {
     expect(result.output).toContain(
       'Could not install the collections your tools need from Galaxy',
     )
+    expect(result.output).toContain('Update complete')
+  })
+
+  test('installs its ansible-core on a Mac set up without it', async () => {
+    const { cli } = await createLinkedStack()
+    await using _ = cli
+    // Set up when local-env used Homebrew's ansible
+    ansibleInstalled(cli, { pinned: false })
+    cli.bin.on('which', ['uv'])
+    cli.bin.on('uv', ['tool', 'install'])
+
+    const result = await cli.run(['update'])
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.bin.calls('uv')[0]?.args).toContain(
+      `ansible-core==${ANSIBLE_CORE_VERSION}`,
+    )
+    // In the summary too
+    expect(
+      result.output.match(
+        new RegExp(`ansible-core ${ANSIBLE_CORE_VERSION} installed`, 'g'),
+      ),
+    ).toHaveLength(2)
+  })
+
+  test('goes on without uv, and says how to get it', async () => {
+    const { cli } = await createLinkedStack()
+    await using _ = cli
+    ansibleInstalled(cli, { pinned: false })
+    cli.bin.on('which', ['uv'], { exitCode: 1 })
+
+    const result = await cli.run(['update'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('`brew install uv`')
     expect(result.output).toContain('Update complete')
   })
 
