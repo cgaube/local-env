@@ -73,7 +73,8 @@ sequenceDiagram
   deployable again at once.
 - Running or Stopped (`templateStates` in `features/docker/docker.ts`): a
   template with a `VIRTUAL_HOST` runs while the routes, which stream live, have
-  one for its stack, and the card links to that route's address. A template
+  one for its stack, and the card links to every host of those routes (one route
+  per container, and a `VIRTUAL_HOST` may list several hosts). A template
   without one takes Dockhand's state of the stack.
 - After a deploy, the CLI prints the app's addresses: its `VIRTUAL_HOST` values,
   with the domain added to a short one, as proxy-connector does.

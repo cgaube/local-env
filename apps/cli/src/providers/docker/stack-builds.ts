@@ -8,6 +8,7 @@ import {
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/logger.js'
 import { askConfirm } from '#cli/utils/prompt.js'
+import { runStep } from '#cli/utils/task.js'
 import { dockhandPost } from '#cli/providers/docker/api.js'
 import { isLinked, readLinks } from '#cli/providers/docker/template-link.js'
 import {
@@ -98,9 +99,11 @@ export const rebuildChangedStacks = async (
 
   const rebuilt: string[] = []
   for (const { stack, tree } of changed) {
-    const result = await dockhandPost<{ success?: boolean; error?: string }>(
-      `/stacks/${encodeURIComponent(stack)}/deploy?env=${environmentId}`,
-      { build: true },
+    const result = await runStep(`Rebuilding ${stack}`, () =>
+      dockhandPost<{ success?: boolean; error?: string }>(
+        `/stacks/${encodeURIComponent(stack)}/deploy?env=${environmentId}`,
+        { build: true },
+      ),
     )
     if (result.success === false) {
       logger.warn(`${stack}: rebuild failed: ${result.error ?? 'unknown'}`)

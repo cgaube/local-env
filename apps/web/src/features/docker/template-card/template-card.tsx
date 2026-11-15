@@ -66,7 +66,7 @@ const needsOf = ({
   ].filter((need): need is Need => need !== null)
 
 // A template of the sources: what it is and what a deploy needs, then
-// Deploy, or once deployed, whether it runs, its address while it does and a
+// Deploy, or once deployed, whether it runs, its addresses while it does and a
 // link to its stack in Dockhand (state: null while Dockhand or the routes are
 // loading, or when Dockhand doesn't answer)
 export function TemplateCard({
@@ -80,7 +80,7 @@ export function TemplateCard({
 }) {
   const needs = needsOf(template)
   const deployed = state !== null && state.status !== 'not-deployed'
-  const url = state?.url
+  const urls = state?.urls ?? []
   const dockhandUrl = domain ? `https://docker.${domain}` : null
   return (
     <Card className="w-full gap-4">
@@ -138,8 +138,9 @@ export function TemplateCard({
         </CardContent>
       ) : null}
       <CardFooter className="mt-auto flex-wrap justify-end gap-2">
-        {url ? (
+        {urls.map((url) => (
           <ButtonLink
+            key={url}
             href={url}
             variant="outline"
             size="sm"
@@ -148,7 +149,7 @@ export function TemplateCard({
             <GlobeIcon data-icon="inline-start" />
             <span className="truncate">{new URL(url).host}</span>
           </ButtonLink>
-        ) : null}
+        ))}
         {deployed ? (
           dockhandUrl ? (
             <ButtonLink

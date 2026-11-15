@@ -56,6 +56,9 @@ describe.concurrent('local-env sources sync', () => {
       expect(result.output).toContain('-    image: axllent/mailpit:v1')
       expect(result.output).toContain('+    image: axllent/mailpit:v2')
       expect(result.output).toContain('mail: updated and redeployed')
+      // Closed by a callout, like update, not by "Done"
+      expect(result.output).toContain('Sources synced')
+      expect(result.output).not.toContain('Done')
       expect(stack().content).toBe(MAIL_V2)
       expect(link()?.base).not.toBe(before)
     },
