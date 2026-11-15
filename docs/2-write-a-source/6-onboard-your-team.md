@@ -47,9 +47,14 @@ To try it with the template source:
    next terminals.
 3. It checks that Docker runs. A Docker engine that runs is kept. Otherwise, it
    installs Colima (free) with Homebrew's `docker` CLI, Docker Compose and
-   Buildx, and starts it. To use another engine (OrbStack, Docker Desktop),
-   install and start it before the script, from a script of yours that then runs
-   this one, or change `ensure_docker` in your copy.
+   Buildx, and starts it as a Homebrew service (`brew services start colima`):
+   it starts again at each login, like Docker Desktop. The first start downloads
+   the VM of Colima: the script waits up to 5 minutes, and prints a dot every 2
+   seconds. It stops at once if Colima stops with an error, and names its log.
+   To stop it, run `brew services stop colima`: launchd starts it again after
+   `colima stop`. To use another engine (OrbStack, Docker Desktop), install and
+   start it before the script, from a script of yours that then runs this one,
+   or change `ensure_docker` in your copy.
 4. It installs local-env with Homebrew, or upgrades it.
 5. It hands over to `local-env onboard <source> --domain <domain>`
    (`--profile <profile>` when you set one), which does the rest in one flow:
