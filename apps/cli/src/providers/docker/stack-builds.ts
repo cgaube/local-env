@@ -8,6 +8,7 @@ import {
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/logger.js'
 import { askConfirm } from '#cli/utils/prompt.js'
+import { runStep } from '#cli/utils/task.js'
 import { dockhandPost } from '#cli/providers/docker/api.js'
 import { isLinked, readLinks } from '#cli/providers/docker/template-link.js'
 import {
@@ -84,31 +85,36 @@ export const rebuildChangedStacks = async (
   { yes, dryRun, source }: RebuildOptions,
 ) => {
   const changed = await findChangedBuilds({ dryRun, source })
-  if (changed.length === 0) return []
+  if (changed.length === 0) return { rebuilt: [], failed: [] }
 
   const list = changed.map(({ stack }) => stack).join(', ')
   if (dryRun) {
     logger.info(`Build folders changed, to rebuild: ${list}`)
-    return []
+    return { rebuilt: [], failed: [] }
   }
   if (!yes && !(await askConfirm(`Rebuild and redeploy ${list}?`, true))) {
     logger.info(`${list}: left on the previous build`)
-    return []
+    return { rebuilt: [], failed: [] }
   }
 
   const rebuilt: string[] = []
+  // Left on their previous build: the next sync tries again
+  const failed: string[] = []
   for (const { stack, tree } of changed) {
-    const result = await dockhandPost<{ success?: boolean; error?: string }>(
-      `/stacks/${encodeURIComponent(stack)}/deploy?env=${environmentId}`,
-      { build: true },
+    const result = await runStep(`Rebuilding ${stack}`, () =>
+      dockhandPost<{ success?: boolean; error?: string }>(
+        `/stacks/${encodeURIComponent(stack)}/deploy?env=${environmentId}`,
+        { build: true },
+      ),
     )
     if (result.success === false) {
       logger.warn(`${stack}: rebuild failed: ${result.error ?? 'unknown'}`)
+      failed.push(stack)
       continue
     }
     updateLink(stack, { build: tree })
     rebuilt.push(stack)
     logger.success(`${stack}: rebuilt and redeployed`)
   }
-  return rebuilt
+  return { rebuilt, failed }
 }

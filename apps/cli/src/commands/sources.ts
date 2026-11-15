@@ -21,6 +21,7 @@ import {
   summarizeSourceContent,
 } from '#cli/sources/sources.js'
 import { logger } from '#cli/utils/index.js'
+import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { askSelect } from '#cli/utils/prompt.js'
 import { checkManifest } from '#cli/logins/index.js'
 import { checkBootstrap, sourceBootstrap } from '#cli/core/bootstrap-plan.js'
@@ -157,13 +158,26 @@ const syncCommand = new Command('sync')
           })
         }
         logger.group('Stacks')
-        const { applied, rebuilt } = await syncStacks({ ...options, source })
-        if (applied.length > 0) {
-          logger.success(`${applied.length} stack(s) updated`)
-        }
-        if (rebuilt.length > 0) {
-          logger.success(`${rebuilt.length} stack(s) rebuilt`)
-        }
+        const { applied, rebuilt, failed } = await syncStacks({
+          ...options,
+          source,
+        })
+        // Last, in place of "Done", like update: green, its lines dimmed;
+        // yellow when a rebuild failed, blue for a dry run
+        closeFrameWithCallout(
+          options.dryRun ? 'info' : failed.length > 0 ? 'warn' : 'success',
+          [
+            options.dryRun
+              ? 'Dry run: nothing was changed'
+              : failed.length > 0
+                ? 'Sources synced, with failures'
+                : 'Sources synced',
+            ...applied.map((stack) => `${stack}: updated and redeployed`),
+            ...rebuilt.map((stack) => `${stack}: rebuilt and redeployed`),
+            ...failed.map((stack) => `${stack}: rebuild failed`),
+          ].join('\n'),
+          { tinted: true },
+        )
       },
     ),
   )

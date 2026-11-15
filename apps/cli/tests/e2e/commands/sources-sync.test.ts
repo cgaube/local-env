@@ -56,6 +56,9 @@ describe.concurrent('local-env sources sync', () => {
       expect(result.output).toContain('-    image: axllent/mailpit:v1')
       expect(result.output).toContain('+    image: axllent/mailpit:v2')
       expect(result.output).toContain('mail: updated and redeployed')
+      // Closed by a callout, like update, not by "Done"
+      expect(result.output).toContain('Sources synced')
+      expect(result.output).not.toContain('Done')
       expect(stack().content).toBe(MAIL_V2)
       expect(link()?.base).not.toBe(before)
     },
@@ -249,6 +252,40 @@ describe.concurrent('local-env sources sync', () => {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('mail: rebuilt and redeployed')
       expect(cli.dockhand.state.builtStacks).toEqual(['mail'])
+    },
+  )
+
+  test.skipIf(COMPILED)(
+    'ends with a warning when a rebuild fails',
+    async () => {
+      const compose = [
+        'name: mail',
+        'services:',
+        '  mail:',
+        '    build: ./app',
+        '',
+      ].join('\n')
+      const { cli, repo } = await createLinkedStack({
+        files: {
+          'docker/mail/compose.yaml': compose,
+          'docker/mail/app/Dockerfile': 'FROM axllent/mailpit:v1\n',
+        },
+      })
+      await using _ = cli
+      repo.commit({ 'docker/mail/app/Dockerfile': 'FROM axllent/mailpit:v2\n' })
+      cli.dockhand.on('POST /stacks/:name/deploy', () => ({
+        success: false,
+        error: 'build failed',
+      }))
+
+      const result = await cli.run(['sources', 'sync'], {
+        answers: [{ ask: 'Rebuild and redeploy mail?', answer: true }],
+      })
+
+      expect(result.output).toContain('mail: rebuild failed: build failed')
+      expect(result.output).toContain('Sources synced, with failures')
+      expect(result.output).toContain('mail: rebuild failed\n')
+      expect(result.output).not.toContain('mail: rebuilt and redeployed')
     },
   )
 

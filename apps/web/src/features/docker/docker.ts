@@ -13,9 +13,9 @@ export const STATUS_LABELS: Record<TemplateStatus, string> = {
   'not-deployed': 'Not deployed',
 }
 
-// What a template's card shows: its status, and the address of its app while
-// it runs
-export type TemplateState = { status: TemplateStatus; url: string | null }
+// What a template's card shows: its status, and the addresses of its apps
+// while it runs
+export type TemplateState = { status: TemplateStatus; urls: string[] }
 
 // The state of each template, by its stack name: deployed when Dockhand has a
 // stack of that name. A template with a VIRTUAL_HOST runs while the proxy
@@ -32,16 +32,24 @@ export const templateStates = (
   const states = new Map<string, TemplateState>()
   for (const { name, hosts } of templates) {
     const stack = byName.get(name)
-    const route = routes.find((candidate) => candidate.stack === name)
+    // Every host of every container of the stack: a stack may route several
+    // services, and a VIRTUAL_HOST may list several hosts
+    const urls = [
+      ...new Set(
+        routes
+          .filter((route) => route.stack === name)
+          .flatMap((route) => route.hosts.map((host) => `https://${host}`)),
+      ),
+    ]
     states.set(
       name,
       !stack
-        ? { status: 'not-deployed', url: null }
-        : route
-          ? { status: 'running', url: route.url }
+        ? { status: 'not-deployed', urls: [] }
+        : urls.length > 0
+          ? { status: 'running', urls }
           : hosts.length === 0 && stack.status === 'running'
-            ? { status: 'running', url: null }
-            : { status: 'stopped', url: null },
+            ? { status: 'running', urls: [] }
+            : { status: 'stopped', urls: [] },
     )
   }
   return states

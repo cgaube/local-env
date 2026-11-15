@@ -282,6 +282,40 @@ describe('Docker page, Templates', () => {
     expect(within(card('Wiki')).getByText('Stopped')).toBeInTheDocument()
   })
 
+  test('links every host of a running stack: each service, each host of a VIRTUAL_HOST', async () => {
+    const { events } = await renderApp('/docker')
+    act(() => {
+      events.emit('stacks', { available: true, stacks: [running('wiki')] })
+      events.emit('templates', [wiki])
+      events.emit('routes', [
+        buildRoute({
+          hosts: ['wiki.dev.test', 'docs.dev.test'],
+          url: 'https://wiki.dev.test',
+          container: 'wiki',
+          stack: 'wiki',
+        }),
+        buildRoute({
+          hosts: ['wiki-admin.dev.test'],
+          url: 'https://wiki-admin.dev.test',
+          container: 'wiki-admin',
+          stack: 'wiki',
+        }),
+      ])
+      events.emit('agent', available)
+    })
+
+    const wikiCard = await screen.findByRole('listitem', { name: 'Wiki' })
+    for (const host of [
+      'wiki.dev.test',
+      'docs.dev.test',
+      'wiki-admin.dev.test',
+    ]) {
+      expect(
+        within(wikiCard).getByRole('link', { name: host }),
+      ).toHaveAttribute('href', `https://${host}`)
+    }
+  })
+
   test('follows Dockhand: a stack removed there makes its template deployable again', async () => {
     const { events } = await renderApp('/docker')
     act(() => {

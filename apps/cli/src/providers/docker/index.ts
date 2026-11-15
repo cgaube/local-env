@@ -121,7 +121,7 @@ const update = async (options: UpdateOptions) => {
 
   logger.group('Stacks')
   // Lists the template changes and syncs only on approval
-  const { applied: synced, rebuilt } = await offerStackSync(options)
+  const { applied: synced, rebuilt, failed } = await offerStackSync(options)
 
   logger.group('Images')
   const updated = await updateStackImages(options.dryRun)
@@ -129,6 +129,7 @@ const update = async (options: UpdateOptions) => {
   return [
     `Stacks synced: ${synced.length ? synced.join(', ') : 'none'}`,
     ...(rebuilt.length ? [`Stacks rebuilt: ${rebuilt.join(', ')}`] : []),
+    ...(failed.length ? [`Rebuild failed: ${failed.join(', ')}`] : []),
     `Images updated: ${updated.length ? updated.join(', ') : 'none'}`,
   ]
 }
