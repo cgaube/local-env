@@ -1,4 +1,4 @@
-// What `ansible-playbook` prints with Ansible's ansible.posix.jsonl callback:
+// What `ansible-playbook` prints with local-env's callback (local_env.py):
 // one event a line, as src/core/playbook-output.ts reads them
 
 export type TaskFixture = {

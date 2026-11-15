@@ -44,7 +44,7 @@ jobs:
           # changesets compares with the history
           fetch-depth: 0
 
-      # Bun and Node, as pinned in mise.toml
+      # The tools pinned in mise.toml: Bun, uv
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
 
       - name: Install dependencies

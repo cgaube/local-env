@@ -1,0 +1,14 @@
+{"_event": "v2_playbook_on_task_start", "task": {"name": "Gathering Facts"}}
+{"_event": "v2_runner_on_ok", "task": {"name": "Gathering Facts"}, "hosts": {"localhost": {"changed": false}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Say hello"}}
+{"_event": "v2_runner_on_ok", "task": {"name": "demo : Say hello"}, "hosts": {"localhost": {"changed": false, "msg": "hello"}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Run true"}}
+{"_event": "v2_runner_on_ok", "task": {"name": "demo : Run true"}, "hosts": {"localhost": {"changed": true, "msg": "", "stderr": ""}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Never runs"}}
+{"_event": "v2_runner_on_skipped", "task": {"name": "demo : Never runs"}, "hosts": {"localhost": {"changed": false}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Echo each item"}}
+{"_event": "v2_runner_on_ok", "task": {"name": "demo : Echo each item"}, "hosts": {"localhost": {"changed": true, "msg": "All items completed", "results": [{"item": "first", "_ansible_item_label": "first", "changed": false, "msg": "", "stderr": ""}, {"item": "second", "_ansible_item_label": "second", "changed": true, "msg": "", "stderr": ""}, {"item": "third", "_ansible_item_label": "third", "changed": false, "skip_reason": "Conditional result was False"}]}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Mark the bad item"}}
+{"_event": "v2_runner_on_failed", "task": {"name": "demo : Mark the bad item"}, "hosts": {"localhost": {"changed": false, "msg": "One or more items failed", "results": [{"item": "good", "_ansible_item_label": "good", "changed": false, "msg": "good"}, {"item": "bad", "_ansible_item_label": "bad", "changed": false, "exception": "(traceback unavailable)", "msg": "bad"}]}}}
+{"_event": "v2_playbook_on_task_start", "task": {"name": "demo : Fail"}}
+{"_event": "v2_runner_on_failed", "task": {"name": "demo : Fail"}, "hosts": {"localhost": {"changed": false, "msg": "boom"}}}

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
+import callbackSource from '#cli/core/ansible-callback/local_env.py' with { type: 'text' }
 import { playbookEvents } from '#cli-tests/support/factories/ansible.js'
 import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 import {
@@ -176,8 +177,15 @@ describe.concurrent('local-env install', () => {
     expect(run?.env.ANSIBLE_ROLES_PATH).toBe(
       cli.home.path('volumes/sources/acme/ansible'),
     )
-    // Its events, drawn by local-env
-    expect(run?.env.ANSIBLE_STDOUT_CALLBACK).toBe('ansible.posix.jsonl')
+    // Its events, from local-env's own callback, written into the run folder
+    // for the run: no collection needed
+    expect(run?.env.ANSIBLE_STDOUT_CALLBACK).toBe('local_env')
+    const callbacks = run!.env.ANSIBLE_CALLBACK_PLUGINS!
+    expect(callbacks).toBe(join(dirname(run!.args.at(-1)!), 'callbacks'))
+    expect(run?.runFolder?.[join(callbacks, 'local_env.py')]).toBe(
+      callbackSource,
+    )
+    expect(existsSync(callbacks)).toBe(false)
     // Nothing to install from Galaxy
     expect(cli.bin.calls('ansible-galaxy')).toEqual([])
   })
@@ -362,9 +370,9 @@ describe.concurrent('local-env install', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('PLAY [local-env tools]')
-    expect(
-      cli.bin.calls('ansible-playbook')[0]?.env.ANSIBLE_STDOUT_CALLBACK,
-    ).toBeUndefined()
+    const [run] = cli.bin.calls('ansible-playbook')
+    expect(run?.env.ANSIBLE_STDOUT_CALLBACK).toBeUndefined()
+    expect(run?.env.ANSIBLE_CALLBACK_PLUGINS).toBeUndefined()
   })
 
   test('records what it installed, for the dashboard', async () => {

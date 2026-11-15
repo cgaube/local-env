@@ -14,7 +14,7 @@ import {
 } from '#cli/utils/prompt.js'
 import { runStep } from '#cli/utils/task.js'
 
-// Ansible's events (ansible.posix.jsonl) for a sample run: what
+// Ansible's events (ansible-callback/local_env.py) for a sample run: what
 // playbook-output.ts reads from `local-env install`
 async function* sampleEvents() {
   const task = (

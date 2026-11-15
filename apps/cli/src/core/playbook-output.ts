@@ -4,7 +4,8 @@ import { styleText } from 'node:util'
 import { logger } from '#cli/utils/logger.js'
 
 // Draws an ansible-playbook run like the rest of the CLI, from the events of
-// Ansible's ansible.posix.jsonl callback (one JSON object a line): a group
+// local-env's own callback (ansible-callback/local_env.py, one JSON object a
+// line): a group
 // per role, a spinner while each task runs, then a line with its result. A
 // task with a loop has a line for each item under it, as Ansible's own
 // output does: the callback sends no event per item, only their results.

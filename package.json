@@ -20,15 +20,16 @@
     "test:cli:e2e": "bun apps/cli/tests/run.ts apps/cli/tests/e2e",
     "test:cli:bin": "bun run compile && LOCAL_ENV_BIN=./local-env bun apps/cli/tests/run.ts apps/cli/tests/e2e",
     "test:cli:coverage": "bun test apps/cli/tests/unit --coverage",
+    "test:ansible": "bun test ./apps/cli/ansible-tests/callback.test.ts",
     "test:web": "vitest run --config apps/web/vite.config.ts",
     "check": "bun run typecheck && bun run lint && bun run fmt:check",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "prepare": "bun run compile",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset tag"
+    "changeset": "bun --bun x changeset",
+    "version-packages": "bun --bun x changeset version",
+    "release": "bun --bun x changeset tag"
   },
   "devDependencies": {
     "@base-ui/react": "^1.9.0",

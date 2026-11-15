@@ -1,9 +1,9 @@
 # `mise install` installs these tools, then the git hooks (lefthook.yml)
 [tools]
 bun = "1.4.4"
-# Runs the changesets CLI
-node = "26.13.0"
 lefthook = "2.2.2"
+# Runs a pinned ansible-core for `bun run test:ansible`
+uv = "0.13.8"
 
 [hooks]
 postinstall = "lefthook install"

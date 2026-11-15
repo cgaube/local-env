@@ -67,7 +67,7 @@ writes no other files, except the AWS profiles of your logins in
 ## From the source code
 
 For the people who change local-env. With [mise](https://mise.jdx.dev), which
-installs the versions of Bun and Node that `mise.toml` pins:
+installs the tools that `mise.toml` pins (Bun, uv):
 
 ```sh
 mise install

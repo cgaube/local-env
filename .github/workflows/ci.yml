@@ -18,7 +18,7 @@ jobs:
           # The changeset check compares the branch with main
           fetch-depth: 0
 
-      # Bun and Node, as pinned in mise.toml
+      # The tools pinned in mise.toml: Bun, uv
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
 
       - name: Install dependencies
@@ -51,6 +51,12 @@ jobs:
       - name: Test the CLI
         if: ${{ !cancelled() }}
         run: bun run test:cli
+
+      # local-env's Ansible callback in real ansible-core versions, which uv
+      # (mise.toml) downloads
+      - name: Test the Ansible callback
+        if: ${{ !cancelled() }}
+        run: bun run test:ansible
 
       - name: Test the web app
         if: ${{ !cancelled() }}
