@@ -57,6 +57,7 @@ import {
   type PlaybookSummary,
   renderPlaybook,
 } from '#cli/core/playbook-output.js'
+import { CALLBACK_NAME, writeCallback } from '#cli/core/ansible-callback.js'
 
 // The tools picked in the dashboard (volumes/tools/picked.json), the profile
 // (profile.json) and the installs that ran: services/dashboard/tools.ts
@@ -565,7 +566,13 @@ export const runPlaybook = async (
       const child = execa('ansible-playbook', args, {
         ...stdin,
         reject: false,
-        env: { ...env, ANSIBLE_STDOUT_CALLBACK: 'ansible.posix.jsonl' },
+        // Its events, from local-env's own callback: ansible-core has no
+        // JSON one (ansible-callback.ts)
+        env: {
+          ...env,
+          ANSIBLE_CALLBACK_PLUGINS: writeCallback(folder.path),
+          ANSIBLE_STDOUT_CALLBACK: CALLBACK_NAME,
+        },
       })
       folder.onSignal((signal) => child.kill(signal))
       summary = await renderPlaybook(

@@ -235,6 +235,7 @@ sequenceDiagram
   cli->>tmp: write extra-vars.json (0600): the values of the inputs of the wanted tools
   cli->>tmp: link each collection at ansible_collections/#lt;namespace#gt;/#lt;name#gt;
   cli->>tmp: write playbook.yml (the roots, by full name or absolute path)
+  cli->>tmp: write callbacks/local_env.py (local-env's output callback)
   cli->>ansible: run, --extra-vars @extra-vars.json, ANSIBLE_COLLECTIONS_PATH = the links, ANSIBLE_ROLES_PATH = ansible/ of every source
   opt there is a password
     cli->>ansible: the password on stdin (--become-password-file -), then close stdin
@@ -270,6 +271,13 @@ sequenceDiagram
   runs it in its collection. It names a plain role by its absolute path.
 - `apps/cli/src/core/playbook-output.ts` shows the events of Ansible with clack.
   `install --verbose` shows the output of Ansible itself.
+- Ansible sends the events through local-env's own callback,
+  `apps/cli/src/core/ansible-callback/local_env.py`. The binary holds it. The
+  CLI writes it into the run folder and runs Ansible with
+  `ANSIBLE_CALLBACK_PLUGINS` on that folder and
+  `ANSIBLE_STDOUT_CALLBACK=local_env`. It prints one JSON object on each line:
+  the start of each task and the result of each task, with only the fields that
+  `playbook-output.ts` reads.
 - A task with a loop shows the count of its items, then a line for each item, as
   the output of Ansible does: its label (`loop_control.label`, else the item),
   its state and its short message. A failed item shows its error. The callback
@@ -440,6 +448,12 @@ sequenceDiagram
   `ansible` package, which `local-env setup` installs with Homebrew. A role that
   needs a collection lists it in its `galaxy.yml`. The user's own Ansible setup
   does not change.
+- **local-env ships its own output callback.** `ansible-core` has no callback
+  that prints JSON lines. `ansible.posix.jsonl` is in the full `ansible` package
+  (about 590 MB, mostly collections local-env does not use), not in
+  `ansible-core`. With its own callback, local-env needs only `ansible-core`.
+  The callback is a small Python file, written for local-env, that uses only the
+  standard library and `ansible.plugins.callback`.
 - **Galaxy collections install into `volumes/tools/collections`, not the run
   folder.** A collection then downloads one time. A second install downloads
   nothing.

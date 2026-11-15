@@ -203,7 +203,9 @@ holds what we build:
   writes it to Ansible's stdin (`--become-password-file -`): it is never on the
   disk. The folder goes when the run ends, on SIGINT, SIGTERM and SIGHUP too;
   the next run removes the ones of runs that were killed. Ansible prints its
-  events as JSON lines (`ansible.posix.jsonl`), which
+  events as JSON lines through local-env's own callback
+  (`src/core/ansible-callback/local_env.py`, embedded in the binary and written
+  into the run folder: ansible-core is enough), which
   `src/core/playbook-output.ts` draws with clack: a group per role, a spinner
   per task, a line per result (`install --verbose` shows Ansible's own output).
   Tests fake them with `tests/support/factories/ansible.ts`. The stacks the
@@ -379,9 +381,11 @@ holds what we build:
 
 ## Build, Test, and Development Commands
 
-- This repository uses Bun, not npm, pnpm or yarn. `mise.toml` pins the Bun and
-  Node versions (Node runs the changesets CLI); `mise install` sets them up, and
-  CI uses the same file through `jdx/mise-action`.
+- This repository uses Bun, not npm, pnpm or yarn. `mise.toml` pins its version
+  (and uv's, for `test:ansible`); `mise install` sets them up, and CI uses the
+  same file through `jdx/mise-action`. No Node: the changesets scripts run its
+  CLI on Bun (`bun --bun x changeset`), even where a Node is installed (CI's
+  runners).
 - `mise install` also installs lefthook and the git hooks (`lefthook.yml`).
   Before a commit, the hooks fix the staged files with oxlint and oxfmt; before
   a push, they run `bun run check`.
@@ -441,6 +445,14 @@ the files the tests import, so its total says little.
   run it before a release.
 - `tests/unit/` mirrors `src/` and `services/`, for logic without processes.
   `tests/setup.ts` gives them a temporary `LOCAL_ENV_HOME` first.
+- `bun run test:ansible` (`apps/cli/ansible-tests/`, outside `tests/`, so
+  `test:cli` never runs it; its own CI step) is the only test of a real binary
+  besides git: it runs local-env's Ansible callback in each ansible-core version
+  that `tests/support/ansible-samples.ts` pins, with uv (`mise.toml`), and
+  checks that it prints the events of `tests/fixtures/ansible/events/`. The unit
+  tests draw those events (`playbook-output.test.ts`). After a change to the
+  callback, the sample role or the versions:
+  `UPDATE_ANSIBLE_FIXTURES=1 bun run test:ansible`.
 - Questions: `cli.run(args, { answers: [{ ask, answer }] })`. A Bun plugin
   (`tests/support/fake-prompts-plugin.ts`) loads `fake-prompts.ts` in place of
   `src/utils/prompt.ts`, so every question must go through that module. An

@@ -1,0 +1,31 @@
+# The sample run of test:ansible: one of each result that playbook-output.ts
+# draws. Each message is the same in every ansible-core version, so the
+# drawn output is too. The run stops at the last task, which fails.
+- name: Say hello
+  ansible.builtin.debug:
+    msg: hello
+
+- name: Run true
+  ansible.builtin.command: 'true'
+
+- name: Never runs
+  ansible.builtin.debug:
+    msg: skipped
+  when: false
+
+- name: Echo each item
+  ansible.builtin.command: 'echo {{ item }}'
+  loop: [first, second, third]
+  changed_when: item == 'second'
+  when: item != 'third'
+
+- name: Mark the bad item
+  ansible.builtin.debug:
+    msg: '{{ item }}'
+  loop: [good, bad]
+  failed_when: item == 'bad'
+  ignore_errors: true
+
+- name: Fail
+  ansible.builtin.fail:
+    msg: boom

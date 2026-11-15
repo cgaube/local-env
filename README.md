@@ -48,8 +48,8 @@ certificates and Dockhand data in `~/.local-env` (or `$LOCAL_ENV_HOME`).
 
 ### From source
 
-With [mise](https://mise.jdx.dev), which installs the Bun and Node versions
-pinned in `mise.toml`:
+With [mise](https://mise.jdx.dev), which installs the tools pinned in
+`mise.toml` (Bun, uv):
 
 ```sh
 mise install
