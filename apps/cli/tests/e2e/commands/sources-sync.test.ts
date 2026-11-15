@@ -255,6 +255,40 @@ describe.concurrent('local-env sources sync', () => {
     },
   )
 
+  test.skipIf(COMPILED)(
+    'ends with a warning when a rebuild fails',
+    async () => {
+      const compose = [
+        'name: mail',
+        'services:',
+        '  mail:',
+        '    build: ./app',
+        '',
+      ].join('\n')
+      const { cli, repo } = await createLinkedStack({
+        files: {
+          'docker/mail/compose.yaml': compose,
+          'docker/mail/app/Dockerfile': 'FROM axllent/mailpit:v1\n',
+        },
+      })
+      await using _ = cli
+      repo.commit({ 'docker/mail/app/Dockerfile': 'FROM axllent/mailpit:v2\n' })
+      cli.dockhand.on('POST /stacks/:name/deploy', () => ({
+        success: false,
+        error: 'build failed',
+      }))
+
+      const result = await cli.run(['sources', 'sync'], {
+        answers: [{ ask: 'Rebuild and redeploy mail?', answer: true }],
+      })
+
+      expect(result.output).toContain('mail: rebuild failed: build failed')
+      expect(result.output).toContain('Sources synced, with failures')
+      expect(result.output).toContain('mail: rebuild failed\n')
+      expect(result.output).not.toContain('mail: rebuilt and redeployed')
+    },
+  )
+
   test('rejects an unknown source', async () => {
     const { cli } = await createLinkedStack()
     await using _ = cli

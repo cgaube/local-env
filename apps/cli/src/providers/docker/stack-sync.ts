@@ -361,8 +361,11 @@ export const printStackLinks = async () => {
 export const syncStacks = async (options: SyncOptions) => {
   const applied = await syncTemplatedStacks(options)
   const environment = await getLocalEnvironment()
-  const rebuilt = await rebuildChangedStacks(environment.id, options)
-  return { applied, rebuilt }
+  const { rebuilt, failed } = await rebuildChangedStacks(
+    environment.id,
+    options,
+  )
+  return { applied, rebuilt, failed }
 }
 
 // What a sync would offer, without asking or redeploying anything
@@ -395,18 +398,18 @@ export const offerStackSync = async (options: SyncOptions) => {
   ]
   if (pending.length === 0) {
     logger.success('Stacks up to date with their templates')
-    return { applied: [], rebuilt: [] }
+    return { applied: [], rebuilt: [], failed: [] }
   }
   for (const line of pending) logger.info(line)
 
   const later = 'Run `local-env sources sync` to review them'
   if (options.dryRun) {
     logger.info(later)
-    return { applied: [], rebuilt: [] }
+    return { applied: [], rebuilt: [], failed: [] }
   }
   if (!options.yes && !(await askConfirm('Review and sync them now?', true))) {
     logger.info(later)
-    return { applied: [], rebuilt: [] }
+    return { applied: [], rebuilt: [], failed: [] }
   }
   return syncStacks({ ...options, link: false })
 }

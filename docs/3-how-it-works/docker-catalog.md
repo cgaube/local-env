@@ -41,6 +41,7 @@ sequenceDiagram
     Dash->>DH: GET /api/stacks (names and states)
     Dash->>Page: stacks topic
   end
+  Dash->>Page: routes topic (routes.json): Running, a link per host of its stack
   Page->>Dash: Deploy: start deploy acme/mail (WebSocket)
   Dash->>Agent: start deploy acme/mail
   Agent->>CLI: local-env deploy acme/mail --yes (pty)

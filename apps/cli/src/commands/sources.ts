@@ -158,15 +158,23 @@ const syncCommand = new Command('sync')
           })
         }
         logger.group('Stacks')
-        const { applied, rebuilt } = await syncStacks({ ...options, source })
+        const { applied, rebuilt, failed } = await syncStacks({
+          ...options,
+          source,
+        })
         // Last, in place of "Done", like update: green, its lines dimmed;
-        // blue for a dry run
+        // yellow when a rebuild failed, blue for a dry run
         closeFrameWithCallout(
-          options.dryRun ? 'info' : 'success',
+          options.dryRun ? 'info' : failed.length > 0 ? 'warn' : 'success',
           [
-            options.dryRun ? 'Dry run: nothing was changed' : 'Sources synced',
+            options.dryRun
+              ? 'Dry run: nothing was changed'
+              : failed.length > 0
+                ? 'Sources synced, with failures'
+                : 'Sources synced',
             ...applied.map((stack) => `${stack}: updated and redeployed`),
             ...rebuilt.map((stack) => `${stack}: rebuilt and redeployed`),
+            ...failed.map((stack) => `${stack}: rebuild failed`),
           ].join('\n'),
           { tinted: true },
         )
