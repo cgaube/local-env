@@ -83,11 +83,12 @@ dependencies: []
   dashboard lists a Galaxy role in the profile's details with a **Galaxy**
   badge, and a role that no source and no `galaxy.yml` has as **Missing**.
 
-  `ansible-core` is enough for local-env: it does not need the full `ansible`
+  local-env runs your roles with its own `ansible-core`, not the full `ansible`
   package. `ansible-core` has no collection other than `ansible.builtin`. List
   every other collection that your roles use in `galaxy.yml`: the collections of
   the roles they depend on, and of the modules they call
-  (`community.general.homebrew`).
+  (`community.general.homebrew`). Its Python has only what `ansible-core` needs:
+  a module that needs another Python library (`boto3`) fails.
 
 - Don't list the collections of your sources in the `dependencies` of
   `galaxy.yml`. local-env leaves them out, but `ansible-galaxy` outside

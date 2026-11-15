@@ -56,7 +56,7 @@ const rule = rules.findLast(
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      /^(LOCAL_ENV_|ANSIBLE_|AWS_|VAULT_|TRUST_STORES$)/.test(entry[0]) &&
+      /^(LOCAL_ENV_|ANSIBLE_|AWS_|VAULT_|UV_|TRUST_STORES$)/.test(entry[0]) &&
       entry[1] !== undefined,
   ),
 )

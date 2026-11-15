@@ -192,20 +192,24 @@ holds what we build:
   plain role by absolute path) in a folder only the user can read
   (`src/core/run-folder.ts`), links every source's collections there as
   `ansible_collections/<namespace>/<name>`, and runs `ansible-playbook` on the
-  Mac, as the user, with `ANSIBLE_COLLECTIONS_PATH` on those links and
-  `ANSIBLE_ROLES_PATH` on every source's `ansible/`, for dependencies by name.
-  First, it installs the Galaxy collections that the collections of the wanted
-  roles need (`galaxy.yml` `dependencies`, without the sources' own) into
-  `volumes/tools/collections/` with `ansible-galaxy`
-  (`src/core/galaxy-collections.ts`; `update` upgrades them); the dashboard
-  shows their roles in a profile's details (`externalRoles`). When a wanted role
-  uses `become`, the CLI asks for the password (`askPassword`, required) and
-  writes it to Ansible's stdin (`--become-password-file -`): it is never on the
-  disk. The folder goes when the run ends, on SIGINT, SIGTERM and SIGHUP too;
-  the next run removes the ones of runs that were killed. Ansible prints its
-  events as JSON lines through local-env's own callback
-  (`src/core/ansible-callback/local_env.py`, embedded in the binary and written
-  into the run folder: ansible-core is enough), which
+  Mac, as the user, with local-env's own Ansible (`src/core/ansible.ts`: a
+  pinned `ansible-core` and Python that `uv tool install` puts in
+  `volumes/ansible/`, run by path, never Homebrew's `ansible` or the `PATH`'s;
+  `setup`, `update`, `install` and the bootstraps install it when it is missing
+  or another version, `doctor` checks it; the tasks run on its Python too), with
+  `ANSIBLE_COLLECTIONS_PATH` on those links and `ANSIBLE_ROLES_PATH` on every
+  source's `ansible/`, for dependencies by name. First, it installs the Galaxy
+  collections that the collections of the wanted roles need (`galaxy.yml`
+  `dependencies`, without the sources' own) into `volumes/tools/collections/`
+  with `ansible-galaxy` (`src/core/galaxy-collections.ts`; `update` upgrades
+  them); the dashboard shows their roles in a profile's details
+  (`externalRoles`). When a wanted role uses `become`, the CLI asks for the
+  password (`askPassword`, required) and writes it to Ansible's stdin
+  (`--become-password-file -`): it is never on the disk. The folder goes when
+  the run ends, on SIGINT, SIGTERM and SIGHUP too; the next run removes the ones
+  of runs that were killed. Ansible prints its events as JSON lines through
+  local-env's own callback (`src/core/ansible-callback/local_env.py`, embedded
+  in the binary and written into the run folder: ansible-core is enough), which
   `src/core/playbook-output.ts` draws with clack: a group per role, a spinner
   per task, a line per result (`install --verbose` shows Ansible's own output).
   Tests fake them with `tests/support/factories/ansible.ts`. The stacks the
@@ -448,11 +452,11 @@ the files the tests import, so its total says little.
 - `bun run test:ansible` (`apps/cli/ansible-tests/`, outside `tests/`, so
   `test:cli` never runs it; its own CI step) is the only test of a real binary
   besides git: it runs local-env's Ansible callback in each ansible-core version
-  that `tests/support/ansible-samples.ts` pins, with uv (`mise.toml`), and
-  checks that it prints the events of `tests/fixtures/ansible/events/`. The unit
-  tests draw those events (`playbook-output.test.ts`). After a change to the
-  callback, the sample role or the versions:
-  `UPDATE_ANSIBLE_FIXTURES=1 bun run test:ansible`.
+  that `tests/support/ansible-samples.ts` lists (the pinned one of
+  `src/core/ansible.ts` among them), with uv (`mise.toml`), and checks that it
+  prints the events of `tests/fixtures/ansible/events/`. The unit tests draw
+  those events (`playbook-output.test.ts`). After a change to the callback, the
+  sample role or the versions: `UPDATE_ANSIBLE_FIXTURES=1 bun run test:ansible`.
 - Questions: `cli.run(args, { answers: [{ ask, answer }] })`. A Bun plugin
   (`tests/support/fake-prompts-plugin.ts`) loads `fake-prompts.ts` in place of
   `src/utils/prompt.ts`, so every question must go through that module. An
@@ -460,10 +464,13 @@ the files the tests import, so its total says little.
 - External binaries are faked (`tests/support/fake-bin.ts`): `cli.bin.on()` sets
   a reply, `cli.bin.calls()` lists the calls. A call without a reply fails. PATH
   holds only the stubs and the real git, so tests never reach the real Docker,
-  Homebrew or sudo. A new binary goes in `FAKED_COMMANDS`. A rule can `touch` a
-  file, and another match only `ifFile` it exists: a call that changes the next
-  ones (a login that opens a session). `tests/support/machine.ts` sets up common
-  states (`machineReady`, `dockerStopped`).
+  Homebrew or sudo. A new binary goes in `FAKED_COMMANDS`. `machineReady` also
+  puts the fake `ansible-playbook` and `ansible-galaxy` where local-env's own
+  Ansible goes (`ansibleInstalled`, `{ pinned: false }` to make it install). A
+  rule can `touch` a file, and another match only `ifFile` it exists: a call
+  that changes the next ones (a login that opens a session).
+  `tests/support/machine.ts` sets up common states (`machineReady`,
+  `dockerStopped`).
 - Dockhand is a stateful fake (`tests/support/fake-dockhand.ts`) that the CLI
   reaches through `LOCAL_ENV_DOCKHAND_URL`. Add the routes a test needs there.
 - Factories in `tests/support/factories/` build test data: config, certificates
@@ -504,6 +511,10 @@ its releases `v<version>`.
   (oxlint, Vitest…): `bun run changeset --empty`, which releases nothing. Commit
   the generated `.changeset/*.md` with the change. Other changes (docs, tests,
   CI) need none.
+- A changeset is for users: it becomes their release notes. Keep it short, two
+  or three sentences at most: what changes for them, and what they must do, if
+  anything. No how it works, no internals, no file paths: the docs and the pull
+  request hold those.
 - To release, `bun run version-packages` applies the pending changesets: it
   bumps `package.json` (which `local-env --version` reads) and writes
   `CHANGELOG.md`.

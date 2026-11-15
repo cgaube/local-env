@@ -8,7 +8,12 @@ import {
   provisionedDockhand,
 } from '#cli-tests/support/factories/dockhand.js'
 import { buildTemplate } from '#cli-tests/support/factories/template.js'
-import { machineReady } from '#cli-tests/support/machine.js'
+import { ansibleInstalled, machineReady } from '#cli-tests/support/machine.js'
+import {
+  ANSIBLE_CORE_VERSION,
+  ANSIBLE_PIN,
+  ANSIBLE_PYTHON_VERSION,
+} from '#cli/core/ansible.js'
 import { COMPILED, createCli, type Cli } from '#cli-tests/support/run-cli.js'
 
 // A source with these roles, cloned like `local-env sources add` does
@@ -153,7 +158,6 @@ const createInstallCli = async () => {
   const cli = await createCli({ dockhand: provisionedDockhand() })
   cli.home.seedConfig()
   machineReady(cli)
-  cli.bin.on('which', ['ansible-playbook'])
   cli.bin.on('ansible-playbook', [])
   return cli
 }
@@ -173,6 +177,10 @@ describe.concurrent('local-env install', () => {
     expect(rolesRun(cli)).toEqual(['acme/git', 'acme/node'])
     // Written for the run, then removed
     expect(existsSync(run!.args[2]!)).toBe(false)
+    // local-env's own ansible-core, with its own Python for the tasks
+    expect(run?.env.ANSIBLE_PYTHON_INTERPRETER).toBe(
+      cli.home.path('volumes/ansible/tools/ansible-core/bin/python'),
+    )
     // Dependencies are found by name in every source
     expect(run?.env.ANSIBLE_ROLES_PATH).toBe(
       cli.home.path('volumes/sources/acme/ansible'),
@@ -1175,16 +1183,70 @@ describe.concurrent('local-env install', () => {
     expect(result.output).toContain('Installed the Backend profile')
   })
 
-  test('stops when Ansible is not installed', async () => {
+  test('installs its ansible-core with uv first, into the home folder', async () => {
     await using cli = await createInstallCli()
     await sourceWithRoles(cli, ['git'])
     cli.home.seedPickedTools(['acme/git'])
-    cli.bin.on('which', ['ansible-playbook'], { exitCode: 1 })
+    ansibleInstalled(cli, { pinned: false })
+    cli.bin.on('which', ['uv'])
+    cli.bin.on('uv', ['tool', 'install'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain(
+      `ansible-core ${ANSIBLE_CORE_VERSION} installed`,
+    )
+    const [uv] = cli.bin.calls('uv')
+    expect(uv?.args).toEqual([
+      'tool',
+      'install',
+      '--python',
+      ANSIBLE_PYTHON_VERSION,
+      `ansible-core==${ANSIBLE_CORE_VERSION}`,
+    ])
+    // Its own folders, and its own Python, never the Mac's
+    const ansible = cli.home.path('volumes/ansible')
+    expect(uv?.env).toMatchObject({
+      UV_TOOL_DIR: join(ansible, 'tools'),
+      UV_TOOL_BIN_DIR: join(ansible, 'bin'),
+      UV_PYTHON_INSTALL_DIR: join(ansible, 'python'),
+      UV_PYTHON_PREFERENCE: 'only-managed',
+    })
+    expect(cli.home.read('volumes/ansible/version')).toBe(`${ANSIBLE_PIN}\n`)
+    // Then the playbook, with it
+    expect(cli.bin.calls('ansible-playbook')).toHaveLength(1)
+  })
+
+  test('moves to the ansible-core this local-env pins', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git'])
+    cli.home.seedPickedTools(['acme/git'])
+    ansibleInstalled(cli, { version: '2.17.0 python 3.12' })
+    cli.bin.on('which', ['uv'])
+    cli.bin.on('uv', ['tool', 'install'])
+
+    const result = await cli.run(['install'])
+
+    expect(result.exitCode).toBe(0)
+    expect(cli.bin.calls('uv')[0]?.args).toContain(
+      `ansible-core==${ANSIBLE_CORE_VERSION}`,
+    )
+    expect(cli.home.read('volumes/ansible/version')).toBe(`${ANSIBLE_PIN}\n`)
+  })
+
+  test('stops when uv is missing, before anything runs', async () => {
+    await using cli = await createInstallCli()
+    await sourceWithRoles(cli, ['git'])
+    cli.home.seedPickedTools(['acme/git'])
+    ansibleInstalled(cli, { pinned: false })
+    cli.bin.on('which', ['uv'], { exitCode: 1 })
 
     const result = await cli.run(['install'])
 
     expect(result.exitCode).toBe(1)
-    expect(result.output).toContain('Ansible is not installed')
+    expect(result.output).toContain('`brew install uv`')
+    expect(cli.bin.calls('ansible-playbook')).toEqual([])
   })
 })
 

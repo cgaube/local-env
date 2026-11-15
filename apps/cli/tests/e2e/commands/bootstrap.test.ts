@@ -10,7 +10,6 @@ const createBootstrapCli = async () => {
   const cli = await createCli({ dockhand: provisionedDockhand() })
   cli.home.seedConfig()
   machineReady(cli)
-  cli.bin.on('which', ['ansible-playbook'])
   cli.bin.on('ansible-playbook', [])
   return cli
 }

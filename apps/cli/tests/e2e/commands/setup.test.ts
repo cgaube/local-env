@@ -1,12 +1,14 @@
 import { join } from 'path'
 import { TEST_DOMAIN } from '#cli-tests/support/factories/config.js'
 import {
+  ansibleInstalled,
   brewInstalled,
   dockerRunning,
   machineReady,
   mkcertInstalled,
 } from '#cli-tests/support/machine.js'
 import { COMPILED, createCli } from '#cli-tests/support/run-cli.js'
+import { ANSIBLE_CORE_VERSION } from '#cli/core/ansible.js'
 
 const IS_MAC = process.platform === 'darwin'
 
@@ -42,6 +44,7 @@ describe.concurrent('local-env setup', () => {
     dockerRunning(cli.bin)
     mkcertInstalled(cli.bin)
     const { prefix } = brewInstalled(cli)
+    ansibleInstalled(cli)
     cli.bin.on('brew', ['services', 'restart', 'dnsmasq'], {
       stderr:
         'Warning: `dnsmasq` must be run as root to start at system startup!\n',
@@ -76,7 +79,11 @@ describe.concurrent('local-env setup', () => {
       await using cli = await createCli()
       dockerRunning(cli.bin)
       mkcertInstalled(cli.bin)
-      brewInstalled(cli, { missing: ['nss'] })
+      brewInstalled(cli, { missing: ['nss', 'uv'] })
+      // Before uv: none to install Ansible with
+      ansibleInstalled(cli, { pinned: false })
+      cli.bin.on('which', ['uv'])
+      cli.bin.on('uv', ['tool', 'install'])
 
       const result = await cli.run(['setup', '--yes', '--domain', TEST_DOMAIN])
 
@@ -86,7 +93,17 @@ describe.concurrent('local-env setup', () => {
           .calls('brew')
           .filter((call) => call.args[0] === 'install')
           .map((call) => call.args),
-      ).toEqual([['install', 'nss']])
+      ).toEqual([
+        ['install', 'nss'],
+        ['install', 'uv'],
+      ])
+      // Then local-env's ansible-core, with it
+      expect(cli.bin.calls('uv')[0]?.args).toContain(
+        `ansible-core==${ANSIBLE_CORE_VERSION}`,
+      )
+      expect(result.output).toContain(
+        `ansible-core ${ANSIBLE_CORE_VERSION} installed`,
+      )
     },
   )
 

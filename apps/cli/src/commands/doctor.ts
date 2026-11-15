@@ -2,6 +2,7 @@ import { describeRoles, listBootstraps } from '#cli/core/bootstrap-plan.js'
 import { BOOTSTRAP_COMMAND, pendingBootstraps } from '#cli/core/bootstrap.js'
 import { listCatalog } from '#cli/core/tools.js'
 import { describeAgent } from '#cli/core/agent.js'
+import { describeAnsible } from '#cli/core/ansible.js'
 import { Command } from 'commander'
 import { execa } from 'execa'
 import { existsSync, readdirSync, readFileSync } from 'fs'
@@ -583,6 +584,14 @@ export const doctorCommand = new Command('doctor')
                 'Dashboard agent not running: run `local-env start` to install and update from the dashboard',
             },
       )
+
+      // What install and the bootstraps run
+      logger.group('Ansible')
+      const ansible = describeAnsible()
+      addResult({
+        level: ansible.ok ? 'pass' : 'warn',
+        message: ansible.message,
+      })
 
       logger.group('Sources')
       for (const result of await checkSources()) addResult(result)

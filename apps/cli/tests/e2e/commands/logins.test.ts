@@ -39,7 +39,6 @@ const createLoginsCli = async () => {
   const cli = await createCli({ dockhand: provisionedDockhand() })
   cli.home.seedConfig()
   machineReady(cli)
-  cli.bin.on('which', ['ansible-playbook'])
   cli.bin.on('ansible-playbook', [])
   cli.bin.on('which', ['aws'])
   cli.bin.on('which', ['vault'])

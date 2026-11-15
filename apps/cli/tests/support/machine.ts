@@ -1,10 +1,11 @@
 // The state of the developer's Mac, through the fake binaries: Docker
 // Desktop, Homebrew and its packages, mkcert
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { FakeBin } from '#cli-tests/support/fake-bin.js'
 import { buildCertificate } from '#cli-tests/support/factories/certificate.js'
 import type { Cli } from '#cli-tests/support/run-cli.js'
+import { ANSIBLE_PIN } from '#cli/core/ansible.js'
 
 // Docker Desktop is running and every compose command succeeds
 export const dockerRunning = (bin: FakeBin) => {
@@ -64,9 +65,24 @@ export const brewInstalled = (
   return { prefix }
 }
 
-// Everything `local-env setup` and `start` need
-export const machineReady = (cli: Pick<Cli, 'bin' | 'root'>) => {
+// local-env's ansible-core (core/ansible.ts): its commands, faked, in the
+// home folder. `pinned: false`: they are there, but not the version file of
+// an install, so the CLI installs it with uv first.
+export const ansibleInstalled = (
+  { bin, home }: Pick<Cli, 'bin' | 'home'>,
+  { pinned = true, version = ANSIBLE_PIN } = {},
+) => {
+  for (const command of ['ansible-playbook', 'ansible-galaxy'] as const) {
+    bin.stubAt(home.path(`volumes/ansible/bin/${command}`), command)
+  }
+  if (pinned) home.write('volumes/ansible/version', `${version}\n`)
+  else rmSync(home.path('volumes/ansible/version'), { force: true })
+}
+
+// Everything `local-env setup`, `start` and `install` need
+export const machineReady = (cli: Pick<Cli, 'bin' | 'root' | 'home'>) => {
   dockerRunning(cli.bin)
   mkcertInstalled(cli.bin)
   brewInstalled(cli)
+  ansibleInstalled(cli)
 }

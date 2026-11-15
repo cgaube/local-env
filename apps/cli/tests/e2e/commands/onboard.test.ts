@@ -9,7 +9,6 @@ const composeUp = (args: string[]) =>
 const createOnboardCli = async () => {
   const cli = await createCli()
   machineReady(cli)
-  cli.bin.on('which', ['ansible-playbook'])
   cli.bin.on('ansible-playbook', [])
   return cli
 }

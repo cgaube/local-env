@@ -4,6 +4,7 @@ import { join, resolve } from 'path'
 import type { ExternalRole } from '#services/dashboard/role-graph.js'
 import { readRoleDir, type Role } from '#services/dashboard/tools.js'
 import { HOME_DIR } from '#cli/core/paths.js'
+import { ansibleBin } from '#cli/core/ansible.js'
 import { spinner } from '@clack/prompts'
 import { styleText } from 'node:util'
 import { logger } from '#cli/utils/logger.js'
@@ -17,8 +18,8 @@ export const GALAXY_DIR = resolve(HOME_DIR, 'volumes/tools/collections')
 // local-env's only collections folder for Ansible, beside the links to the
 // sources: not the user's own (~/.ansible/collections, their
 // ANSIBLE_COLLECTIONS_PATH), so every Mac runs the same versions. Ansible
-// still sees the collections of the ansible package, the same on every Mac
-// with the same Ansible.
+// still sees ansible.builtin, the only collection of local-env's
+// ansible-core (core/ansible.ts).
 
 // A collection to install, with every range asked for it: the resolver of
 // ansible-galaxy picks a version that meets them all
@@ -106,8 +107,7 @@ export const installGalaxyCollections = async (
     ...(upgrade ? ['--upgrade'] : []),
   ]
   // In the path, not with -p: ansible-galaxy warns that a -p folder is not
-  // where Ansible looks. Only ours: one of the ansible package counts as
-  // installed, one in ~/.ansible doesn't.
+  // where Ansible looks. Only ours: one in ~/.ansible doesn't count.
   const env = { ANSIBLE_COLLECTIONS_PATH: GALAXY_DIR }
   const failed = () =>
     new Error(
@@ -118,7 +118,7 @@ export const installGalaxyCollections = async (
       ].join('\n'),
     )
   if (verbose) {
-    const { exitCode } = await execa('ansible-galaxy', args, {
+    const { exitCode } = await execa(ansibleBin('ansible-galaxy'), args, {
       stdio: 'inherit',
       reject: false,
       env,
@@ -133,7 +133,11 @@ export const installGalaxyCollections = async (
   progress?.start(
     `Installing ${requirements.map(({ name }) => name).join(', ')}`,
   )
-  const child = execa('ansible-galaxy', args, { all: true, reject: false, env })
+  const child = execa(ansibleBin('ansible-galaxy'), args, {
+    all: true,
+    reject: false,
+    env,
+  })
   const output: string[] = []
   for await (const line of child.iterable({ from: 'all' })) output.push(line)
   const { exitCode } = await child
@@ -211,7 +215,7 @@ const canRedraw = () =>
 const FAILURE_TAIL = 20
 
 // The version of a collection installed in GALAXY_DIR (MANIFEST.json): null
-// for one of the ansible package, or a URL
+// for one that isn't there, or a URL
 const installedVersion = (name: string) => {
   const [namespace, collection, ...rest] = name.split('.')
   if (!namespace || !collection || rest.length > 0) return null

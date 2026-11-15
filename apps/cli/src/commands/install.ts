@@ -22,7 +22,8 @@ import { ensureBootstraps, pendingBootstraps } from '#cli/core/bootstrap.js'
 import { describeRoles } from '#cli/core/bootstrap-plan.js'
 import { deployStacks } from '#cli/providers/docker/stack-deploy.js'
 import type { PlaybookSummary } from '#cli/core/playbook-output.js'
-import { hasCommand, logger } from '#cli/utils/index.js'
+import { logger } from '#cli/utils/index.js'
+import { ensureAnsible } from '#cli/core/ansible.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { askConfirm, askSelect, canAsk } from '#cli/utils/prompt.js'
 
@@ -303,11 +304,8 @@ export const runInstall = async (
       showDryRun(catalog, roots, describeRun(catalog, profile, picked))
       return null
     }
-    if (!(await hasCommand('ansible-playbook'))) {
-      throw new Error(
-        'Ansible is not installed. Run `local-env setup`, or `brew install ansible`.',
-      )
-    }
+    // Installed, or moved to the version this local-env pins
+    await ensureAnsible()
 
     // Asked first: the install then runs alone
     const stacks = await planRequiredStacks(catalog, roots, options)

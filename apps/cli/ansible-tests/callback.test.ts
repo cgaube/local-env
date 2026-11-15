@@ -13,6 +13,10 @@ import { join } from 'path'
 import { execa, execaSync } from 'execa'
 import { CALLBACK_NAME, writeCallback } from '#cli/core/ansible-callback.js'
 import {
+  ANSIBLE_CORE_VERSION,
+  ANSIBLE_PYTHON_VERSION,
+} from '#cli/core/ansible.js'
+import {
   ANSIBLE_CORE_VERSIONS,
   SAMPLE_ROLES,
   sampleEventsFile,
@@ -43,6 +47,10 @@ const runSample = async (version: string) => {
       'uvx',
       [
         '--quiet',
+        // The one local-env installs runs on its Python, as on the Macs
+        ...(version === ANSIBLE_CORE_VERSION
+          ? ['--python', ANSIBLE_PYTHON_VERSION]
+          : []),
         '--from',
         `ansible-core==${version}`,
         'ansible-playbook',

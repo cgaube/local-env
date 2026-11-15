@@ -28,6 +28,8 @@ export const FAKED_COMMANDS = [
   'open',
   'security',
   'sudo',
+  // Installs local-env's ansible-core (core/ansible.ts)
+  'uv',
   'vault',
   'which',
 ] as const
@@ -61,7 +63,7 @@ export type FakeRule = FakeReply & {
 export type FakeCall = {
   command: string
   args: string[]
-  // The LOCAL_ENV_* (compose settings), ANSIBLE_* and TRUST_STORES (mkcert)
+  // The LOCAL_ENV_* (compose settings), ANSIBLE_*, UV_* and TRUST_STORES (mkcert)
   // variables the call got
   env: Record<string, string>
   // The YAML and JSON files among its args (`@<path>` too), by path, as

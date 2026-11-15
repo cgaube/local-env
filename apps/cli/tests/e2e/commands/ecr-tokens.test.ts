@@ -317,7 +317,6 @@ describe.concurrent('local-env install, ECR tokens', () => {
     // The profile acme-dev exists once a role of the install wrote it
     const profile = join(cli.root, 'aws-profile')
     cli.bin.on('which', ['aws'])
-    cli.bin.on('which', ['ansible-playbook'])
     cli.bin.on('ansible-playbook', [], { touch: profile })
     cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_OUT)
     cli.bin.on('aws', ['sts', 'get-caller-identity'], {

@@ -51,7 +51,6 @@ const createStacksCli = async () => {
   cli.home.seedConfig()
   cli.home.seedCertificate()
   machineReady(cli)
-  cli.bin.on('which', ['ansible-playbook'])
   cli.bin.on('ansible-playbook', [])
   cli.bin.on('which', ['aws'])
   cli.bin.on('aws', ['sts', 'get-caller-identity'], LOGGED_IN)
