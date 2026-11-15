@@ -1,5 +1,22 @@
 # local-env
 
+## 0.11.0
+
+### Minor Changes
+
+- b582cfd: The dashboard's Tools page hides the tools of your profile at first,
+  as the profile installs them: you pick only the others. The **Profile tools**
+  switch beside the filters shows them again.
+
+### Patch Changes
+
+- 81a9795: In the dashboard, Escape closes the terminal sheet once its command
+  ended. While the command runs, Escape still goes to the command.
+- 624e523: The dashboard shows the end of an install, from a terminal or from
+  the page: the Install button and the tools' statuses update. With Docker
+  engines that do not pass file changes from the Mac to containers (Lima), it
+  missed them.
+
 ## 0.10.0
 
 ### Minor Changes
