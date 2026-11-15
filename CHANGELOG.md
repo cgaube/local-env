@@ -1,5 +1,23 @@
 # local-env
 
+## 0.11.1
+
+### Patch Changes
+
+- e752503: `local-env install` works with `ansible-core`, not only the full
+  `ansible` package. It draws its output with its own Ansible callback, so it
+  needs no collection for it.
+- 9e8274d: local-env installs its own Ansible (about 100 MB) instead of
+  Homebrew's `ansible` (about 600 MB). After `local-env update`,
+  `brew uninstall ansible` frees the space. A role must list in its `galaxy.yml`
+  every collection it uses other than `ansible.builtin`.
+- e3e9ac8: `local-env sources sync` shows a spinner while Dockhand redeploys or
+  rebuilds a stack, and ends with a callout that lists the stacks it changed,
+  like `local-env update`.
+- e3e9ac8: The Docker page shows a link for every host of a running stack: each
+  service with a `VIRTUAL_HOST`, and each host when one lists several. It showed
+  only the first one.
+
 ## 0.11.0
 
 ### Minor Changes
