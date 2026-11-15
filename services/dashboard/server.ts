@@ -6,7 +6,8 @@
 //   any other    -> public/index.html: the app routes itself (/docker/routes)
 //   /api/events  -> a Server-Sent Events stream: the current routes, services
 //                   and sources on connect, then each of them again when it
-//                   changes (watched files, no polling)
+//                   changes: watched files, and the events of the
+//                   dashboard agent, which watches the Mac's side
 //   /api/config  -> the domain, for the help section
 //   /api/logins  -> the logins of the sources and their state, asked from the
 //                   dashboard agent, which checks them on the Mac
@@ -48,7 +49,7 @@ import {
 import { tryReadSourceManifest } from './source-manifest.js'
 import { type StacksResponse } from './catalog.js'
 import { listTemplates } from './templates.js'
-import type { LoginsResponse } from './agent-protocol.js'
+import type { AgentEvent, LoginsResponse } from './agent-protocol.js'
 
 const ROUTES_FILE = '/routes/routes.json'
 const SERVICES_FILE = '/routes/services.json'
@@ -188,8 +189,9 @@ const readLogins = async () => {
 }
 
 // The stacks in Dockhand's local environment, with their state: a template is
-// deployed when a stack has its name, as local-env links them. Streamed while
-// a page is open (below), not available when Dockhand doesn't answer.
+// deployed when a stack has its name, as local-env links them. Asked again
+// when a compose container changes (projects.json, below), not available
+// when Dockhand doesn't answer.
 const readStacks = async () => {
   try {
     const options = { signal: AbortSignal.timeout(3000) }
@@ -270,48 +272,86 @@ const publish = (topic: Topic) => {
     topic,
     setTimeout(async () => {
       const data = await readers[topic]()
-      last.set(topic, data)
       for (const client of clients) send(client, topic, data)
     }, 200),
   )
 }
 
-// What each topic sent last, for the topics asked on a timer
-const last = new Map<Topic, string>()
-
 watch('/routes', (_event, file) => {
-  if (file === 'routes.json') {
-    publish('routes')
-    // A stack deployed, stopped or removed changes the routes: ask Dockhand
-    // at once, not at the next tick
-    publish('stacks')
-  }
+  if (file === 'routes.json') publish('routes')
   if (file === 'services.json') publish('services')
+  // A compose container started, stopped, removed or its health changed:
+  // ask Dockhand for the stacks again (proxy-connector follows Docker's
+  // events)
+  if (file === 'projects.json') publish('stacks')
 })
 watch(SOURCES_DIR, { recursive: true }, () => {
   publish('sources')
   publish('templates')
   publish('tools')
 })
-// picked.json, profile.json and variables.json, written below and by
-// `local-env install`, and installed.json, by `local-env install`
+// picked.json, profile.json and variables.json, written below. What the Mac
+// writes (installed.json, a git pull) comes from the agent's events: on some
+// engines (Lima's virtiofs), its file events never reach the container.
 watch(TOOLS_DIR, () => publish('tools'))
-// The agent writes its token when it starts and removes it when it stops
-watch(AGENT_DIR, () => publish('agent'))
 
-// What changes without a file changing here, asked while pages are open: a
-// run of the agent starts and ends, a stack is removed in Dockhand. Pages get
-// only what changed.
-const poll = (topic: Topic, every: number) =>
-  setInterval(async () => {
-    if (clients.size === 0) return
-    const data = await readers[topic]()
-    if (data === last.get(topic)) return
-    last.set(topic, data)
-    for (const client of clients) send(client, topic, data)
-  }, every)
-poll('agent', 3000)
-poll('stacks', 5000)
+// The agent's events (GET /events): a folder changed on the Mac, a run
+// started or ended. Followed while it runs; away (not started yet, or
+// handing over to a new version), tried again, sooner while a page is open.
+const AGENT_TOPICS: Record<AgentEvent['topic'], Topic[]> = {
+  tools: ['tools'],
+  sources: ['sources', 'templates', 'tools'],
+  run: ['agent'],
+}
+let following = false
+let retry: ReturnType<typeof setTimeout> | undefined
+let retryDelay = 500
+const followAgent = async () => {
+  clearTimeout(retry)
+  retry = undefined
+  const token = readAgentToken()
+  if (token) {
+    try {
+      const response = await fetch(`${AGENT_URL}/events`, {
+        headers: { Authorization: `Bearer ${token}` },
+        // Kept open
+        timeout: false,
+      })
+      if (response.ok && response.body) {
+        following = true
+        retryDelay = 500
+        // Back, maybe new: what changed while it was away
+        for (const topic of ['agent', 'tools', 'sources', 'templates'] as const)
+          publish(topic)
+        const decoder = new TextDecoder()
+        let buffer = ''
+        for await (const chunk of response.body) {
+          buffer += decoder.decode(chunk, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+          for (const line of lines) {
+            if (!line) continue
+            try {
+              const { topic } = JSON.parse(line) as AgentEvent
+              for (const name of AGENT_TOPICS[topic] ?? []) publish(name)
+            } catch {
+              // Not an event
+            }
+          }
+        }
+      }
+    } catch {
+      // Stopped, or killed without removing its token
+    }
+  }
+  if (following) {
+    following = false
+    publish('agent')
+  }
+  retry = setTimeout(followAgent, retryDelay)
+  retryDelay = Math.min(retryDelay * 2, 10_000)
+}
+void followAgent()
 
 // A PUT of JSON, or the response that refuses it. JSON only: another site
 // can't send it without a CORS preflight, which this server never allows.
@@ -397,6 +437,11 @@ const events = () => {
     async start(controller) {
       client = controller
       clients.add(client)
+      // Someone looks: find the agent now, not at the next try
+      if (!following && retry) {
+        retryDelay = 500
+        void followAgent()
+      }
       for (const topic of Object.keys(readers) as Topic[]) {
         send(client, topic, await readers[topic]())
       }

@@ -64,10 +64,14 @@ flowchart LR
   pty["pty<br/>local-env install | update | deploy"]
   files["volumes/agent/<br/>agent.json, token, agent.log"]
 
+  watched["volumes/tools/, volumes/sources/"]
+
   browser -- "wss /api/terminal" --> nginx --> dashboard
   dashboard -- "ws://host.docker.internal:17081/terminal<br/>+ token" --> agent
+  dashboard -- "GET /events (kept open)<br/>+ token" --> agent
   agent -- "Bun.Terminal" --> pty
   agent -- writes --> files
+  agent -- "fs.watch" --> watched
   files -- "token (mounted read-only)" --> dashboard
 ```
 
@@ -85,14 +89,22 @@ flowchart LR
   on, could be taken by another test before the agent listened.
 - The agent answers only requests with its token (`Authorization: Bearer`).
   `GET /status` gives its version and the current or last run. `GET /terminal`
-  opens a WebSocket on the run.
+  opens a WebSocket on the run. `GET /events` stays open and gives a line of
+  JSON per change (`AgentEvent`): `run` when a run starts or ends, `tools` and
+  `sources` when a file changes in `volumes/tools/` or `volumes/sources/` (one
+  event per burst of 100 ms).
 - The dashboard has the token: `compose.yaml` mounts `volumes/agent` into the
   dashboard alone. The dashboard checks the `Origin` of `/api/terminal`: only
   `https://local-env.<domain>` can connect. Then it pipes the page's socket to
   the agent's socket.
 - The `agent` topic of `/api/events` gives `{ available, version, run }`. The
-  dashboard asks the agent for its status every 3 seconds while a page is open,
-  and when the token file changes.
+  dashboard follows the agent's `GET /events`: on each event it sends its pages
+  the topics again (`run`: `agent`; `tools`: `tools`; `sources`: `sources`,
+  `templates` and `tools`), so the Install button shows the end of an install
+  from the page or from a terminal. When it connects, it sends them all (what
+  changed while the agent was away). When the stream ends, the agent is gone:
+  `available: false`. It tries again after 0.5 s, then twice as long each time,
+  up to 10 s, and at once when a page connects.
 - `services/dashboard/agent-protocol.ts` (no imports) holds the messages. The
   agent, the dashboard and the page use it.
 
@@ -183,6 +195,13 @@ behind the link, and `brew cleanup` removes the old Cellar folder.
 - **The run lives in the agent, not in the socket.** `update` restarts the
   dashboard and nginx. A run that ends with its socket would stop the update
   halfway. The replay also lets a reload or a second tab show the run.
+- **The agent watches the files, not the dashboard.** The dashboard's own
+  watches see only the writes made in its container: on some Docker engines
+  (Lima's virtiofs), the file events of the Mac never reach a bind mount. So the
+  end of a `local-env install` (`installed.json`) or a `git pull` of a source
+  went unseen. The agent runs on the Mac, where `fs.watch` works, and pushes the
+  change: no timer compares files, and the run's start and end come the same
+  way, without asking the agent's status on a timer.
 - **A dark terminal in both themes.** The CLI's colors are made for a dark
   terminal.
 
@@ -190,6 +209,8 @@ behind the link, and `brew cleanup` removes the old Cellar folder.
 
 - One command runs at a time, from the dashboard. The agent does not know about
   a `local-env install` that runs in a terminal at the same time.
+- Without the agent, the dashboard does not see the files that the Mac changes
+  on those engines, until a page loads again.
 - Nothing restarts a core service or the agent after a crash. `local-env status`
   and `local-env doctor` show it, and `local-env start` brings them back.
 - The page does not keep the output after the agent stops: `local-env stop` ends

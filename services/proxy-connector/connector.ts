@@ -11,6 +11,9 @@
 //   dashboard and `local-env proxy routes`.
 // - writes services.json, the state of local-env's own services, for the
 //   dashboard's Core services section.
+// - writes projects.json, the state of every compose container: when it
+//   changes, the dashboard asks Dockhand for the stacks again (Running,
+//   Stopped), instead of asking on a timer.
 // - lets containers reach https://<host>.<DOMAIN> too: inside Docker those
 //   names resolve to 127.0.0.1, the container itself. Routed containers also
 //   join HOSTS_NETWORK, where the proxy answers to every routed host name.
@@ -210,6 +213,34 @@ const readFile = async (path: string) => {
 let currentConf = await readFile(`${ROUTES_DIR}/routes.conf`)
 let currentJson = await readFile(`${ROUTES_DIR}/routes.json`)
 let currentServices = await readFile(`${ROUTES_DIR}/services.json`)
+let currentProjects = await readFile(`${ROUTES_DIR}/projects.json`)
+
+// Every container of a compose project (a stack), stopped ones included,
+// with its state: started, stopped, removed or its health changed. Only
+// what the dashboard needs to know that a stack changed.
+const writeProjects = async () => {
+  const filters = encodeURIComponent(
+    JSON.stringify({ label: ['com.docker.compose.project'] }),
+  )
+  const containers = (await (
+    await docker(`/containers/json?all=1&filters=${filters}`)
+  ).json()) as CoreContainer[]
+  const projects = containers
+    .map((container) => ({
+      project: container.Labels?.['com.docker.compose.project'] ?? '',
+      container: container.Names[0]?.replace(/^\//, '') ?? '',
+      state: healthOf(container),
+    }))
+    .sort(
+      (a, b) =>
+        a.project.localeCompare(b.project) ||
+        a.container.localeCompare(b.container),
+    )
+  const json = JSON.stringify(projects, null, 2)
+  if (json === currentProjects) return
+  await Bun.write(`${ROUTES_DIR}/projects.json`, json)
+  currentProjects = json
+}
 
 type CoreContainer = {
   Names: string[]
@@ -219,6 +250,12 @@ type CoreContainer = {
   Labels: Record<string, string> | null
   Ports: { IP?: string; PublicPort?: number }[] | null
 }
+
+// "Up 2 hours (healthy)": the health, when the service checks it
+const healthOf = (container: CoreContainer) =>
+  /\((healthy|unhealthy|health: starting)\)/
+    .exec(container.Status)?.[1]
+    ?.replace('health: ', '') ?? container.State
 
 // Every container of the core stack, stopped ones included, with its URL:
 // its route, or its only port published on the host (Dockhand)
@@ -253,11 +290,7 @@ const writeServices = async (routes: Route[]) => {
         container: name,
         url,
         ports,
-        // "Up 2 hours (healthy)": the health, when the service checks it
-        state:
-          /\((healthy|unhealthy|health: starting)\)/
-            .exec(container.Status)?.[1]
-            ?.replace('health: ', '') ?? container.State,
+        state: healthOf(container),
       }
     })
     .sort((a, b) => a.service.localeCompare(b.service))
@@ -389,6 +422,11 @@ const sync = async () => {
     await writeServices(routes)
   } catch (error) {
     console.error('could not list local-env services:', error)
+  }
+  try {
+    await writeProjects()
+  } catch (error) {
+    console.error('could not list the compose containers:', error)
   }
 }
 
