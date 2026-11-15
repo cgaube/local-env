@@ -42,6 +42,14 @@ export type AgentState =
   | { available: true; version: string; run: RunState | null }
   | { available: false; version: null; run: null }
 
+// GET /events of the agent: one line of JSON per change, for the dashboard
+// server, which sends its pages the topic again. tools and sources: a file
+// changed on the Mac (installed.json, a git pull), which the container can't
+// see on every Docker engine; run: a run started or ended.
+// An empty line comes first.
+export type AgentEventTopic = 'tools' | 'sources' | 'run'
+export type AgentEvent = { topic: AgentEventTopic }
+
 // From the page, as JSON text
 export type ClientMessage =
   | {

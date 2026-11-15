@@ -83,8 +83,12 @@ holds what we build:
   `0`, a free port, which `agent.json` gives) and wants the token it writes to
   `volumes/agent/token`, which only the dashboard mounts. The dashboard pipes
   `/api/terminal` (WebSocket, its own Origin only) to it; the page shows it with
-  xterm.js (`features/terminal/`). `services/dashboard/agent-protocol.ts` holds
-  the messages. `docs/3-how-it-works/dashboard-terminal.md` explains why.
+  xterm.js (`features/terminal/`). The agent also watches `volumes/tools/` and
+  `volumes/sources/` on the Mac and streams each change, and each run's start
+  and end, on `GET /events`, which the dashboard follows: on some engines
+  (Lima), the Mac's file events never reach the container.
+  `services/dashboard/agent-protocol.ts` holds the messages.
+  `docs/3-how-it-works/dashboard-terminal.md` explains why.
 - `services/proxy/` builds the nginx proxy (plain `nginx:alpine`). It includes
   the routes that `proxy-connector` generates into `volumes/proxy/routes.conf`.
   Certificates are generated into `services/proxy/certs/` in the home folder by
@@ -100,19 +104,20 @@ holds what we build:
   runs. The Docker page (`features/docker/`) is the catalog of the sources'
   stack templates (what a deploy asks for, reads from the vault and logs in to;
   **Running** or **Stopped** once Dockhand has a stack of its name, from the
-  `stacks` topic, which the server asks Dockhand on its network every 5 seconds
-  while a page is open and when the routes change, and the live routes), whose
-  **Deploy** runs `local-env deploy <source>/<folder>` through the dashboard
-  agent, then **Other apps**, the routes no template deployed.
-  `local-env deploy` (`src/commands/deploy.ts`) deploys one template once, with
-  `src/providers/docker/stack-deploy.ts` (shared with `install`: registry
-  logins, vault secrets, asked `${NAME:?help}` variables, `POST /stacks`, the
-  link). `docs/3-how-it-works/docker-catalog.md` explains why. The Overview
-  (`features/overview/`) starts with **Needs attention** (`attention.ts`: what
-  the page sees that waits for you, each with a command to copy or a page)
-  beside **Health** (the core services and the agent; the table in a sheet),
-  then Sources, each with its logins. A core service with a `local-env.app`
-  label gets a link in the sidebar.
+  `stacks` topic, which the server asks Dockhand on its network when
+  `proxy-connector`, from Docker's events, rewrites
+  `volumes/proxy/projects.json` (the state of every compose container), and the
+  live routes), whose **Deploy** runs `local-env deploy <source>/<folder>`
+  through the dashboard agent, then **Other apps**, the routes no template
+  deployed. `local-env deploy` (`src/commands/deploy.ts`) deploys one template
+  once, with `src/providers/docker/stack-deploy.ts` (shared with `install`:
+  registry logins, vault secrets, asked `${NAME:?help}` variables,
+  `POST /stacks`, the link). `docs/3-how-it-works/docker-catalog.md` explains
+  why. The Overview (`features/overview/`) starts with **Needs attention**
+  (`attention.ts`: what the page sees that waits for you, each with a command to
+  copy or a page) beside **Health** (the core services and the agent; the table
+  in a sheet), then Sources, each with its logins. A core service with a
+  `local-env.app` label gets a link in the sidebar.
 - In `apps/web/src`, `components/ui/` holds the shadcn components, as the CLI
   adds them (`bunx --bun shadcn@latest add <name>`, from the root: it needs a
   `package.json` beside `components.json`). Everything else is in
@@ -128,7 +133,8 @@ holds what we build:
 - `services/proxy-connector/connector.ts` turns running containers into routes:
   it attaches each container with a `VIRTUAL_HOST` to the proxy network, adds
   the domain to short hosts, writes `routes.conf` and `routes.json`, and reloads
-  nginx.
+  nginx. It also writes `services.json` (the core services) and `projects.json`
+  (every compose container's state), which the dashboard watches.
 - `src/sources/` clones, pulls and removes sources: git repos (URL or local
   path) cloned into `volumes/sources/<name>` in the home folder. A source's
   manifest, `local-env.yml` at its root, gives its `name` (unique: the folder,

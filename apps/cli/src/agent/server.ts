@@ -2,6 +2,9 @@
 // for the dashboard, which can't run anything on the Mac itself. Only the
 // dashboard holds the token (volumes/agent/token, mounted into it alone).
 //   GET /status   -> the version and the current or last run
+//   GET /events   -> a line of JSON per change: { topic } (tools, sources:
+//                    the folders it watches on the Mac; run: a run started
+//                    or ended). Kept open: the dashboard server reads it.
 //   GET /terminal -> a WebSocket on that run. The client sends JSON:
 //                    { type: 'start', command, template?, cols, rows }
 //                    { type: 'input', data }
@@ -12,9 +15,11 @@
 // first gets its output so far (the dashboard restarts during `update`).
 import type { ServerWebSocket, Subprocess } from 'bun'
 import { timingSafeEqual } from 'node:crypto'
+import { type FSWatcher, mkdirSync, watch } from 'node:fs'
 import {
   AGENT_COMMANDS,
   type AgentCommand,
+  type AgentEventTopic,
   type AgentStatus,
   type LoginsReport,
   type RunState,
@@ -48,6 +53,7 @@ export const startAgentServer = ({
   env = {},
   onRunExit,
   logins,
+  watched = {},
 }: {
   port: number
   hostname?: string
@@ -61,6 +67,9 @@ export const startAgentServer = ({
   // GET /logins: the logins of the sources and their state
   // (logins/report.ts), checked on each request
   logins?: () => Promise<LoginsReport>
+  // The folders whose changes GET /events reports, by topic:
+  // volumes/tools and volumes/sources
+  watched?: Partial<Record<'tools' | 'sources', string>>
 }) => {
   let run: RunState | null = null
   let output: Uint8Array[] = []
@@ -68,6 +77,57 @@ export const startAgentServer = ({
   let terminal: Bun.Terminal | null = null
   let child: Subprocess | null = null
   const clients = new Set<ServerWebSocket<unknown>>()
+  const listeners = new Set<ReadableStreamDefaultController<Uint8Array>>()
+  const encoder = new TextEncoder()
+
+  const emit = (topic: AgentEventTopic) => {
+    const line = encoder.encode(`${JSON.stringify({ topic })}\n`)
+    for (const listener of listeners) {
+      try {
+        listener.enqueue(line)
+      } catch {
+        listeners.delete(listener)
+      }
+    }
+  }
+
+  // A git pull touches many files, an install rewrites several: one event
+  // per burst
+  const bursts = new Map<AgentEventTopic, ReturnType<typeof setTimeout>>()
+  const emitSoon = (topic: AgentEventTopic) => {
+    clearTimeout(bursts.get(topic))
+    bursts.set(
+      topic,
+      setTimeout(() => emit(topic), 100),
+    )
+  }
+
+  // On the Mac, where file events work: the dashboard's container gets
+  // none from a bind mount on some engines (Lima's virtiofs)
+  const watchers: FSWatcher[] = Object.entries(watched).map(([topic, dir]) => {
+    mkdirSync(dir, { recursive: true })
+    return watch(dir, { recursive: true }, () =>
+      emitSoon(topic as AgentEventTopic),
+    )
+  })
+
+  const events = () => {
+    let self: ReadableStreamDefaultController<Uint8Array>
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          self = controller
+          listeners.add(controller)
+          // An empty line: Bun sends the headers with the first bytes
+          controller.enqueue(encoder.encode('\n'))
+        },
+        cancel() {
+          listeners.delete(self)
+        },
+      }),
+      { headers: { 'Content-Type': 'application/x-ndjson' } },
+    )
+  }
 
   const send = (ws: ServerWebSocket<unknown>, message: ServerMessage) =>
     ws.send(JSON.stringify(message))
@@ -103,6 +163,7 @@ export const startAgentServer = ({
     outputBytes = 0
     // Clients clear their screen: a new run
     broadcast({ type: 'state', run, replay: false })
+    emit('run')
 
     const pty = new Bun.Terminal({
       cols: size(message.cols, 100),
@@ -139,6 +200,7 @@ export const startAgentServer = ({
         current.status = 'exited'
         current.exitCode = exitCode
         broadcast({ type: 'state', run: current, replay: false })
+        emit('run')
         onRunExit?.(current)
       }, 50)
     })
@@ -176,6 +238,11 @@ export const startAgentServer = ({
       if (pathname === '/status') {
         return Response.json({ version, run } satisfies AgentStatus)
       }
+      if (pathname === '/events') {
+        // Open until either side goes: no idle timeout
+        server.timeout(request, 0)
+        return events()
+      }
       if (pathname === '/logins' && logins) {
         return logins().then(
           (report) => Response.json(report),
@@ -210,6 +277,16 @@ export const startAgentServer = ({
     isBusy: () => run?.status === 'running',
     // The run goes with the agent: its pty is gone
     stop: async () => {
+      for (const watcher of watchers) watcher.close()
+      for (const timer of bursts.values()) clearTimeout(timer)
+      for (const listener of listeners) {
+        try {
+          listener.close()
+        } catch {
+          // Already cancelled
+        }
+      }
+      listeners.clear()
       child?.kill('SIGHUP')
       terminal?.close()
       await server.stop(true)

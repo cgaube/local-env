@@ -5,6 +5,8 @@ import { execa } from 'execa'
 import packageJson from '#package.json' with { type: 'json' }
 import { startAgentServer } from '#cli/agent/server.js'
 import { buildLoginsReport } from '#cli/logins/report.js'
+import { TOOLS_DIR } from '#cli/core/tools.js'
+import { SOURCES_DIR } from '#cli/sources/sources.js'
 import {
   AGENT_DIR,
   AGENT_INFO,
@@ -51,6 +53,8 @@ export const agentCommand = new Command('agent')
         version: packageJson.version,
         argv: (command, args) => [...selfArgv(), command, ...args],
         logins: buildLoginsReport,
+        // The dashboard shows the end of an install or a sync from a terminal
+        watched: { tools: TOOLS_DIR, sources: SOURCES_DIR },
         // Not when it is idle: a run that just ended is what upgraded it
         onRunExit: async (run) => {
           log(`local-env ${run.command} exited with ${run.exitCode}`)

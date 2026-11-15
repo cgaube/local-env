@@ -1,6 +1,10 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { startAgentServer } from '#cli/agent/server.js'
 import type {
   AgentCommand,
+  AgentEvent,
   ServerMessage,
 } from '#services/dashboard/agent-protocol.js'
 
@@ -65,6 +69,49 @@ const connect = async (port: number): Promise<Client> => {
   }
 }
 
+// GET /events, read line by line as they come
+const listen = async (port: number) => {
+  const controller = new AbortController()
+  const response = await fetch(`http://127.0.0.1:${port}/events`, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    signal: controller.signal,
+  })
+  const events: AgentEvent[] = []
+  const decoder = new TextDecoder()
+  let buffer = ''
+  void (async () => {
+    try {
+      for await (const chunk of response.body!) {
+        buffer += decoder.decode(chunk, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        events.push(
+          ...lines
+            .filter((line) => line !== '')
+            .map((line) => JSON.parse(line) as AgentEvent),
+        )
+      }
+    } catch {
+      // Aborted
+    }
+  })()
+  const waitFor = async (check: () => boolean) => {
+    const deadline = Date.now() + 5000
+    while (!check()) {
+      if (Date.now() > deadline) {
+        throw new Error(`Timed out: ${JSON.stringify(events)}`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
+  return {
+    status: response.status,
+    events,
+    waitFor,
+    close: () => controller.abort(),
+  }
+}
+
 const lastState = (client: Client) =>
   client.messages.findLast((message) => message.type === 'state')
 
@@ -117,6 +164,72 @@ describe('agent server', () => {
       expect(checks).toBe(2)
       const anonymous = await fetch(`http://127.0.0.1:${server.port}/logins`)
       expect(anonymous.status).toBe(401)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('reports the changes of the folders it watches, once per burst', async () => {
+    const tools = mkdtempSync(join(tmpdir(), 'agent-tools-'))
+    const sources = mkdtempSync(join(tmpdir(), 'agent-sources-'))
+    const server = startAgentServer({
+      port: 0,
+      token: TOKEN,
+      version: '1.2.3',
+      argv: (command, args) => ['sh', '-c', SCRIPTS[command], command, ...args],
+      watched: { tools, sources },
+    })
+    const listener = await listen(server.port)
+    try {
+      expect(listener.status).toBe(200)
+      // macOS starts a watch asynchronously: a write made at once can be
+      // missed, under load. Write until the first event, then start over.
+      // Slower than a burst (100 ms), or the burst never ends
+      const probe = setInterval(
+        () => writeFileSync(join(tools, 'probe'), String(Date.now())),
+        200,
+      )
+      await listener.waitFor(() => listener.events.length > 0)
+      clearInterval(probe)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      listener.events.length = 0
+
+      writeFileSync(join(tools, 'installed.json'), '{}')
+      writeFileSync(join(tools, 'stacks.json'), '{}')
+      await listener.waitFor(() => listener.events.length > 0)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(listener.events).toEqual([{ topic: 'tools' }])
+
+      writeFileSync(join(sources, 'HEAD'), 'ref')
+      await listener.waitFor(() => listener.events.length > 1)
+      expect(listener.events.at(-1)).toEqual({ topic: 'sources' })
+    } finally {
+      listener.close()
+      await server.stop()
+    }
+  })
+
+  test('reports when a run starts and ends', async () => {
+    const server = startServer()
+    const listener = await listen(server.port)
+    const client = await connect(server.port)
+    try {
+      client.send({ type: 'start', command: 'update' })
+      await client.waitFor(() => lastState(client)?.run?.status === 'exited')
+      await listener.waitFor(() => listener.events.length === 2)
+      expect(listener.events).toEqual([{ topic: 'run' }, { topic: 'run' }])
+    } finally {
+      client.close()
+      listener.close()
+      await server.stop()
+    }
+  })
+
+  test('refuses the events without the token', async () => {
+    const server = startServer()
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/events`)
+      expect(response.status).toBe(401)
     } finally {
       await server.stop()
     }

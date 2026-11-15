@@ -37,9 +37,9 @@ sequenceDiagram
   participant Vault as vault CLI (aws, vault)
   participant DH as Dockhand
   Dash->>Page: templates topic (listTemplates of /sources)
-  loop every 5 s while a page is open, and when the routes change
+  loop when a compose container changes (projects.json, from proxy-connector)
     Dash->>DH: GET /api/stacks (names and states)
-    Dash->>Page: stacks topic, when it changed
+    Dash->>Page: stacks topic
   end
   Page->>Dash: Deploy: start deploy acme/mail (WebSocket)
   Dash->>Agent: start deploy acme/mail
@@ -66,10 +66,11 @@ sequenceDiagram
 - Deployed is a stack of the template's name in Dockhand's local environment:
   the same rule as the template links. The dashboard server asks Dockhand on its
   network (`http://dockhand:3000`) and streams the answer as the `stacks` topic
-  of `/api/events`: every 5 seconds while a page is open, sent only when it
-  changed, and at once when the routes change (a stack deployed, stopped or
-  removed). A stack removed in Dockhand makes its card deployable again within
-  seconds.
+  of `/api/events`, on connect and each time a compose container starts, stops,
+  goes or changes its health. `proxy-connector`, which follows Docker's events,
+  writes the state of every compose container to `volumes/proxy/projects.json`,
+  and the dashboard watches it. A stack removed in Dockhand makes its card
+  deployable again at once.
 - Running or Stopped (`templateStates` in `features/docker/docker.ts`): a
   template with a `VIRTUAL_HOST` runs while the routes, which stream live, have
   one for its stack, and the card links to that route's address. A template
@@ -110,11 +111,13 @@ sequenceDiagram
 - **Deploy once.** A second copy of a template would have the same name, which
   links stacks to templates. To deploy again, the user removes the stack in
   Dockhand.
-- **Dockhand polled, while a page is open.** Dockhand has no event stream, and a
-  stack removed there must not still show as deployed. One request every 5
-  seconds, only while a page listens, as for the dashboard agent; the routes,
-  which proxy-connector writes from Docker's events, make the common cases
-  immediate.
+- **Docker's events, not a timer.** Dockhand has no event stream, and a stack
+  removed there must not still show as deployed. A stack's state is the state of
+  its containers, and `proxy-connector` already follows Docker's events for the
+  routes: it writes `projects.json` when a compose container changes, and the
+  dashboard asks Dockhand then. The dashboard gets no Docker socket: it is
+  served to the browser. Both containers run in Docker's VM, so the file's
+  events reach the dashboard on every engine.
 - **The status on the card, no Routes tab.** A list of routes beside the cards
   showed the same apps twice. The card says whether the app runs and where, and
   only what no template deployed gets a list of its own.
@@ -131,5 +134,5 @@ sequenceDiagram
 - A stack deployed outside local-env, from Dockhand, has no secrets:
   `sources sync` says so.
 - The sidebar step does not hide Templates in a sidebar the user changed.
-- A change in Dockhand that touches no route (a template without a
-  `VIRTUAL_HOST`) reaches the card at the next tick: up to 5 seconds.
+- A change in Dockhand that touches no container (a stack created and never
+  started) reaches the card when the page loads again.
