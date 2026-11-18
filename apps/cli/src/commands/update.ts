@@ -4,6 +4,7 @@ import { ensureCertificate } from '#cli/core/certificate.js'
 import { readConfig } from '#cli/core/config.js'
 import { ensureRuntimeDirs } from '#cli/core/home.js'
 import { updateSelf } from '#cli/core/self-update.js'
+import { runAgentStep } from '#cli/core/agent.js'
 import { pullSources } from '#cli/sources/sources.js'
 import { closeFrameWithCallout } from '#cli/utils/logger.js'
 import { upgradeGalaxyCollections } from '#cli/core/tools.js'
@@ -110,6 +111,9 @@ export const updateCommand = new Command('update')
         await offerBootstraps({ yes: options.yes, changedOnly: true })
       // Provisioning starts the providers' apps, so a dry run skips it
       if (!options.dryRun) await provisionProviders()
+      // A new version, or a checkout edited since `start`: the agent of
+      // the old one would run the dashboard's next install
+      if (!options.dryRun) await runAgentStep()
 
       const summary: string[] = []
       for (const provider of providers) {

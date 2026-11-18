@@ -77,10 +77,12 @@ holds what we build:
   (`src/core/network.ts`), so `stop` (`compose down`) leaves it, and the stopped
   apps attached to it can still start. `reset` removes it.
 - The dashboard agent runs `local-env install` and `update` for the dashboard,
-  in a pty (`Bun.Terminal`), on the Mac. `local-env start` spawns
-  `local-env agent` (hidden) detached (`src/core/agent.ts`); `stop` and `reset`
-  end it. It listens on `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`; tests give
-  `0`, a free port, which `agent.json` gives) and wants the token it writes to
+  in a pty (`Bun.Terminal`), on the Mac. `local-env start` and `update` spawn
+  `local-env agent` (hidden) detached (`src/core/agent.ts`), or replace one of
+  another program (an `update` from the dashboard leaves that to the agent,
+  which replaces itself once the run ends); `stop` and `reset` end it. It
+  listens on `127.0.0.1:17081` (`LOCAL_ENV_AGENT_PORT`; tests give `0`, a free
+  port, which `agent.json` gives) and wants the token it writes to
   `volumes/agent/token`, which only the dashboard mounts. The dashboard pipes
   `/api/terminal` (WebSocket, its own Origin only) to it; the page shows it with
   xterm.js (`features/terminal/`). The agent also watches `volumes/tools/` and

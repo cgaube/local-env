@@ -49,8 +49,8 @@ local-env, but did not restart them. Run `local-env start`.
 
 ## The dashboard cannot install
 
-The **Install** button needs the dashboard agent, which `local-env start`
-starts. Run `local-env start`, then try again.
+The **Install** button needs the dashboard agent, which `local-env start` and
+`local-env update` start. Run `local-env start`, then try again.
 
 ## Start again from zero
 

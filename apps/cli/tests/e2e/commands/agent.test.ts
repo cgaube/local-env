@@ -193,6 +193,67 @@ describe.concurrent('local-env agent', () => {
     expect(after.build).toBe(before.build)
   })
 
+  // An update from your terminal: Homebrew installed a new version, or you
+  // edited a checkout
+  test('is replaced by `update` when it runs another program', async () => {
+    await using cli = await startedCli()
+    await started(cli)
+    const before = agentInfo(cli)
+    cli.home.writeJson('volumes/agent/agent.json', {
+      ...before,
+      build: 'another local-env 1:2',
+    })
+
+    const result = await cli.run(['update', '--yes'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Dashboard agent restarted')
+    const after = agentInfo(cli)
+    expect(after.pid).not.toBe(before.pid)
+    expect(isAlive(before.pid)).toBe(false)
+    expect(after.build).toBe(before.build)
+  })
+
+  test('is started by `update` when none runs', async () => {
+    await using cli = await startedCli()
+
+    const result = await cli.run(['update', '--yes'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Dashboard agent started')
+    expect(isAlive(agentInfo(cli).pid)).toBe(true)
+  })
+
+  // The agent runs this update: it replaces itself once the run ends
+  test('is left by an `update` from the dashboard', async () => {
+    await using cli = await startedCli()
+    await started(cli)
+    const before = agentInfo(cli)
+    cli.home.writeJson('volumes/agent/agent.json', {
+      ...before,
+      build: 'another local-env 1:2',
+    })
+
+    const result = await cli.run(['update', '--yes'], {
+      env: { LOCAL_ENV_FROM_DASHBOARD: '1' },
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('Replaced once this command ends')
+    expect(agentInfo(cli).pid).toBe(before.pid)
+    expect(isAlive(before.pid)).toBe(true)
+  })
+
+  test('is not touched by `update --dry-run`', async () => {
+    await using cli = await startedCli()
+
+    const result = await cli.run(['update', '--dry-run'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).not.toContain('Dashboard agent')
+    expect(cli.home.exists('volumes/agent/agent.json')).toBe(false)
+  })
+
   test('is listed by `status`', async () => {
     await using cli = await startedCli()
 

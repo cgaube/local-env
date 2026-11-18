@@ -5,6 +5,7 @@ import { execa } from 'execa'
 import packageJson from '#package.json' with { type: 'json' }
 import { startAgentServer } from '#cli/agent/server.js'
 import { buildLoginsReport } from '#cli/logins/report.js'
+import { IS_COMPILED } from '#cli/core/paths.js'
 import { TOOLS_DIR } from '#cli/core/tools.js'
 import { SOURCES_DIR } from '#cli/sources/sources.js'
 import {
@@ -36,6 +37,8 @@ export const agentCommand = new Command('agent')
   .description('Run install and update for the dashboard (started by start)')
   .action(async () => {
     const port = agentPort()
+    // Which program this agent runs, to know when it changed
+    const build = agentBuild()
     const token = randomBytes(32).toString('hex')
     mkdirSync(AGENT_DIR, { recursive: true })
 
@@ -59,9 +62,17 @@ export const agentCommand = new Command('agent')
         onRunExit: async (run) => {
           log(`local-env ${run.command} exited with ${run.exitCode}`)
           const installed = await installedVersion()
-          if (!installed || installed === packageJson.version) return
+          if (!installed) return
+          // A checkout keeps its version: its files changed. A binary's own
+          // file may be gone (brew cleanup), and Homebrew changes the version.
+          const edited = !IS_COMPILED && agentBuild() !== build
+          if (installed === packageJson.version && !edited) return
           if (server.isBusy()) return
-          log(`local-env ${installed} is installed: handing over to it`)
+          log(
+            edited
+              ? 'local-env changed: handing over to it'
+              : `local-env ${installed} is installed: handing over to it`,
+          )
           await server.stop()
           ownFiles()
           spawnAgent()
@@ -80,7 +91,7 @@ export const agentCommand = new Command('agent')
         pid: process.pid,
         port: server.port,
         version: packageJson.version,
-        build: agentBuild(),
+        build,
       }),
     )
     log(`local-env ${packageJson.version} agent on 127.0.0.1:${server.port}`)
