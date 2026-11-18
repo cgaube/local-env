@@ -1,6 +1,7 @@
 // The dashboard agent: a process on the Mac that runs `local-env install` and
 // `local-env update` for the dashboard (src/agent/server.ts). `local-env start`
-// spawns it, detached, beside the core services; `stop` and `reset` end it.
+// and `update` spawn it, detached, beside the core services, or replace one of
+// another program; `stop` and `reset` end it.
 // Nothing restarts it, like the core services: after a reboot, `start` brings
 // both back. docs/3-how-it-works/dashboard-terminal.md explains why.
 //   volumes/agent/agent.json -> { pid, port, version, build } of the running
@@ -20,6 +21,7 @@ import { join } from 'node:path'
 import packageJson from '#package.json' with { type: 'json' }
 import type { AgentStatus } from '#services/dashboard/agent-protocol.js'
 import { CHECKOUT_DIR, HOME_DIR, IS_COMPILED } from '#cli/core/paths.js'
+import { logger } from '#cli/utils/logger.js'
 
 export const AGENT_DIR = join(HOME_DIR, 'volumes/agent')
 export const AGENT_INFO = join(AGENT_DIR, 'agent.json')
@@ -225,6 +227,32 @@ export const ensureAgent = async (): Promise<EnsureResult> => {
     )
   }
   return { state: replaced ? 'restarted' : 'started' }
+}
+
+// The "Dashboard agent" step of `start` and `update`: the agent of this
+// program, running. A run of the agent itself (an `update` from the dashboard)
+// leaves it: the agent is busy with this run, and replaces itself once it ends
+// (commands/agent.ts).
+export const runAgentStep = async () => {
+  logger.group('Dashboard agent')
+  if (process.env.LOCAL_ENV_FROM_DASHBOARD === '1') {
+    logger.info('Replaced once this command ends, if it changed')
+    return
+  }
+  const agent = await ensureAgent()
+  if (agent.state === 'busy') {
+    logger.warn(
+      `The dashboard agent of local-env ${agent.version} is running a command: run \`local-env start\` once it ends`,
+    )
+    return
+  }
+  logger.success(
+    agent.state === 'running'
+      ? 'Dashboard agent running'
+      : agent.state === 'started'
+        ? 'Dashboard agent started'
+        : 'Dashboard agent restarted',
+  )
 }
 
 // For `status` and `doctor`

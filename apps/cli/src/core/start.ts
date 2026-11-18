@@ -1,4 +1,4 @@
-import { ensureAgent } from '#cli/core/agent.js'
+import { runAgentStep } from '#cli/core/agent.js'
 import { ensureCertificate } from '#cli/core/certificate.js'
 import { readConfig } from '#cli/core/config.js'
 import { ensureRuntimeDirs } from '#cli/core/home.js'
@@ -38,21 +38,7 @@ export const runStart = async ({
 
   // Runs install and update for the dashboard. Started with the core
   // services: nothing restarts either of them on its own.
-  logger.group('Dashboard agent')
-  const agent = await ensureAgent()
-  if (agent.state === 'busy') {
-    logger.warn(
-      `The dashboard agent of local-env ${agent.version} is running a command: run \`local-env start\` again once it ends`,
-    )
-  } else {
-    logger.success(
-      agent.state === 'running'
-        ? 'Dashboard agent running'
-        : agent.state === 'started'
-          ? 'Dashboard agent started'
-          : 'Dashboard agent restarted',
-    )
-  }
+  await runAgentStep()
 
   if (!summary) return
   // Last, in green, in place of "Done": where to go next
