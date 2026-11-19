@@ -1,5 +1,13 @@
 # local-env
 
+## 0.11.2
+
+### Patch Changes
+
+- f571d68: `local-env update` now restarts the dashboard agent when local-env
+  changed, so the dashboard's Install and Update buttons run the new version
+  without a `local-env start`.
+
 ## 0.11.1
 
 ### Patch Changes
